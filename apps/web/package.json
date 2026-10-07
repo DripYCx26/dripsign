@@ -1,0 +1,27 @@
+{
+  "name": "@dripsign/web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --hostname 0.0.0.0 --port 3000",
+    "build": "next build",
+    "start": "next start --hostname 0.0.0.0 --port 3000",
+    "type-check": "next typegen && tsc --noEmit"
+  },
+  "dependencies": {
+    "@dripsign/db": "workspace:*",
+    "@dripsign/core": "workspace:*",
+    "@dripsign/ui": "workspace:*",
+    "next": "16.3.8",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "server-only": "0.0.1",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "24.12.0",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "typescript": "5.9.3"
+  }
+}

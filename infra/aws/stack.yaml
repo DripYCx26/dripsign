@@ -1,0 +1,501 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Generic isolated DripSign web and jobs on private ECS Fargate.
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  PrivateSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+  HttpsListenerArn:
+    Type: String
+    AllowedPattern: '^arn:[^:]+:elasticloadbalancing:[^:]+:[0-9]{12}:listener/app/.+$'
+  AlbSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+  DatabaseSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Dedicated DripSign PostgreSQL security group; never a V2 group.
+  DatabaseSecretArn:
+    Type: String
+    AllowedPattern: '^arn:[^:]+:secretsmanager:[^:]+:[0-9]{12}:secret:.+$'
+    Description: Plaintext TLS URL for dripsign_app in the isolated dripsign database.
+  Image:
+    Type: String
+    AllowedPattern: '^.+\.dkr\.ecr\.[^/]+/[^@]+@sha256:[a-f0-9]{64}$'
+    Description: Private immutable mirror of the generic public artifact.
+  ImageRepositoryArn:
+    Type: String
+    AllowedPattern: '^arn:[^:]+:ecr:[^:]+:[0-9]{12}:repository/.+$'
+  StagingHostname:
+    Type: String
+    AllowedPattern: '^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$'
+    Description: Existing DNS and certificate for staging; different from dripsign.com.
+  StagingRulePriority:
+    Type: Number
+    MinValue: 1
+    MaxValue: 50000
+  ProductionRulePriority:
+    Type: Number
+    MinValue: 1
+    MaxValue: 50000
+  EnableProductionHost:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'false'
+  PublicOrigin:
+    Type: String
+    AllowedPattern: '^https://[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$'
+  SesIdentityArn:
+    Type: String
+    AllowedPattern: '^arn:[^:]+:ses:[^:]+:[0-9]{12}:identity/.+$'
+  SesFromAddress:
+    Type: String
+    AllowedPattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$'
+  DocusealBaseUrl:
+    Type: String
+    AllowedPattern: '^https://[a-z0-9][a-z0-9.-]*\.[a-z]{2,}(:[0-9]+)?$'
+    Default: https://api.docuseal.com
+  WebDesiredCount:
+    Type: Number
+    MinValue: 0
+    MaxValue: 10
+    Default: 0
+  JobsDesiredCount:
+    Type: Number
+    MinValue: 0
+    MaxValue: 4
+    Default: 0
+Rules:
+  DistinctPriorities:
+    Assertions:
+      - Assert: !Not [!Equals [!Ref StagingRulePriority, !Ref ProductionRulePriority]]
+        AssertDescription: Staging and production listener priorities must differ.
+  DistinctStagingHostname:
+    Assertions:
+      - Assert: !Not [!Equals [!Ref StagingHostname, dripsign.com]]
+        AssertDescription: Use a separate staging hostname; enable production explicitly.
+Conditions:
+  ProductionHostEnabled: !Equals [!Ref EnableProductionHost, 'true']
+Resources:
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+  Artifacts:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+  ArtifactPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref Artifacts
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt Artifacts.Arn
+              - !Sub '${Artifacts.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+  WebConfig:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Description: Populate required web JSON keys privately before starting ECS.
+  JobsConfig:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Description: Populate required jobs JSON keys privately before starting ECS.
+  WebLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 30
+  JobsLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 30
+  WebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: DripSign web receives only ALB traffic.
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          SourceSecurityGroupId: !Ref AlbSecurityGroupId
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          DestinationSecurityGroupId: !Ref DatabaseSecurityGroupId
+  JobsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: DripSign jobs have no inbound access.
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          DestinationSecurityGroupId: !Ref DatabaseSecurityGroupId
+  DatabaseWebIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DatabaseSecurityGroupId
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref WebSecurityGroup
+  DatabaseJobsIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DatabaseSecurityGroupId
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref JobsSecurityGroup
+  WebExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub 'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:*'
+      Policies:
+        - PolicyName: TaskStartup
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: '*'
+              - Effect: Allow
+                Action: ['ecr:BatchCheckLayerAvailability', 'ecr:GetDownloadUrlForLayer', 'ecr:BatchGetImage']
+                Resource: !Ref ImageRepositoryArn
+              - Effect: Allow
+                Action: ['logs:CreateLogStream', 'logs:PutLogEvents']
+                Resource: !GetAtt WebLogs.Arn
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: [!Ref WebConfig, !Ref DatabaseSecretArn]
+  JobsExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub 'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:*'
+      Policies:
+        - PolicyName: TaskStartup
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: '*'
+              - Effect: Allow
+                Action: ['ecr:BatchCheckLayerAvailability', 'ecr:GetDownloadUrlForLayer', 'ecr:BatchGetImage']
+                Resource: !Ref ImageRepositoryArn
+              - Effect: Allow
+                Action: ['logs:CreateLogStream', 'logs:PutLogEvents']
+                Resource: !GetAtt JobsLogs.Arn
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: [!Ref JobsConfig, !Ref DatabaseSecretArn]
+  WebTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub 'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:*'
+      Policies:
+        - PolicyName: ArtifactAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ['s3:GetObject', 's3:GetObjectVersion', 's3:PutObject']
+                Resource: !Sub '${Artifacts.Arn}/*'
+  JobsTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub 'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:*'
+      Policies:
+        - PolicyName: JobDelivery
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ['s3:GetObject', 's3:GetObjectVersion', 's3:PutObject']
+                Resource: !Sub '${Artifacts.Arn}/*'
+              - Effect: Allow
+                Action: ['ses:SendEmail', 'ses:SendRawEmail']
+                Resource: !Ref SesIdentityArn
+                Condition:
+                  StringEquals:
+                    ses:FromAddress: !Ref SesFromAddress
+  WebTask:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Cpu: '512'
+      Memory: '1024'
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      ExecutionRoleArn: !GetAtt WebExecutionRole.Arn
+      TaskRoleArn: !GetAtt WebTaskRole.Arn
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      ContainerDefinitions:
+        - Name: web
+          Image: !Ref Image
+          Essential: true
+          Command: [pnpm, --filter, '@dripsign/web', start]
+          User: '1000:1000'
+          StopTimeout: 60
+          PortMappings:
+            - ContainerPort: 3000
+              Protocol: tcp
+          Environment:
+            - Name: NODE_ENV
+              Value: production
+            - Name: PORT
+              Value: '3000'
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: DRIPSIGN_PUBLIC_ORIGIN
+              Value: !Ref PublicOrigin
+            - Name: DRIPSIGN_DOCUMENT_BUCKET
+              Value: !Ref Artifacts
+          Secrets:
+            - Name: DRIPSIGN_DATABASE_URL
+              ValueFrom: !Ref DatabaseSecretArn
+            - Name: DRIPSIGN_AUTH_SECRET
+              ValueFrom: !Sub '${WebConfig}:DRIPSIGN_AUTH_SECRET::'
+            - Name: DRIPSIGN_STAFF_MEMBERSHIPS
+              ValueFrom: !Sub '${WebConfig}:DRIPSIGN_STAFF_MEMBERSHIPS::'
+            - Name: DRIPSIGN_BRIDGE_ISSUERS
+              ValueFrom: !Sub '${WebConfig}:DRIPSIGN_BRIDGE_ISSUERS::'
+            - Name: DOCUSEAL_WEBHOOK_SECRET
+              ValueFrom: !Sub '${WebConfig}:DOCUSEAL_WEBHOOK_SECRET::'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref WebLogs
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: web
+  JobsTask:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Cpu: '512'
+      Memory: '1024'
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      ExecutionRoleArn: !GetAtt JobsExecutionRole.Arn
+      TaskRoleArn: !GetAtt JobsTaskRole.Arn
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      ContainerDefinitions:
+        - Name: jobs
+          Image: !Ref Image
+          Essential: true
+          Command: [pnpm, --filter, '@dripsign/jobs', start]
+          User: '1000:1000'
+          StopTimeout: 60
+          Environment:
+            - Name: NODE_ENV
+              Value: production
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: DRIPSIGN_PUBLIC_ORIGIN
+              Value: !Ref PublicOrigin
+            - Name: DRIPSIGN_DOCUMENT_BUCKET
+              Value: !Ref Artifacts
+            - Name: DRIPSIGN_EMAIL_FROM
+              Value: !Ref SesFromAddress
+            - Name: DOCUSEAL_API_URL
+              Value: !Ref DocusealBaseUrl
+          Secrets:
+            - Name: DRIPSIGN_DATABASE_URL
+              ValueFrom: !Ref DatabaseSecretArn
+            - Name: DOCUSEAL_API_KEY
+              ValueFrom: !Sub '${JobsConfig}:DOCUSEAL_API_KEY::'
+            - Name: DOCUSEAL_ARTIFACT_ORIGINS
+              ValueFrom: !Sub '${JobsConfig}:DOCUSEAL_ARTIFACT_ORIGINS::'
+            - Name: ANTHROPIC_API_KEY
+              ValueFrom: !Sub '${JobsConfig}:ANTHROPIC_API_KEY::'
+            - Name: DRIPSIGN_HOST_EVENT_URL
+              ValueFrom: !Sub '${JobsConfig}:DRIPSIGN_HOST_EVENT_URL::'
+            - Name: DRIPSIGN_HOST_EVENT_SECRET
+              ValueFrom: !Sub '${JobsConfig}:DRIPSIGN_HOST_EVENT_SECRET::'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref JobsLogs
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: jobs
+  WebTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VpcId
+      Port: 3000
+      Protocol: HTTP
+      TargetType: ip
+      HealthCheckPath: /health
+      Matcher:
+        HttpCode: '200'
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '30'
+  StagingHostRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref HttpsListenerArn
+      Priority: !Ref StagingRulePriority
+      Conditions:
+        - Field: host-header
+          HostHeaderConfig:
+            Values: [!Ref StagingHostname]
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref WebTargetGroup
+  ProductionHostRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Condition: ProductionHostEnabled
+    Properties:
+      ListenerArn: !Ref HttpsListenerArn
+      Priority: !Ref ProductionRulePriority
+      Conditions:
+        - Field: host-header
+          HostHeaderConfig:
+            Values: [dripsign.com]
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref WebTargetGroup
+  WebService:
+    Type: AWS::ECS::Service
+    DependsOn: StagingHostRule
+    Properties:
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref WebTask
+      DesiredCount: !Ref WebDesiredCount
+      LaunchType: FARGATE
+      PlatformVersion: '1.4.0'
+      EnableExecuteCommand: false
+      HealthCheckGracePeriodSeconds: 60
+      DeploymentConfiguration:
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets: !Ref PrivateSubnetIds
+          SecurityGroups: [!Ref WebSecurityGroup]
+      LoadBalancers:
+        - ContainerName: web
+          ContainerPort: 3000
+          TargetGroupArn: !Ref WebTargetGroup
+  JobsService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref JobsTask
+      DesiredCount: !Ref JobsDesiredCount
+      LaunchType: FARGATE
+      PlatformVersion: '1.4.0'
+      EnableExecuteCommand: false
+      DeploymentConfiguration:
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets: !Ref PrivateSubnetIds
+          SecurityGroups: [!Ref JobsSecurityGroup]
+Outputs:
+  Cluster:
+    Value: !Ref Cluster
+  WebService:
+    Value: !GetAtt WebService.Name
+  JobsService:
+    Value: !GetAtt JobsService.Name
+  ArtifactBucket:
+    Value: !Ref Artifacts
+  WebConfigSecretArn:
+    Value: !Ref WebConfig
+  JobsConfigSecretArn:
+    Value: !Ref JobsConfig
+  WebTaskRoleArn:
+    Value: !GetAtt WebTaskRole.Arn
+  JobsTaskRoleArn:
+    Value: !GetAtt JobsTaskRole.Arn

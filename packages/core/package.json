@@ -1,0 +1,16 @@
+{
+  "name": "@dripsign/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": { "type-check": "tsc --noEmit", "build": "tsc --noEmit" },
+  "dependencies": {
+    "@dripsign/db": "workspace:*",
+    "@aws-sdk/client-s3": "3.1136.0",
+    "@aws-sdk/client-sesv2": "3.1136.0",
+    "pdf-lib": "1.17.1",
+    "zod": "4.6.5"
+  },
+  "devDependencies": { "@types/node": "24.10.1", "typescript": "5.9.3" }
+}

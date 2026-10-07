@@ -36,6 +36,11 @@ audience, nonce, and short expiry. DripSign consumes the nonce atomically,
 rechecks membership and scope, and uses a separate idempotency key for
 mutations. The host browser never receives the bridge signing secret.
 
+A published PDF includes its standard signature page and field positions, so
+staff can preview the exact bytes before inviting signatures. The original
+uploaded PDF is preserved separately. The published revision stores the field
+positions and signer set; the signing request cannot substitute either.
+
 A signing round freezes the revision hash and required signer identities. A
 provider creation timeout remains uncertain until reconciled; the app never
 blindly creates a second submission. Authenticated, deduplicated provider
