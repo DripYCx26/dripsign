@@ -26,25 +26,26 @@ export function Login({ kind, agreementId }: Props): ReactNode {
       if (!response.ok) {
         const isPaused = response.status === 503 && typeof value === 'object' && value !== null
           && 'error' in value && value.error === 'admission_paused';
-        setError(isPaused ? 'Email codes are temporarily paused. Try again after the service resumes.' : 'Sign-in could not be completed. Check your code and try again.');
+        setError(isPaused ? 'Email codes are paused. Try again later.' : challengeId ? 'Code did not work. Check it or request a new one.' : 'Could not send a code. Try again.');
         return;
       }
       if (challengeId) { router.refresh(); return; }
       if (typeof value === 'object' && value !== null && 'challengeId' in value && typeof value.challengeId === 'string') {
         setChallengeId(value.challengeId);
-      } else { setError('Sign-in is unavailable. Try again shortly.'); }
-    } catch { setError('Sign-in is unavailable. Try again shortly.'); }
+      } else { setError('Could not send a code. Try again.'); }
+    } catch { setError('Could not connect. Try again.'); }
     finally { setIsPending(false); }
   }
   return <section className="login">
-    <h1>{kind === 'staff' ? 'Staff sign in' : 'Your agreements'}</h1>
-    <p className="notice">{challengeId ? 'Code expires in 10 minutes.' : 'Enter the email we invited.'}</p>
-    <form className="stack" onSubmit={handleSubmit}>
-      <label>Email<input type="email" autoComplete="email" required maxLength={320} value={email} disabled={Boolean(challengeId)} onChange={(event) => setEmail(event.target.value)} /></label>
-      {challengeId && <label>Email code<input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" required maxLength={6} value={code} onChange={(event) => setCode(event.target.value)} /></label>}
+    <h1>{kind === 'staff' ? 'Agreements' : 'Your agreements'}</h1>
+    <p className="notice">{challengeId ? 'Enter the code from your email.' : kind === 'staff' ? 'Enter your work email.' : 'Enter the email we sent the agreement to.'}</p>
+    <form className="stack login-card" onSubmit={handleSubmit}>
+      {!challengeId && <label>Email address<input type="email" autoComplete="email" placeholder="you@company.com" required maxLength={320} value={email} onChange={(event) => setEmail(event.target.value)} /></label>}
+      {challengeId && <label>Code<input className="code-input" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" placeholder="000000" required maxLength={6} value={code} onChange={(event) => setCode(event.target.value)} /></label>}
       {error && <p role="alert" className="error">{error}</p>}
-      <button className="primary" disabled={isPending}>{isPending ? 'Please wait…' : challengeId ? 'Continue' : 'Email a code'}</button>
+      <button className="primary" disabled={isPending}>{isPending ? 'Please wait…' : challengeId ? 'Continue' : 'Send code'}</button>
       {challengeId && <button type="button" className="secondary" disabled={isPending} onClick={() => { setChallengeId(null); setCode(''); }}>Use another email</button>}
     </form>
+    {challengeId && <p className="login-expiry">Code expires in 10 minutes.</p>}
   </section>;
 }
