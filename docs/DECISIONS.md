@@ -1,6 +1,37 @@
 # Decisions
 
-## 2026-10-07: One signing service with a host application bridge
+## 2026-10-07: DripSign signs agreements itself
+
+Michael rejected DocuSeal as DripSign's signer. DripSign verifies the invited
+email, records a typed-name signature and explicit consent against one frozen
+PDF revision, then produces the signed PDF and audit record from those records.
+The final required signature closes negotiation immediately. Artifact creation
+may finish later; the agreement becomes signed only after both files are stored.
+
+The shared chat sits left of the PDF on desktop. A recipient may propose a
+change while signing is still open. That action closes the unfinished signing
+round in the same transaction and keeps any earlier signatures as evidence of
+the closed round. A completed round requires a separate amendment. AI may draft
+a private candidate from a proposal. Staff must review the wording and PDF and
+explicitly publish a new immutable revision before anyone signs it. Uploaded
+PDFs require a staff-supplied replacement unless staff first adopts editable
+source. The public dreach.ai website is outside this change; DripSign uses its
+visual language without copying another product's name, assets, or copy.
+
+The selected design uses database signature evidence and deterministic PDF
+archival. Names must be renderable in the signed PDF before a signature is
+accepted. The rejected alternative adds a KMS evidence seal and S3 Object Lock
+at launch; those add key and retention operations without an established pilot
+requirement. The signed PDF is an electronic-signature rendition, not a claim
+of certificate-based PDF signing or independent timestamping.
+
+This supersedes the DocuSeal submission, callback, signing URL, and provider
+reconciliation portions of the decision below. Existing provider rounds, if
+any, must be inventoried and preserved before release. Deployment, SES sending
+readiness, legal template review, and a controlled signing run remain release
+gates. After native signatures exist, rollback must retain native support.
+
+## 2026-10-07: One signing service with a host application bridge (historical provider plan)
 
 DripSign owns agreement documents, proposals, issued revisions, required
 signers, provider submissions, and archived evidence. Its standalone portal is
@@ -30,11 +61,19 @@ must be confirmed cancelled before the document changes. A completed
 agreement needs a separate amendment.
 
 Recipients verify their exact granted email. Every read, proposal, signature
-action, and download checks the current grant. A host bridge assertion binds
+action, and download checks the current grant. Every DocuSeal signer also
+verifies an email code before accessing the signing document. DripSign sends
+the invitation; DocuSeal signature request emails remain disabled.
+A host bridge assertion binds
 the staff member, tenant, resource, operation, method, path, body hash,
 audience, nonce, and short expiry. DripSign consumes the nonce atomically,
 rechecks membership and scope, and uses a separate idempotency key for
 mutations. The host browser never receives the bridge signing secret.
+
+A published PDF includes its standard signature page and field positions, so
+staff can preview the exact bytes before inviting signatures. The original
+uploaded PDF is preserved separately. The published revision stores the field
+positions and signer set; the signing request cannot substitute either.
 
 A signing round freezes the revision hash and required signer identities. A
 provider creation timeout remains uncertain until reconciled; the app never

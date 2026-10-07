@@ -1,0 +1,1 @@
+export { SIGNING_CONSENT_TEXT, SIGNING_CONSENT_VERSION, SIGNING_CONSENT_HASH } from '@dripsign/db/types';

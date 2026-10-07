@@ -1,0 +1,25 @@
+{
+  "name": "@dripsign/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./migrate": "./src/migrations.ts"
+  },
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "build": "tsc --noEmit",
+    "migrate": "node --experimental-strip-types scripts/migrate.ts",
+    "bootstrap-staff": "node --experimental-strip-types scripts/bootstrapStaff.ts"
+  },
+  "dependencies": {
+    "pg": "8.16.3"
+  },
+  "devDependencies": {
+    "@types/pg": "8.15.5",
+    "@types/node": "24.10.1",
+    "typescript": "5.9.3"
+  }
+}
