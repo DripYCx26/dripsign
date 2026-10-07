@@ -1,0 +1,13 @@
+{
+  "name": "dripsign",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "packageManager": "pnpm@10.34.6",
+  "scripts": {
+    "type-check": "pnpm -r type-check",
+    "build": "pnpm -r build"
+  }
+}
