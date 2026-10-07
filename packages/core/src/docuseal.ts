@@ -117,7 +117,7 @@ export class DocuSealClient {
           areas: [{ page: field.page, x: field.x, y: field.y, w: field.width, h: field.height }],
         })) }],
         submitters: request.signers.map(signer => ({ name: signer.name, email: signer.email, role: signer.id,
-          external_id: `${request.attemptId}:${signer.id}`, send_email: false, send_sms: false })),
+          external_id: `${request.attemptId}:${signer.id}`, send_email: false, send_sms: false, require_email_2fa: true })),
       });
       if (!response.ok) {
         await response.body?.cancel();

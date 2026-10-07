@@ -30,7 +30,10 @@ must be confirmed cancelled before the document changes. A completed
 agreement needs a separate amendment.
 
 Recipients verify their exact granted email. Every read, proposal, signature
-action, and download checks the current grant. A host bridge assertion binds
+action, and download checks the current grant. Every DocuSeal signer also
+verifies an email code before accessing the signing document. DripSign sends
+the invitation; DocuSeal signature request emails remain disabled.
+A host bridge assertion binds
 the staff member, tenant, resource, operation, method, path, body hash,
 audience, nonce, and short expiry. DripSign consumes the nonce atomically,
 rechecks membership and scope, and uses a separate idempotency key for
