@@ -49,10 +49,6 @@ Parameters:
   SesFromAddress:
     Type: String
     AllowedPattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$'
-  DocusealBaseUrl:
-    Type: String
-    AllowedPattern: '^https://[a-z0-9][a-z0-9.-]*\.[a-z]{2,}(:[0-9]+)?$'
-    Default: https://api.docuseal.com
   WebDesiredCount:
     Type: Number
     MinValue: 0
@@ -343,8 +339,6 @@ Resources:
               ValueFrom: !Sub '${WebConfig}:DRIPSIGN_STAFF_MEMBERSHIPS::'
             - Name: DRIPSIGN_BRIDGE_ISSUERS
               ValueFrom: !Sub '${WebConfig}:DRIPSIGN_BRIDGE_ISSUERS::'
-            - Name: DOCUSEAL_WEBHOOK_SECRET
-              ValueFrom: !Sub '${WebConfig}:DOCUSEAL_WEBHOOK_SECRET::'
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -381,15 +375,9 @@ Resources:
               Value: !Ref Artifacts
             - Name: DRIPSIGN_EMAIL_FROM
               Value: !Ref SesFromAddress
-            - Name: DOCUSEAL_API_URL
-              Value: !Ref DocusealBaseUrl
           Secrets:
             - Name: DRIPSIGN_DATABASE_URL
               ValueFrom: !Ref DatabaseSecretArn
-            - Name: DOCUSEAL_API_KEY
-              ValueFrom: !Sub '${JobsConfig}:DOCUSEAL_API_KEY::'
-            - Name: DOCUSEAL_ARTIFACT_ORIGINS
-              ValueFrom: !Sub '${JobsConfig}:DOCUSEAL_ARTIFACT_ORIGINS::'
             - Name: ANTHROPIC_API_KEY
               ValueFrom: !Sub '${JobsConfig}:ANTHROPIC_API_KEY::'
             - Name: DRIPSIGN_HOST_EVENT_URL

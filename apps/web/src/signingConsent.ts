@@ -1,1 +1,1 @@
-export const SIGNING_CONSENT = 'I intend to sign this document electronically and confirm I am authorized to sign for the named party.';
+export { SIGNING_CONSENT_TEXT, SIGNING_CONSENT_VERSION, SIGNING_CONSENT_HASH } from '@dripsign/db/types';

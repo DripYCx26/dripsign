@@ -1,12 +1,13 @@
-import { createSchema, createAgreement, idSchema } from '../../../server/api';
+import { createSchema, createAgreement } from '../../../server/api';
 import { handleRequest, HttpError, json, readJson, requireOrigin } from '../../../server/http';
 import { requireActor } from '../../../server/sessions';
-import { listAgreements } from '../../../server/agreements';
+import { agreementListQuery, listAgreements } from '../../../server/agreements';
 
 export async function GET(request: Request): Promise<Response> {
   return handleRequest(async () => {
-    const before = new URL(request.url).searchParams.get('before');
-    return json({ agreements: await listAgreements(await requireActor(), before ? idSchema.parse(before) : null) });
+    const actor = await requireActor();
+    const query = agreementListQuery(request);
+    return json({ agreements: await listAgreements(actor, query.before ?? null, query.view) });
   });
 }
 export async function POST(request: Request): Promise<Response> {

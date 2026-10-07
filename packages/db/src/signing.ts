@@ -1,219 +1,120 @@
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
-import { AgreementStore, ROUND_COLUMNS } from './agreements.ts';
+import { AgreementStore, ROUND_COLUMNS, REVISION_COLUMNS, SIGNATURE_COLUMNS } from './agreements.ts';
 import { transaction } from './connection.ts';
-import { asset, bounded, isIssuedDraft } from './validation.ts';
-import { StoreError } from './types.ts';
-import type { Agreement, FinalizeAgreement, JobFence, Mutation, ProviderSubmission, Signature, SignatureEvent, SigningAccess, ProviderEvent, Revision, SigningRound, SigningOutcome } from './types.ts';
+import { canonicalJson } from './json.ts';
+import { asset, isIssuedDraft, parseArchiveJobPayload, requestEvidence, signatureName } from './validation.ts';
+import { SIGNING_CONSENT_HASH, SIGNING_CONSENT_TEXT, SIGNING_CONSENT_VERSION, SIGNING_VERIFICATION_MAX_AGE_MS, StoreError } from './types.ts';
+import type { Agreement, FinalizeAgreement, FrozenSigner, JobFence, Mutation, NativeSignature, Revision, Signature, SignatureRequestEvidence, SigningArchiveEvidence, SigningRound } from './types.ts';
 
 export class SigningStore extends AgreementStore {
-  private async round(client: PoolClient, tenantId: string, agreementId: string, roundId: string): Promise<SigningRound> {
-    const row = (await client.query<Omit<SigningRound,'requiredGrantIds'>>(`SELECT ${ROUND_COLUMNS} FROM dripsign.signing_round WHERE tenant_id=$1 AND agreement_id=$2 AND id=$3 FOR UPDATE`,[tenantId,agreementId,roundId])).rows[0];
-    if(!row) throw new StoreError('not_found','Resource not found');
-    const required=(await client.query<{grant_id:string}>('SELECT grant_id FROM dripsign.required_signer WHERE tenant_id=$1 AND round_id=$2 ORDER BY grant_id LIMIT 100',[tenantId,roundId])).rows.map((r)=>r.grant_id);
-    return {...row,requiredGrantIds:required};
+  protected async round(client: PoolClient, tenantId: string, agreementId: string, roundId: string): Promise<SigningRound> {
+    const row = (await client.query<Omit<SigningRound, 'requiredGrantIds' | 'signers'>>(`SELECT ${ROUND_COLUMNS} FROM dripsign.signing_round WHERE tenant_id=$1 AND agreement_id=$2 AND id=$3 FOR UPDATE`, [tenantId, agreementId, roundId])).rows[0];
+    if (!row) throw new StoreError('not_found', 'Resource not found');
+    const signers = (await client.query<FrozenSigner>('SELECT grant_id AS "grantId",name,email FROM dripsign.required_signer WHERE tenant_id=$1 AND round_id=$2 ORDER BY grant_id LIMIT 100', [tenantId, roundId])).rows;
+    return { ...row, requiredGrantIds: signers.map((signer) => signer.grantId), signers };
   }
-  async requestSigningRound(command: Mutation, provider: string): Promise<SigningRound> {
-    bounded(provider,'Signing provider',100);
-    return this.mutate(command,'request_signing',{provider},async(client,agreement)=>{
-      if(command.actor.kind!=='staff') throw new StoreError('forbidden','Staff permission is required');
-      if(agreement.status!=='negotiating'||!agreement.currentRevisionId) throw new StoreError('conflict','Agreement is not ready for signing');
-      if((await client.query('SELECT 1 FROM dripsign.proposal WHERE tenant_id=$1 AND agreement_id=$2 AND status=\'pending\'',[agreement.tenantId,agreement.id])).rowCount) throw new StoreError('conflict','Resolve the pending proposal first');
-      const revision=(await client.query<Pick<Revision,'document'|'source'|'signingFields'|'requiredGrantIds'>>('SELECT document,source,signing_fields AS \"signingFields\",required_grant_ids AS \"requiredGrantIds\" FROM dripsign.revision WHERE tenant_id=$1 AND id=$2',[agreement.tenantId,agreement.currentRevisionId])).rows[0];
-      if(!revision)throw new StoreError('conflict','Published signing preview is missing');
-      if(agreement.publicationNeeded||!isIssuedDraft(agreement.draft,revision))throw new StoreError('conflict','Publish the working draft before requesting signatures');
-      const fields=revision.signingFields;
-      const grants=(await client.query<{id:string}>('SELECT id FROM dripsign.recipient_grant WHERE tenant_id=$1 AND agreement_id=$2 AND required_signer=true AND revoked_at IS NULL ORDER BY id FOR SHARE',[agreement.tenantId,agreement.id])).rows;
-      if(grants.length!==revision.requiredGrantIds.length||grants.some((g)=>!revision.requiredGrantIds.includes(g.id)))throw new StoreError('conflict','Required parties changed');
-      if(!grants.length||grants.some((g)=>!fields.some((f)=>f.grantId===g.id&&f.type==='signature'))||fields.some((f)=>!grants.some((g)=>g.id===f.grantId))) throw new StoreError('invalid','Every required signer needs a signature field');
-      const id=randomUUID();
-      await client.query('INSERT INTO dripsign.signing_round(tenant_id,agreement_id,id,revision_id,status,provider) VALUES($1,$2,$3,$4,\'preparing\',$5)',[agreement.tenantId,agreement.id,id,agreement.currentRevisionId,provider]);
-      for(const grant of grants) await client.query('INSERT INTO dripsign.required_signer(tenant_id,agreement_id,round_id,grant_id) VALUES($1,$2,$3,$4)',[agreement.tenantId,agreement.id,id,grant.id]);
-      await client.query('UPDATE dripsign.agreement SET status=\'signing\',version=version+1 WHERE tenant_id=$1 AND id=$2',[agreement.tenantId,agreement.id]);
-      await this.enqueue(client,{tenantId:agreement.tenantId,agreementId:agreement.id,kind:'signing_create',dedupeKey:`signing:create:${id}`,payload:{mutation:{...command,expectedVersion:agreement.version+1,idempotencyKey:`signing:create:${id}`},roundId:id,fields}});
-      return this.round(client,agreement.tenantId,agreement.id,id);
+
+  /** Freezes the published document, signer identities, and exact consent in an immediately active native round. */
+  async requestSigningRound(command: Mutation): Promise<SigningRound> {
+    return this.mutate(command, 'request_signing', null, async (client, agreement) => {
+      if (command.actor.kind !== 'staff') throw new StoreError('forbidden', 'Staff permission is required');
+      if (agreement.status !== 'negotiating' || !agreement.currentRevisionId) throw new StoreError('conflict', 'Agreement is not ready for signing');
+      if ((await client.query('SELECT 1 FROM dripsign.proposal WHERE tenant_id=$1 AND agreement_id=$2 AND status=\'pending\' LIMIT 1', [agreement.tenantId, agreement.id])).rowCount) throw new StoreError('conflict', 'Resolve the pending proposal first');
+      const revision = (await client.query<Revision>(`SELECT ${REVISION_COLUMNS} FROM dripsign.revision WHERE tenant_id=$1 AND agreement_id=$2 AND id=$3`, [agreement.tenantId, agreement.id, agreement.currentRevisionId])).rows[0];
+      if (!revision || agreement.publicationNeeded || !isIssuedDraft(agreement.draft, revision)) throw new StoreError('conflict', 'Publish the working draft before requesting signatures');
+      const signers = (await client.query<FrozenSigner>('SELECT id AS "grantId",name,email FROM dripsign.recipient_grant WHERE tenant_id=$1 AND agreement_id=$2 AND required_signer=true AND revoked_at IS NULL ORDER BY id FOR SHARE', [agreement.tenantId, agreement.id])).rows;
+      if (!signers.length || signers.length > 10 || signers.length !== revision.requiredGrantIds.length || signers.some((signer) => !revision.requiredGrantIds.includes(signer.grantId))) throw new StoreError('conflict', 'Required parties changed');
+      const id = randomUUID();
+      await client.query(`INSERT INTO dripsign.signing_round(tenant_id,agreement_id,id,revision_id,status,document_sha256,consent_version,consent_text,consent_hash)
+        VALUES($1,$2,$3,$4,'active',$5,$6,$7,$8)`, [agreement.tenantId, agreement.id, id, revision.id, revision.document.sha256, SIGNING_CONSENT_VERSION, SIGNING_CONSENT_TEXT, SIGNING_CONSENT_HASH]);
+      for (const signer of signers) await client.query('INSERT INTO dripsign.required_signer(tenant_id,agreement_id,round_id,grant_id,name,email) VALUES($1,$2,$3,$4,$5,$6)', [agreement.tenantId, agreement.id, id, signer.grantId, signer.name, signer.email]);
+      await client.query('UPDATE dripsign.agreement SET status=\'signing\',version=version+1 WHERE tenant_id=$1 AND id=$2', [agreement.tenantId, agreement.id]);
+      return this.round(client, agreement.tenantId, agreement.id, id);
     });
   }
-  async confirmSigningSubmission(command: Mutation, roundId: string, providerSubmissionId: string, fence?: JobFence): Promise<SigningRound> {
-    bounded(providerSubmissionId,'Provider submission',200);
-    return this.mutate(command,'confirm_signing',{roundId,providerSubmissionId},async(client,agreement)=>{
-      if(command.actor.kind!=='staff') throw new StoreError('forbidden','Staff permission is required');
-      const round=await this.round(client,agreement.tenantId,agreement.id,roundId);
-      if(agreement.status!=='signing'||round.revisionId!==agreement.currentRevisionId||!['preparing','uncertain','active'].includes(round.status)|| (round.providerSubmissionId && round.providerSubmissionId!==providerSubmissionId)) throw new StoreError('conflict','Signing round changed');
-      await client.query('UPDATE dripsign.signing_round SET status=\'active\',provider_submission_id=$3 WHERE tenant_id=$1 AND id=$2',[agreement.tenantId,roundId,providerSubmissionId]);
-      await this.bump(client,agreement);return this.round(client,agreement.tenantId,agreement.id,roundId);
-    },fence);
-  }
-  async markSigningUncertain(command: Mutation, roundId: string, fence?: JobFence): Promise<SigningRound> {
-    return this.mutate(command,'signing_uncertain',{roundId},async(client,agreement)=>{
-      if(command.actor.kind!=='staff') throw new StoreError('forbidden','Staff permission is required');
-      const round=await this.round(client,agreement.tenantId,agreement.id,roundId);
-      if(round.status!=='preparing'||round.revisionId!==agreement.currentRevisionId) throw new StoreError('conflict','Signing round changed');
-      await client.query('UPDATE dripsign.signing_round SET status=\'uncertain\' WHERE tenant_id=$1 AND id=$2',[agreement.tenantId,roundId]);
-      const create=(await client.query<{payload:Record<string,unknown>}>('SELECT payload FROM dripsign.outbox WHERE tenant_id=$1 AND dedupe_key=$2',[agreement.tenantId,`signing:create:${roundId}`])).rows[0];
-      if(create)await this.enqueue(client,{tenantId:agreement.tenantId,agreementId:agreement.id,kind:'signing_reconcile',dedupeKey:`signing:reconcile:${roundId}`,payload:create.payload});
-      await this.bump(client,agreement);return this.round(client,agreement.tenantId,agreement.id,roundId);
-    },fence);
-  }
-  private async signature(client: PoolClient, agreement: Agreement, event: SignatureEvent): Promise<Signature> {
-    const round=await this.round(client,agreement.tenantId,agreement.id,event.roundId);
-    if(agreement.status!=='signing'||round.status!=='active'||round.revisionId!==event.revisionId||round.revisionId!==agreement.currentRevisionId||!round.requiredGrantIds.includes(event.grantId)) throw new StoreError('conflict','Signing round changed');
-    if(!(await client.query('SELECT 1 FROM dripsign.signing_consent WHERE tenant_id=$1 AND round_id=$2 AND grant_id=$3',[agreement.tenantId,event.roundId,event.grantId])).rowCount)throw new StoreError('conflict','Signer consent is required');
-    bounded(event.providerEventId,'Provider event',200);
-    if(!Number.isFinite(Date.parse(event.signedAt))) throw new StoreError('invalid','Signing time is invalid');
-    await client.query('INSERT INTO dripsign.signature(tenant_id,round_id,grant_id,provider_event_id,signed_at) VALUES($1,$2,$3,$4,$5) ON CONFLICT(tenant_id,round_id,grant_id) DO NOTHING',[agreement.tenantId,event.roundId,event.grantId,event.providerEventId,event.signedAt]);
-    const result=(await client.query<Signature>('SELECT round_id AS "roundId",grant_id AS "grantId",provider_event_id AS "providerEventId",signed_at::text AS "signedAt" FROM dripsign.signature WHERE tenant_id=$1 AND round_id=$2 AND grant_id=$3',[agreement.tenantId,event.roundId,event.grantId])).rows[0];
-    if(!result) throw new Error('Signature insert returned no row');return result;
-  }
-  async recordSignature(command: Mutation,event:SignatureEvent,fence?:JobFence):Promise<Signature> {
-    return this.mutate(command,'signature',event,async(client,agreement)=>{if(command.actor.kind!=='staff')throw new StoreError('forbidden','Provider authority is required');const result=await this.signature(client,agreement,event);await this.bump(client,agreement);return result;},fence);
-  }
-  // A provider observation is pinned to a frozen round, independent of shared-message version bumps.
-  async applySigningObservation(fence: JobFence, command: Mutation, roundId: string, submission: ProviderSubmission): Promise<SigningRound> {
-    return transaction(this.pool,async(client)=>{
-      await this.fence(client,fence);
-      if(command.actor.kind!=='staff'||command.actor.tenantId!==fence.tenantId) throw new StoreError('forbidden','Provider authority is required');
-      const agreement=await this.lockedRecovery(client,fence.tenantId,command.agreementId,roundId);
-      const round=await this.round(client,agreement.tenantId,agreement.id,roundId);
-      const job=(await client.query<{agreement_id:string;payload:{roundId?:string}}>('SELECT agreement_id,payload FROM dripsign.outbox WHERE tenant_id=$1 AND id=$2',[fence.tenantId,fence.id])).rows[0];
-      if(job?.agreement_id!==agreement.id||job.payload.roundId!==roundId||agreement.currentRevisionId!==round.revisionId||agreement.status!=='signing'||!['preparing','uncertain','active'].includes(round.status)||(round.providerSubmissionId&&round.providerSubmissionId!==submission.id)) throw new StoreError('conflict','Signing round changed');
-      bounded(submission.id,'Provider submission',200);
-      const grants=(await client.query<{id:string;email:string}>('SELECT id,email FROM dripsign.recipient_grant WHERE tenant_id=$1 AND agreement_id=$2 AND id=ANY($3::uuid[]) AND revoked_at IS NULL',[agreement.tenantId,agreement.id,round.requiredGrantIds])).rows;
-      if(submission.signers.length!==round.requiredGrantIds.length||new Set(submission.signers.map((s)=>s.grantId)).size!==round.requiredGrantIds.length||submission.signers.some((s)=>!grants.some((g)=>g.id===s.grantId&&g.email===s.email.toLowerCase()))) throw new StoreError('conflict','Provider signers do not match required parties');
-      if(['declined','expired','archived'].includes(submission.status)) throw new StoreError('conflict','Provider submission is not open');
-      await client.query('UPDATE dripsign.signing_round SET status=\'active\',provider_submission_id=$3 WHERE tenant_id=$1 AND id=$2',[agreement.tenantId,roundId,submission.id]);
-      for(const signer of submission.signers) {
-        if(!/^https:\/\//.test(signer.signingUrl))throw new StoreError('invalid','Provider signing URL is invalid');
-        await client.query('INSERT INTO dripsign.provider_signer(tenant_id,round_id,grant_id,provider_id,email,role,signing_url) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(tenant_id,round_id,grant_id) DO UPDATE SET signing_url=EXCLUDED.signing_url',[agreement.tenantId,roundId,signer.grantId,signer.providerId,signer.email,signer.role,signer.signingUrl]);
+
+  /** Rechecks the live mailbox session within the same transaction as the immutable signature. */
+  async signAgreement(command: Mutation, value: NativeSignature, sessionTokenHash: string, evidence: SignatureRequestEvidence): Promise<Signature> {
+    signatureName(value.typedName); requestEvidence(evidence);
+    if (value.consentAccepted !== true || !/^[a-f0-9]{64}$/.test(value.documentSha256) || !/^[a-f0-9]{64}$/.test(value.consentHash) || !/^[a-f0-9]{64}$/.test(sessionTokenHash)) throw new StoreError('invalid', 'Signature is invalid');
+    let session: { id: string; verifiedAt: string } | undefined;
+    return this.mutate(command, 'signature', value, async (client, agreement) => {
+      if (command.actor.kind !== 'recipient' || !session) throw new StoreError('not_found', 'Resource not found');
+      const recipient = command.actor;
+      const round = await this.round(client, agreement.tenantId, agreement.id, value.roundId);
+      if (agreement.status !== 'signing' || round.status !== 'active' || agreement.currentRevisionId !== value.revisionId || round.revisionId !== value.revisionId || round.documentSha256 !== value.documentSha256) throw new StoreError('conflict', 'Review the current signing document');
+      if (round.consentVersion !== value.consentVersion || round.consentHash !== value.consentHash) throw new StoreError('conflict', 'Review the current electronic signature consent');
+      const signer = round.signers.find((item) => item.grantId === recipient.grantId);
+      if (!signer || signer.email !== command.actor.email) throw new StoreError('not_found', 'Resource not found');
+      const live = (await client.query<{ name: string; email: string }>('SELECT name,email FROM dripsign.recipient_grant WHERE tenant_id=$1 AND agreement_id=$2 AND id=$3 AND required_signer=true AND revoked_at IS NULL FOR SHARE', [agreement.tenantId, agreement.id, command.actor.grantId])).rows[0];
+      if (!live || live.email !== signer.email || live.name !== signer.name) throw new StoreError('conflict', 'Required parties changed');
+      if ((await client.query('SELECT 1 FROM dripsign.signature WHERE tenant_id=$1 AND round_id=$2 AND grant_id=$3', [agreement.tenantId, round.id, signer.grantId])).rowCount) throw new StoreError('conflict', 'This signature was already recorded');
+      const signature = (await client.query<Signature>(`INSERT INTO dripsign.signature(tenant_id,round_id,grant_id,typed_name,consent_version,consent_text,consent_hash,document_sha256,auth_session_id,verified_at,request_evidence)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING ${SIGNATURE_COLUMNS}`, [agreement.tenantId, round.id, signer.grantId, value.typedName, round.consentVersion, round.consentText, round.consentHash, round.documentSha256, session.id, session.verifiedAt, JSON.stringify({ipAddress:evidence.ipAddress,userAgent:evidence.userAgent,requestId:evidence.requestId})])).rows[0];
+      if (!signature) throw new Error('Signature insert returned no row');
+      const missing = (await client.query('SELECT 1 FROM dripsign.required_signer r LEFT JOIN dripsign.signature s ON s.tenant_id=r.tenant_id AND s.round_id=r.round_id AND s.grant_id=r.grant_id WHERE r.tenant_id=$1 AND r.round_id=$2 AND s.grant_id IS NULL LIMIT 1', [agreement.tenantId, round.id])).rowCount;
+      if (!missing) {
+        await client.query('UPDATE dripsign.signing_round SET status=\'finalizing\' WHERE tenant_id=$1 AND id=$2', [agreement.tenantId, round.id]);
+        await this.enqueue(client, { tenantId: agreement.tenantId, agreementId: agreement.id, kind: 'archive', dedupeKey: `signing:archive:${round.id}`, payload: { roundId: round.id, revisionId: round.revisionId } });
       }
-      for(const signer of submission.signers) if(signer.completedAt) await this.signature(client,agreement,{roundId,revisionId:round.revisionId,grantId:signer.grantId,providerEventId:`${submission.id}:${signer.providerId}:completed`,signedAt:signer.completedAt});
-      const original=(await client.query<{payload:Record<string,unknown>}>('SELECT payload FROM dripsign.outbox WHERE tenant_id=$1 AND id=$2',[fence.tenantId,fence.id])).rows[0];
-      if(!original)throw new StoreError('not_found','Resource not found');
-      const complete=submission.status==='completed'&&submission.signers.every((party)=>party.completedAt!==null);
-      if(complete)await this.enqueue(client,{tenantId:agreement.tenantId,agreementId:agreement.id,kind:'archive',dedupeKey:`signing:archive:${roundId}`,payload:original.payload});
-      else if((await client.query<{kind:string}>('SELECT kind FROM dripsign.outbox WHERE tenant_id=$1 AND id=$2',[fence.tenantId,fence.id])).rows[0]?.kind==='signing_create')await this.enqueue(client,{tenantId:agreement.tenantId,agreementId:agreement.id,kind:'signing_reconcile',dedupeKey:`signing:reconcile:${roundId}`,payload:original.payload});
-      await this.bump(client,agreement);
-      return this.round(client,agreement.tenantId,agreement.id,roundId);
+      await this.bump(client, agreement);
+      return signature;
+    }, undefined, async (client) => {
+      if (command.actor.kind !== 'recipient') throw new StoreError('not_found', 'Resource not found');
+      const row = (await client.query<{ id: string; verifiedAt: string }>(`SELECT id,verified_at::text AS "verifiedAt" FROM dripsign.auth_session WHERE token_hash=$1
+        AND actor->>'kind'='recipient' AND actor->>'email'=$2 AND revoked_at IS NULL AND expires_at>now()
+        AND verified_at<=now() AND verified_at>now()-($3::int*interval '1 millisecond') FOR SHARE`, [sessionTokenHash, command.actor.email, SIGNING_VERIFICATION_MAX_AGE_MS])).rows[0];
+      if (!row) throw new StoreError('verification_required', 'Verify your email again before signing');
+      session = row;
     });
   }
-  async finalizeAgreement(command: Mutation,value:FinalizeAgreement,fence?:JobFence):Promise<Agreement> {
-    asset(value.signedDocument,command.actor.tenantId,command.agreementId);asset(value.auditRecord,command.actor.tenantId,command.agreementId);
-    return this.mutate(command,'finalize',value,(client,agreement)=>this.complete(client,command,agreement,value),fence);
-  }
-  private async complete(client:PoolClient,command:Mutation,agreement:Agreement,value:FinalizeAgreement):Promise<Agreement> {
-      if(command.actor.kind!=='staff') throw new StoreError('forbidden','Provider authority is required');
-      const round=await this.round(client,agreement.tenantId,agreement.id,value.roundId);
-      if(agreement.status!=='signing'||round.status!=='active'||round.revisionId!==value.revisionId||agreement.currentRevisionId!==value.revisionId||!round.requiredGrantIds.length) throw new StoreError('conflict','Signing round changed');
-      const missing=(await client.query('SELECT 1 FROM dripsign.required_signer r LEFT JOIN dripsign.signature s ON s.tenant_id=r.tenant_id AND s.round_id=r.round_id AND s.grant_id=r.grant_id WHERE r.tenant_id=$1 AND r.round_id=$2 AND s.grant_id IS NULL LIMIT 1',[agreement.tenantId,round.id])).rowCount;
-      if(missing) throw new StoreError('conflict','Every required party must sign');
-      for(const [kind,document] of [['signed_document',value.signedDocument],['audit_record',value.auditRecord]] as const) await client.query('INSERT INTO dripsign.archived_artifact(tenant_id,round_id,id,kind,document) VALUES($1,$2,$3,$4,$5)',[agreement.tenantId,round.id,randomUUID(),kind,JSON.stringify(document)]);
-      await client.query('UPDATE dripsign.signing_round SET status=\'completed\' WHERE tenant_id=$1 AND id=$2',[agreement.tenantId,round.id]);
-      await client.query('UPDATE dripsign.agreement SET status=\'signed\' WHERE tenant_id=$1 AND id=$2',[agreement.tenantId,agreement.id]);
-      const eventId=randomUUID();
-      const provenance=(await client.query<{createProvenance:import('./types.ts').CreateProvenance|null}>('SELECT create_provenance AS \"createProvenance\" FROM dripsign.agreement WHERE tenant_id=$1 AND id=$2',[agreement.tenantId,agreement.id])).rows[0]?.createProvenance??null;
-      await this.enqueue(client,{tenantId:agreement.tenantId,agreementId:agreement.id,kind:'agreement_executed',dedupeKey:`executed:${round.id}`,payload:{eventId,tenantId:agreement.tenantId,agreementId:agreement.id,revisionId:round.revisionId,signedDocumentSha256:value.signedDocument.sha256,auditRecordSha256:value.auditRecord.sha256,createProvenance:provenance}});
-      return this.bump(client,agreement);
-  }
-  async applyArchivedEvidence(fence:JobFence,command:Mutation,value:FinalizeAgreement):Promise<Agreement> {
-    asset(value.signedDocument,command.actor.tenantId,command.agreementId);asset(value.auditRecord,command.actor.tenantId,command.agreementId);
-    return transaction(this.pool,async(client)=>{
-      await this.fence(client,fence);
-      if(fence.tenantId!==command.actor.tenantId)throw new StoreError('not_found','Resource not found');
-      const job=(await client.query<{agreement_id:string;payload:{roundId?:string}}>('SELECT agreement_id,payload FROM dripsign.outbox WHERE tenant_id=$1 AND id=$2',[fence.tenantId,fence.id])).rows[0];
-      if(job?.agreement_id!==command.agreementId||job.payload.roundId!==value.roundId)throw new StoreError('conflict','Archive job changed');
-      const agreement=await this.lockedRecovery(client,fence.tenantId,command.agreementId,value.roundId);
-      if(agreement.status==='signed'&&agreement.currentRevisionId===value.revisionId)return agreement;
-      return this.complete(client,command,agreement,value);
+
+  /** Cancellation retains partial signatures and immediately closes an unfinished round. */
+  async requestSigningCancellation(command: Mutation): Promise<SigningRound> {
+    return this.mutate(command, 'request_cancel', null, async (client, agreement) => {
+      if (command.actor.kind !== 'staff') throw new StoreError('forbidden', 'Staff permission is required');
+      const id = await this.voidActiveRound(client, agreement);
+      await this.bump(client, agreement);
+      return this.round(client, agreement.tenantId, agreement.id, id);
     });
   }
-  async getSignerAccess(command:Mutation,revisionId:string,documentSha256:string,consentHash:string):Promise<SigningAccess> {
-    bounded(consentHash,'Consent hash',64,64);
-    return transaction(this.pool,async(client)=>{
-      const agreement=await this.locked(client,command.actor,command.agreementId);
-      if(agreement.version!==command.expectedVersion)throw new StoreError('conflict','Agreement changed; reload it');
-      if(command.actor.kind!=='recipient'||agreement.status!=='signing'||agreement.currentRevisionId!==revisionId)throw new StoreError('conflict','Signing revision changed');
-      const revision=(await client.query<{sha256:string}>('SELECT document->>\'sha256\' AS sha256 FROM dripsign.revision WHERE tenant_id=$1 AND id=$2',[agreement.tenantId,revisionId])).rows[0];
-      if(revision?.sha256!==documentSha256)throw new StoreError('conflict','Review the current document');
-      const row=(await client.query<{roundId:string;signingUrl:string}>('SELECT r.id AS "roundId",s.signing_url AS "signingUrl" FROM dripsign.signing_round r JOIN dripsign.provider_signer s ON s.tenant_id=r.tenant_id AND s.round_id=r.id WHERE r.tenant_id=$1 AND r.agreement_id=$2 AND r.revision_id=$3 AND r.status=\'active\' AND s.grant_id=$4 AND NOT EXISTS(SELECT 1 FROM dripsign.signature x WHERE x.tenant_id=r.tenant_id AND x.round_id=r.id AND x.grant_id=s.grant_id)',[agreement.tenantId,agreement.id,revisionId,command.actor.grantId])).rows[0];
-      if(!row)throw new StoreError('conflict','Signature is not available');
-      await client.query('INSERT INTO dripsign.signing_consent(tenant_id,round_id,grant_id,consent_hash) VALUES($1,$2,$3,$4) ON CONFLICT(tenant_id,round_id,grant_id) DO NOTHING',[agreement.tenantId,row.roundId,command.actor.grantId,consentHash]);
-      return {roundId:row.roundId,revisionId,grantId:command.actor.grantId,signingUrl:row.signingUrl};
-    });
+
+  protected async archiveEvidence(client: PoolClient, tenantId: string, agreementId: string, roundId: string, revisionId: string): Promise<SigningArchiveEvidence> {
+    const agreement = await this.lockedRecovery(client, tenantId, agreementId, roundId);
+    const round = await this.round(client, tenantId, agreementId, roundId);
+    if (!['finalizing', 'completed'].includes(round.status) || round.revisionId !== revisionId || agreement.currentRevisionId !== revisionId) throw new StoreError('conflict', 'Signing evidence changed');
+    const revision = (await client.query<Revision>(`SELECT ${REVISION_COLUMNS} FROM dripsign.revision WHERE tenant_id=$1 AND agreement_id=$2 AND id=$3`, [tenantId, agreementId, round.revisionId])).rows[0];
+    const signatures = (await client.query<Signature>(`SELECT ${SIGNATURE_COLUMNS} FROM dripsign.signature WHERE tenant_id=$1 AND round_id=$2 ORDER BY grant_id LIMIT 100`, [tenantId, roundId])).rows;
+    if (!revision || revision.document.sha256 !== round.documentSha256 || signatures.length !== round.requiredGrantIds.length || !signatures.length || round.requiredGrantIds.some((id) => !signatures.some((signature) => signature.grantId === id))) throw new StoreError('conflict', 'Signing evidence is incomplete');
+    return { title: agreement.title, revision, round, signatures };
   }
-  async requestSigningCancellation(command:Mutation):Promise<string> {
-    return this.mutate(command,'request_cancel',null,async(client,agreement)=>{
-      if(command.actor.kind!=='staff'||agreement.status!=='signing')throw new StoreError('conflict','No active signing round');
-      const round=(await client.query<{id:string}>('SELECT id FROM dripsign.signing_round WHERE tenant_id=$1 AND agreement_id=$2 AND status IN (\'active\',\'preparing\',\'uncertain\') FOR UPDATE',[agreement.tenantId,agreement.id])).rows[0];
-      if(!round)throw new StoreError('conflict','No active signing round');
-      return this.enqueue(client,{tenantId:agreement.tenantId,agreementId:agreement.id,kind:'signing_cancel',dedupeKey:`signing:cancel:${round.id}`,payload:{mutation:{...command,idempotencyKey:`signing:cancel:${round.id}`},roundId:round.id,fields:[]}});
-    });
-  }
-  async ingestProviderEvent(event:ProviderEvent):Promise<boolean> {
-    bounded(event.eventId,'Provider event',200);bounded(event.submissionId,'Provider submission',200);
-    return transaction(this.pool,async(client)=>{
-      const round=(await client.query<{tenant_id:string;agreement_id:string;id:string;payload:Record<string,unknown>}>('SELECT r.tenant_id,r.agreement_id,r.id,o.payload FROM dripsign.signing_round r JOIN dripsign.outbox o ON o.tenant_id=r.tenant_id AND o.dedupe_key=\'signing:create:\'||r.id::text WHERE r.provider_submission_id=$1 AND r.status IN (\'active\',\'uncertain\') LIMIT 1 FOR UPDATE OF r',[event.submissionId])).rows[0];
-      if(!round)return false;
-      await this.enqueue(client,{tenantId:round.tenant_id,agreementId:round.agreement_id,kind:'signing_reconcile',dedupeKey:`provider:event:${event.eventId}`,payload:round.payload});
-      return true;
-    });
-  }
-  async applySigningCancellation(fence:JobFence,command:Mutation,roundId:string,evidence:ProviderSubmission):Promise<Agreement> {
-    return transaction(this.pool,async(client)=>{
-      await this.fence(client,fence);
-      if(command.actor.kind!=='staff'||command.actor.tenantId!==fence.tenantId)throw new StoreError('forbidden','Provider authority is required');
-      const job=(await client.query<{agreement_id:string;payload:{roundId?:string}}>('SELECT agreement_id,payload FROM dripsign.outbox WHERE tenant_id=$1 AND id=$2',[fence.tenantId,fence.id])).rows[0];
-      if(job?.agreement_id!==command.agreementId||job.payload.roundId!==roundId)throw new StoreError('conflict','Cancellation job changed');
-      const agreement=await this.lockedRecovery(client,fence.tenantId,command.agreementId,roundId);
-      const round=await this.round(client,agreement.tenantId,agreement.id,roundId);
-      if(evidence.status!=='expired'||(round.providerSubmissionId&&evidence.id!==round.providerSubmissionId))throw new StoreError('conflict','Provider cancellation evidence is required');
-      if(!round.providerSubmissionId){
-        const parties=(await client.query<{id:string;email:string}>('SELECT id,email FROM dripsign.recipient_grant WHERE tenant_id=$1 AND agreement_id=$2 AND id=ANY($3::uuid[])',[agreement.tenantId,agreement.id,round.requiredGrantIds])).rows;
-        if(evidence.signers.length!==round.requiredGrantIds.length||new Set(evidence.signers.map((s)=>s.grantId)).size!==round.requiredGrantIds.length||evidence.signers.some((s)=>!parties.some((p)=>p.id===s.grantId&&p.email===s.email.toLowerCase())))throw new StoreError('conflict','Recovered provider parties do not match');
-        await client.query('UPDATE dripsign.signing_round SET provider_submission_id=$3 WHERE tenant_id=$1 AND id=$2',[agreement.tenantId,roundId,evidence.id]);
+
+  /** Archival completion uses only a current archive lease and the exact frozen evidence. */
+  async applyArchivedEvidence(fence: JobFence, value: FinalizeAgreement): Promise<Agreement> {
+    return transaction(this.pool, async (client) => {
+      await this.fence(client, fence);
+      const job = (await client.query<{ agreement_id: string | null; kind: string; payload: unknown }>('SELECT agreement_id,kind,payload FROM dripsign.outbox WHERE tenant_id=$1 AND id=$2', [fence.tenantId, fence.id])).rows[0];
+      if (!job?.agreement_id || job.kind !== 'archive') throw new StoreError('not_found', 'Resource not found');
+      const payload = parseArchiveJobPayload(job.payload);
+      if (payload.roundId !== value.roundId || payload.revisionId !== value.revisionId) throw new StoreError('conflict', 'Archive job changed');
+      asset(value.signedDocument, fence.tenantId, job.agreement_id); asset(value.auditRecord, fence.tenantId, job.agreement_id);
+      const prefix = `tenants/${fence.tenantId}/agreements/${job.agreement_id}/`;
+      if (value.signedDocument.objectKey !== `${prefix}signed_document/${value.signedDocument.sha256}.pdf` || value.auditRecord.objectKey !== `${prefix}audit_record/${value.auditRecord.sha256}.pdf`) throw new StoreError('invalid', 'Archived documents are invalid');
+      const evidence = await this.archiveEvidence(client, fence.tenantId, job.agreement_id, value.roundId, value.revisionId);
+      const agreement = await this.lockedRecovery(client, fence.tenantId, job.agreement_id, value.roundId);
+      const existing = (await client.query<{ kind: string; document: unknown }>('SELECT kind,document FROM dripsign.archived_artifact WHERE tenant_id=$1 AND round_id=$2 LIMIT 2', [fence.tenantId, value.roundId])).rows;
+      if (evidence.round.status === 'completed') {
+        if (agreement.status !== 'signed' || existing.length !== 2 || existing.some((item) => canonicalJson(item.document) !== canonicalJson(item.kind === 'signed_document' ? value.signedDocument : value.auditRecord))) throw new StoreError('conflict', 'Archived evidence changed');
+        return agreement;
       }
-      if(round.status==='void'&&round.revisionId===agreement.currentRevisionId)return agreement;
-      if(agreement.status!=='signing'||round.revisionId!==agreement.currentRevisionId||round.status==='completed')throw new StoreError('conflict','Signing round changed');
-      await client.query('UPDATE dripsign.signing_round SET status=\'void\' WHERE tenant_id=$1 AND id=$2',[agreement.tenantId,roundId]);
-      await client.query('UPDATE dripsign.agreement SET status=\'negotiating\' WHERE tenant_id=$1 AND id=$2',[agreement.tenantId,agreement.id]);
-      return this.bump(client,agreement);
-    });
-  }
-  async markCancellationUncertain(fence:JobFence,payload:import('./types.ts').SigningJobPayload):Promise<string> {
-    return transaction(this.pool,async(client)=>{
-      await this.fence(client,fence);
-      if(payload.mutation.actor.kind!=='staff'||payload.mutation.actor.tenantId!==fence.tenantId)throw new StoreError('forbidden','Provider authority is required');
-      const job=(await client.query<{agreement_id:string}>('SELECT agreement_id FROM dripsign.outbox WHERE tenant_id=$1 AND id=$2',[fence.tenantId,fence.id])).rows[0];
-      if(job?.agreement_id!==payload.mutation.agreementId)throw new StoreError('not_found','Resource not found');
-      return this.enqueue(client,{tenantId:fence.tenantId,agreementId:payload.mutation.agreementId,kind:'signing_reconcile',dedupeKey:`signing:cancel-reconcile:${payload.roundId}`,payload:{mutation:payload.mutation,roundId:payload.roundId,fields:payload.fields}});
-    });
-  }
-  protected async voidUncreatedSigningRound(client:PoolClient,fence:JobFence):Promise<boolean> {
-    const job=(await client.query<{agreement_id:string|null;roundId:string|null}>('SELECT agreement_id,payload->>\'roundId\' AS "roundId" FROM dripsign.outbox WHERE tenant_id=$1 AND id=$2 AND lease_token=$3 AND status=\'delivering\' AND lease_until>now() AND kind=\'signing_create\' AND effect_started_at IS NULL FOR UPDATE',[fence.tenantId,fence.id,fence.leaseToken])).rows[0];
-    if(!job?.agreement_id||!job.roundId||!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(job.roundId))return false;
-    const agreement=(await client.query<Pick<Agreement,'id'|'status'|'currentRevisionId'>>('SELECT id,status,current_revision_id AS "currentRevisionId" FROM dripsign.agreement WHERE tenant_id=$1 AND id=$2 FOR UPDATE',[fence.tenantId,job.agreement_id])).rows[0];
-    if(!agreement||agreement.status!=='signing'||!agreement.currentRevisionId)return false;
-    const round=(await client.query<Pick<SigningRound,'status'|'revisionId'|'providerSubmissionId'>>('SELECT status,revision_id AS "revisionId",provider_submission_id AS "providerSubmissionId" FROM dripsign.signing_round WHERE tenant_id=$1 AND agreement_id=$2 AND id=$3 FOR UPDATE',[fence.tenantId,agreement.id,job.roundId])).rows[0];
-    if(!round||round.status!=='preparing'||round.providerSubmissionId!==null||round.revisionId!==agreement.currentRevisionId)return false;
-    await client.query('UPDATE dripsign.signing_round SET status=\'void\' WHERE tenant_id=$1 AND id=$2',[fence.tenantId,job.roundId]);
-    await client.query('UPDATE dripsign.agreement SET status=\'negotiating\',version=version+1 WHERE tenant_id=$1 AND id=$2',[fence.tenantId,agreement.id]);
-    return true;
-  }
-  async rejectSigningCreation(fence:JobFence,command:Mutation,roundId:string,rejection:Extract<SigningOutcome,{status:'rejected'}>):Promise<Agreement> {
-    if(rejection.status!=='rejected')throw new StoreError('invalid','Definitive creation rejection is required');
-    bounded(rejection.code,'Creation rejection',100);
-    return transaction(this.pool,async(client)=>{
-      await this.fence(client,fence);
-      if(command.actor.kind!=='staff'||command.actor.tenantId!==fence.tenantId)throw new StoreError('forbidden','Provider authority is required');
-      const job=(await client.query<{agreement_id:string;kind:string;effect_started_at:string|null;payload:{roundId?:string}}>('SELECT agreement_id,kind,effect_started_at::text,payload FROM dripsign.outbox WHERE tenant_id=$1 AND id=$2',[fence.tenantId,fence.id])).rows[0];
-      if(job?.kind!=='signing_create'||job.effect_started_at===null||job.agreement_id!==command.agreementId||job.payload.roundId!==roundId)throw new StoreError('conflict','Signing creation job changed');
-      const agreement=await this.lockedRecovery(client,fence.tenantId,command.agreementId,roundId);
-      const round=await this.round(client,agreement.tenantId,agreement.id,roundId);
-      if(round.providerSubmissionId!==null||round.revisionId!==agreement.currentRevisionId)throw new StoreError('conflict','Signing round changed');
-      if(round.status==='void'&&agreement.status==='negotiating')return agreement;
-      if(round.status!=='preparing'||agreement.status!=='signing')throw new StoreError('conflict','Signing creation is no longer awaiting a result');
-      await client.query('UPDATE dripsign.signing_round SET status=\'void\' WHERE tenant_id=$1 AND id=$2',[agreement.tenantId,roundId]);
-      await client.query('UPDATE dripsign.agreement SET status=\'negotiating\' WHERE tenant_id=$1 AND id=$2',[agreement.tenantId,agreement.id]);
-      return this.bump(client,agreement);
+      if (existing.length || agreement.status !== 'signing') throw new StoreError('conflict', 'Archived evidence changed');
+      for (const [kind, document] of [['signed_document', value.signedDocument], ['audit_record', value.auditRecord]] as const) await client.query('INSERT INTO dripsign.archived_artifact(tenant_id,round_id,id,kind,document) VALUES($1,$2,$3,$4,$5)', [fence.tenantId, value.roundId, randomUUID(), kind, JSON.stringify(document)]);
+      await client.query('UPDATE dripsign.signing_round SET status=\'completed\' WHERE tenant_id=$1 AND id=$2', [fence.tenantId, value.roundId]);
+      await client.query('UPDATE dripsign.agreement SET status=\'signed\' WHERE tenant_id=$1 AND id=$2', [fence.tenantId, agreement.id]);
+      const provenance = (await client.query<{ createProvenance: import('./types.ts').CreateProvenance | null }>('SELECT create_provenance AS "createProvenance" FROM dripsign.agreement WHERE tenant_id=$1 AND id=$2', [fence.tenantId, agreement.id])).rows[0]?.createProvenance ?? null;
+      await this.enqueue(client, { tenantId: fence.tenantId, agreementId: agreement.id, kind: 'agreement_executed', dedupeKey: `executed:${value.roundId}`, payload: { eventId: randomUUID(), tenantId: fence.tenantId, agreementId: agreement.id, revisionId: value.revisionId, signedDocumentSha256: value.signedDocument.sha256, auditRecordSha256: value.auditRecord.sha256, createProvenance: provenance } });
+      return this.bump(client, agreement);
     });
   }
 }

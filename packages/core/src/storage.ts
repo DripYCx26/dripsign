@@ -25,7 +25,9 @@ export class S3DocumentStorage {
 
   async putImmutable(tenantId: string, agreementId: string, kind: 'draft' | 'revision' | 'signed_document' | 'audit_record', bytes: Uint8Array): Promise<DocumentAsset> {
     if (!['draft', 'revision', 'signed_document', 'audit_record'].includes(kind)) throw new StoreError('invalid', 'The document kind is invalid.');
-    await validateUploadedPdf(bytes, kind === 'draft' || kind === 'revision' ? 10 * 1024 * 1024 : 20 * 1024 * 1024);
+    const isPreparedDocument = kind === 'draft' || kind === 'revision';
+    // Executed renditions may append four certificate pages; drafts and immutable publications keep their original quarantine bounds.
+    await validateUploadedPdf(bytes, isPreparedDocument ? 10 * 1024 * 1024 : 20 * 1024 * 1024, isPreparedDocument ? 200 : 200 + Math.ceil(10 / 3));
     return this.writeImmutableAsset(tenantId, agreementId, kind, bytes);
   }
 

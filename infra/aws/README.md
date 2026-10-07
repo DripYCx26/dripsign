@@ -1,6 +1,6 @@
 # AWS deployment
 
-This template adds a standalone DripSign deployment to an operator-owned VPC and HTTPS ALB listener. It references a separately provisioned PostgreSQL database and dedicated secret. It contains no credentials or concrete AWS account identifiers. It replaces no existing live deployment.
+This template defines a standalone DripSign deployment in an operator-owned VPC and HTTPS ALB listener. It references a separately provisioned PostgreSQL database and dedicated secret. It contains no credentials or concrete AWS account identifiers. The native signer is not deployed by this repository change; task counts remain zero and production host routing remains disabled by default.
 
 | File | Purpose |
 | --- | --- |
@@ -34,11 +34,11 @@ The private release operation must verify that `dripsign_app` cannot insert, upd
 
 ## Operate the service
 
-Use the web secret for bridge and recipient session configuration. Use the jobs secret for provider and bounded AI configuration. The application-owned runtime contract is indexed in [the container README](../container/README.md). Retain both secret resources and the artifact bucket on stack deletion or replacement. The bucket blocks public access, requires TLS, encrypts objects, and versions every write. Runtime roles have no object deletion permission. Application revision/hash rules remain responsible for immutable evidence; S3 versioning alone does not prevent an overwrite.
+Use the web secret for bridge and recipient session configuration. Use the jobs secret for private AI and host event configuration. The application-owned runtime contract is indexed in [the container README](../container/README.md). Retain both secret resources and the artifact bucket on stack deletion or replacement. The bucket blocks public access, requires TLS, encrypts objects with AES256, and versions every write. Runtime roles have no object deletion permission. Application revision/hash rules remain responsible for immutable evidence; S3 versioning alone does not prevent an overwrite.
 
-Configure DocuSeal to send authenticated callbacks to `https://<active-host>/api/webhooks/docuseal`. Store the same high-entropy webhook secret in the provider configuration and the web secret JSON key `DOCUSEAL_WEBHOOK_SECRET`. Jobs reconcile the provider state using their separate API key. Transfer callback ownership once during cutover; leave ambiguous submissions for reconciliation rather than resubmission. The template supplies configuration, not a DocuSeal account, subscription, verified webhook delivery, or DNS setup.
+DripSign owns the signing ceremony and records each required recipient's consent against the frozen published revision. Jobs generate and archive the signed PDF and audit record in the private artifact bucket. Agreement completion and host notification follow only after every required signature and both archived artifacts are recorded. Archive failures leave completion pending for recovery. Native signing needs no external signing endpoint, API key, webhook secret, or artifact-origin allowlist.
 
-Jobs alone receive SES send permission, restricted by both the verified identity ARN and `ses:FromAddress` equal to the configured exact sender. SES verification, production access, DKIM, and delivery evidence are operator prerequisites. ECS private subnet egress is limited to TCP 443 and the dedicated database TCP 5432; NAT or equivalent reachable endpoints must exist. Provider and event destination allowlisting is enforced by the application, because an IP security group cannot enforce HTTPS hostnames.
+Jobs alone receive SES send permission, restricted by both the verified identity ARN and `ses:FromAddress` equal to the configured exact sender. SES verification, production access, DKIM, and delivery evidence are operator prerequisites. ECS private subnet egress is limited to TCP 443 and the dedicated database TCP 5432; NAT or equivalent reachable endpoints must exist. The host event destination is fixed in private application configuration, because an IP security group cannot enforce HTTPS hostnames.
 
 Deploy and recover through [the private paired release contract](../paired-release.md). No public workflow assumes AWS roles or changes ECS, databases, secrets, SES, certificates, or DNS. Private configuration must not grant this public repository or any fork an AWS OIDC trust relationship.
 

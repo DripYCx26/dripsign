@@ -2,7 +2,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import type { DripSignStore, OutboxAdmission, OutboxMessage } from '@dripsign/db';
 import { logMetadata } from './metadataLog.ts';
 
-// ASSUMPTION: the lease exceeds the bounded provider read, download, and archive sequence.
+// ASSUMPTION: the lease exceeds bounded external requests and native artifact rendering and storage.
 const LEASE_MS = 300_000;
 // ASSUMPTION: this bounded fair page avoids polling every tenant while global admission is full.
 const TENANT_PAGE_SIZE = 16;

@@ -5,12 +5,14 @@ import { transaction } from './connection.ts';
 import { AGREEMENT_COLUMNS, StoreBase, actorKey } from './storeBase.ts';
 import { asset, bounded, draft, emailAddress, source, isIssuedDraft } from './validation.ts';
 import { StoreError } from './types.ts';
-import type { Actor, Agreement, AgreementInboxItem, AgreementAction, AgreementDetail, ArchivedArtifact, BootstrapStaff, DocumentDraft, Mutation, NewAgreement, PrivateAiMessage, Proposal, ProposalChange, PublishRevision, PdfPreparationJobPayload, PdfPreparationResult, JobFence, DocumentAsset, RecipientGrant, Revision, SharedMessage, Signature, SigningRound, StaffActor } from './types.ts';
+import type { Actor, Agreement, AgreementInboxItem, AgreementAction, AgreementDetail, ArchivedArtifact, BootstrapStaff, DocumentDraft, Mutation, NewAgreement, PrivateAiMessage, Proposal, ProposalChange, PublishRevision, PdfPreparationJobPayload, PdfPreparationResult, JobFence, DocumentAsset, RecipientGrant, Revision, SharedMessage, SignatureSummary, FrozenSigner, ProposalAiCandidate, ProposalAiJobPayload, PrivateSuggestion, SigningRound, StaffActor } from './types.ts';
 
 const GRANT_COLUMNS = 'id,agreement_id AS "agreementId",email,name,required_signer AS "requiredSigner",revoked_at::text AS "revokedAt"';
-const REVISION_COLUMNS = 'id,agreement_id AS "agreementId",number,document,source,signing_fields AS "signingFields",required_grant_ids AS "requiredGrantIds",published_at::text AS "publishedAt"';
+export const REVISION_COLUMNS = 'id,agreement_id AS "agreementId",number,document,source,signing_fields AS "signingFields",required_grant_ids AS "requiredGrantIds",published_at::text AS "publishedAt"';
 const PROPOSAL_COLUMNS = 'id,agreement_id AS "agreementId",base_revision_id AS "baseRevisionId",author_kind AS "authorKind",author_id AS "authorId",text,replacement_source AS "replacementSource",original_source AS "originalSource",status,supersedes_id AS "supersedesId",created_at::text AS "createdAt"';
-export const ROUND_COLUMNS = 'id, id AS "attemptId", agreement_id AS "agreementId", revision_id AS "revisionId",status,provider,provider_submission_id AS "providerSubmissionId",created_at::text AS "createdAt"';
+export const ROUND_COLUMNS = 'id,agreement_id AS "agreementId",revision_id AS "revisionId",status,document_sha256 AS "documentSha256",consent_version AS "consentVersion",consent_text AS "consentText",consent_hash AS "consentHash",created_at::text AS "createdAt"';
+export const SIGNATURE_COLUMNS = 'round_id AS "roundId",grant_id AS "grantId",typed_name AS "typedName",consent_version AS "consentVersion",consent_text AS "consentText",consent_hash AS "consentHash",document_sha256 AS "documentSha256",signed_at::text AS "signedAt",auth_session_id AS "authSessionId",verified_at::text AS "verifiedAt",request_evidence AS "requestEvidence"';
+const CANDIDATE_COLUMNS = 'id,proposal_id AS "proposalId",revision_id AS "revisionId",source_sha256 AS "sourceSha256",status,suggestion,created_at::text AS "createdAt",adopted_at::text AS "adoptedAt"';
 
 export class AgreementStore extends StoreBase {
   async bootstrapStaff(input: BootstrapStaff): Promise<StaffActor> {
@@ -35,12 +37,14 @@ export class AgreementStore extends StoreBase {
       return (await client.query<Agreement>(`SELECT ${AGREEMENT_COLUMNS} FROM dripsign.agreement WHERE tenant_id=$1 AND ($2::uuid IS NULL OR id<$2) ORDER BY id DESC LIMIT $3`, [actor.tenantId,beforeId,limit])).rows;
     });
   }
-  async listAgreementInbox(actor:StaffActor,limit=50,beforeId:string|null=null):Promise<readonly AgreementInboxItem[]> {
+  async listAgreementInbox(actor:StaffActor,limit=50,beforeId:string|null=null,view:'outstanding'|'received'|'all'='all'):Promise<readonly AgreementInboxItem[]> {
     if(!Number.isInteger(limit)||limit<1||limit>100)throw new StoreError('invalid','Page size is invalid');
+    if(!['outstanding','received','all'].includes(view))throw new StoreError('invalid','Inbox view is invalid');
+    const statuses=view==='outstanding'?['draft','negotiating','signing']:view==='received'?['signed']:null;
     return transaction(this.pool,async(client)=>{
       await this.staff(client,actor);
       return (await client.query<AgreementInboxItem>(`WITH page AS (
-        SELECT * FROM dripsign.agreement WHERE tenant_id=$1 AND ($2::uuid IS NULL OR id<$2) ORDER BY id DESC LIMIT $3
+        SELECT * FROM dripsign.agreement WHERE tenant_id=$1 AND ($2::uuid IS NULL OR id<$2) AND ($4::text[] IS NULL OR status=ANY($4::text[])) ORDER BY id DESC LIMIT $3
       ), latest_round AS (
         SELECT DISTINCT ON(r.agreement_id) r.id,r.agreement_id FROM dripsign.signing_round r JOIN page p ON p.tenant_id=r.tenant_id AND p.id=r.agreement_id WHERE r.tenant_id=$1 ORDER BY r.agreement_id,r.created_at DESC,r.id DESC
       ), signatures AS (
@@ -48,44 +52,44 @@ export class AgreementStore extends StoreBase {
       ), required AS (
         SELECT r.agreement_id,count(s.grant_id)::int AS required_count FROM latest_round r LEFT JOIN dripsign.required_signer s ON s.tenant_id=$1 AND s.round_id=r.id GROUP BY r.agreement_id
       ) SELECT p.id,p.tenant_id AS "tenantId",p.title,p.status,p.version,p.draft_dirty AS \"publicationNeeded\",p.current_revision_id AS "currentRevisionId",p.created_at::text AS "createdAt",q.author_kind AS "pendingProposalAuthorKind",COALESCE(s.signed_count,0) AS "signedCount",COALESCE(r.required_count,0) AS "requiredCount"
-       FROM page p LEFT JOIN dripsign.proposal q ON q.tenant_id=p.tenant_id AND q.agreement_id=p.id AND q.status='pending' LEFT JOIN signatures s ON s.agreement_id=p.id LEFT JOIN required r ON r.agreement_id=p.id ORDER BY p.id DESC`,[actor.tenantId,beforeId,limit])).rows;
+       FROM page p LEFT JOIN dripsign.proposal q ON q.tenant_id=p.tenant_id AND q.agreement_id=p.id AND q.status='pending' LEFT JOIN signatures s ON s.agreement_id=p.id LEFT JOIN required r ON r.agreement_id=p.id ORDER BY p.id DESC`,[actor.tenantId,beforeId,limit,statuses])).rows;
     });
   }
-  protected async detail(client: PoolClient, actor: Actor, agreementId: string, recoveryRoundId:string|null=null): Promise<AgreementDetail> {
-    const agreement = recoveryRoundId?await this.lockedRecovery(client,actor.tenantId,agreementId,recoveryRoundId):await this.locked(client,actor,agreementId);
+  protected async detail(client: PoolClient, actor: Actor, agreementId: string): Promise<AgreementDetail> {
+    const agreement = await this.locked(client,actor,agreementId);
     const tenant = actor.tenantId;
     const grants = (await client.query<RecipientGrant>(`SELECT ${GRANT_COLUMNS} FROM dripsign.recipient_grant WHERE tenant_id=$1 AND agreement_id=$2 ORDER BY id LIMIT 100`, [tenant,agreementId])).rows;
     const revisions = (await client.query<Revision>(`SELECT ${REVISION_COLUMNS} FROM dripsign.revision WHERE tenant_id=$1 AND agreement_id=$2 ORDER BY number DESC LIMIT 100`, [tenant,agreementId])).rows;
     const proposals = (await client.query<Proposal>(`SELECT ${PROPOSAL_COLUMNS} FROM dripsign.proposal WHERE tenant_id=$1 AND agreement_id=$2 ORDER BY created_at DESC,id DESC LIMIT 200`, [tenant,agreementId])).rows;
     const messages = (await client.query<SharedMessage>('SELECT id,agreement_id AS "agreementId",author_kind AS "authorKind",author_id AS "authorId",body,created_at::text AS "createdAt" FROM dripsign.shared_message WHERE tenant_id=$1 AND agreement_id=$2 ORDER BY created_at DESC,id DESC LIMIT 200', [tenant,agreementId])).rows;
-    const round = (await client.query<Omit<SigningRound,'requiredGrantIds'>>(`SELECT ${ROUND_COLUMNS} FROM dripsign.signing_round WHERE tenant_id=$1 AND agreement_id=$2 ORDER BY created_at DESC,id DESC LIMIT 1`, [tenant,agreementId])).rows[0];
-    const required = round ? (await client.query<{grant_id: string}>('SELECT grant_id FROM dripsign.required_signer WHERE tenant_id=$1 AND round_id=$2 ORDER BY grant_id LIMIT 100', [tenant,round.id])).rows.map((r) => r.grant_id) : [];
-    const signatures = round ? (await client.query<Signature>('SELECT round_id AS "roundId",grant_id AS "grantId",provider_event_id AS "providerEventId",signed_at::text AS "signedAt" FROM dripsign.signature WHERE tenant_id=$1 AND round_id=$2 LIMIT 100', [tenant,round.id])).rows : [];
+    const round = (await client.query<Omit<SigningRound,'requiredGrantIds'|'signers'>>(`SELECT ${ROUND_COLUMNS} FROM dripsign.signing_round WHERE tenant_id=$1 AND agreement_id=$2 ORDER BY created_at DESC,id DESC LIMIT 1`, [tenant,agreementId])).rows[0];
+    const signers = round ? (await client.query<FrozenSigner>('SELECT grant_id AS "grantId",name,email FROM dripsign.required_signer WHERE tenant_id=$1 AND round_id=$2 ORDER BY grant_id LIMIT 100', [tenant,round.id])).rows : [];
+    const required = signers.map((signer) => signer.grantId);
+    const signatures = round ? (await client.query<SignatureSummary>('SELECT round_id AS "roundId",grant_id AS "grantId",typed_name AS "typedName",signed_at::text AS "signedAt" FROM dripsign.signature WHERE tenant_id=$1 AND round_id=$2 ORDER BY grant_id LIMIT 100', [tenant,round.id])).rows : [];
     const artifacts = round ? (await client.query<ArchivedArtifact>('SELECT id,round_id AS "roundId",kind,document,archived_at::text AS "archivedAt" FROM dripsign.archived_artifact WHERE tenant_id=$1 AND round_id=$2 LIMIT 2', [tenant,round.id])).rows : [];
-    const privateAiMessages = !recoveryRoundId && actor.kind === 'staff' ? await this.privateMessages(client,actor,agreementId) : [];
+    const privateAiMessages = actor.kind === 'staff' ? await this.privateMessages(client,actor,agreementId) : [];
     const actions: AgreementAction[] = ['message'];
     if(agreement.currentRevisionId || (actor.kind==='staff' && agreement.draft.document))actions.push('download');
     const issued= revisions.find((revision)=>revision.id===agreement.currentRevisionId);
     if(actor.kind==='staff' && agreement.status==='negotiating' && !agreement.publicationNeeded && issued && isIssuedDraft(agreement.draft,issued) && !proposals.some((p)=>p.status==='pending'))actions.push('request_signatures');
-    if(actor.kind==='staff' && agreement.status==='signing')actions.push('cancel_signatures');
+    if(actor.kind==='staff' && agreement.status==='signing' && round?.status==='active')actions.push('cancel_signatures');
     const editable = agreement.status === 'draft' || agreement.status === 'negotiating';
     const pending = proposals.find((p) => p.status === 'pending');
-    if (editable && agreement.currentRevisionId) {
+    if ((editable || (actor.kind==='recipient' && round?.status==='active')) && agreement.currentRevisionId) {
       if (pending) { if (pending.authorKind !== actor.kind) actions.push('counter','accept','reject'); }
       else actions.push('propose');
     }
     if (actor.kind === 'staff' && editable) { actions.push('save_draft','ask_ai'); if (!pending && agreement.draft.preparationStatus==='ready' && agreement.draft.document) actions.push('publish'); }
     if (actor.kind === 'recipient' && round?.status === 'active' && required.includes(actor.grantId) && !signatures.some((s) => s.grantId === actor.grantId)) actions.push('sign');
+    const privateAiCandidates = actor.kind==='staff' ? (await client.query<ProposalAiCandidate>(`SELECT ${CANDIDATE_COLUMNS} FROM dripsign.proposal_ai_candidate WHERE tenant_id=$1 AND agreement_id=$2 ORDER BY created_at DESC,id DESC LIMIT 100`,[tenant,agreementId])).rows : [];
+    if (actor.kind==='staff' && editable && privateAiCandidates.some((candidate)=>candidate.status==='ready' && candidate.revisionId===agreement.currentRevisionId)) actions.push('adopt_ai_candidate');
     return {
       agreement: { id: agreement.id,tenantId: agreement.tenantId,title: agreement.title,status: agreement.status,version: agreement.version,currentRevisionId: agreement.currentRevisionId,publicationNeeded: agreement.publicationNeeded,createdAt: agreement.createdAt },
-      draft: !recoveryRoundId && actor.kind === 'staff' ? agreement.draft : null,
+      draft: actor.kind === 'staff' ? agreement.draft : null,
       grants: actor.kind === 'staff' ? grants : grants.filter((g) => g.id === actor.grantId),
-      revisions,proposals: actor.kind==='staff'?proposals:proposals.map((p)=>({...p,authorId:p.authorKind==='staff'?'staff':p.authorId})),messages:actor.kind==='staff'?messages:messages.map((m)=>({...m,authorId:m.authorKind==='staff'?'staff':m.authorId})), signingRound: round ? { ...round,requiredGrantIds: required } : null,
-      signatures,artifacts,allowedActions: recoveryRoundId?[]:actions,privateAiMessages,
+      revisions,proposals: actor.kind==='staff'?proposals:proposals.map((p)=>({...p,authorId:p.authorKind==='staff'?'staff':p.authorId})),messages:actor.kind==='staff'?messages:messages.map((m)=>({...m,authorId:m.authorKind==='staff'?'staff':m.authorId})), signingRound: round ? { ...round,requiredGrantIds: required,signers:actor.kind==='staff'?signers:signers.filter((signer)=>signer.grantId===actor.grantId) } : null,
+      signatures,artifacts,allowedActions: actions,privateAiMessages,privateAiCandidates,
     };
-  }
-  protected async recoveryDetail(client:PoolClient,tenantId:string,agreementId:string,roundId:string):Promise<AgreementDetail> {
-    return this.detail(client,{kind:'staff',tenantId,userId:'recovery'},agreementId,roundId);
   }
   async getBridgeCreatedAgreement(actor:StaffActor,subject:string,key:string,bodySha256:string):Promise<Agreement|null> {
     bounded(subject,'Creator subject',200);bounded(key,'Create key',200,8);
@@ -98,7 +102,7 @@ export class AgreementStore extends StoreBase {
   async getAgreement(actor: Actor, agreementId: string): Promise<AgreementDetail> { return transaction(this.pool,(client) => this.detail(client,actor,agreementId)); }
   async createAgreement(input: NewAgreement): Promise<Agreement> {
     bounded(input.title,'Title',300); bounded(input.idempotencyKey,'Idempotency key',200,8);
-    if (input.recipients.length < 1 || input.recipients.length > 100 || !input.recipients.some((r) => r.requiredSigner)) throw new StoreError('invalid','At least one required signer is needed');
+    if (input.recipients.length < 1 || input.recipients.length > 100 || !input.recipients.some((r) => r.requiredSigner) || input.recipients.filter((r) => r.requiredSigner).length > 10) throw new StoreError('invalid','Choose between one and ten required signers');
     if(input.createProvenance&&(input.createProvenance.tenantId!==input.actor.tenantId||input.createProvenance.subject!==input.actor.userId||input.createProvenance.idempotencyKey!==input.idempotencyKey||!/^[a-f0-9]{64}$/.test(input.createProvenance.bodySha256)))throw new StoreError('invalid','Create provenance is invalid');
     const emails = new Set<string>();
     for (const recipient of input.recipients) { const email = emailAddress(recipient.email); bounded(recipient.name,'Recipient name',200); if (emails.has(email)) throw new StoreError('invalid','Recipient is duplicated'); emails.add(email); }
@@ -126,12 +130,35 @@ export class AgreementStore extends StoreBase {
     });
   }
   protected requireEditable(status: Agreement['status']): void { if (status !== 'draft' && status !== 'negotiating') throw new StoreError('conflict','Agreement is not open for changes'); }
+  protected async voidActiveRound(client: PoolClient, agreement: Agreement): Promise<string> {
+    if (agreement.status!=='signing') throw new StoreError('conflict','No active signing round');
+    const round=(await client.query<{id:string;status:SigningRound['status']}>('SELECT id,status FROM dripsign.signing_round WHERE tenant_id=$1 AND agreement_id=$2 AND revision_id=$3 AND status IN (\'active\',\'finalizing\',\'completed\') FOR UPDATE',[agreement.tenantId,agreement.id,agreement.currentRevisionId])).rows[0];
+    if (!round || round.status!=='active') throw new StoreError('conflict','Signatures are being finalized');
+    await client.query('UPDATE dripsign.signing_round SET status=\'void\' WHERE tenant_id=$1 AND id=$2',[agreement.tenantId,round.id]);
+    await client.query('UPDATE dripsign.agreement SET status=\'negotiating\' WHERE tenant_id=$1 AND id=$2',[agreement.tenantId,agreement.id]);
+    return round.id;
+  }
+  async revokeRecipientGrant(command: Mutation, grantId: string): Promise<Agreement> {
+    return this.mutate(command,'revoke_grant',{grantId},async(client,agreement)=>{
+      if (command.actor.kind!=='staff') throw new StoreError('forbidden','Staff permission is required');
+      const grant=(await client.query<{requiredSigner:boolean}>('SELECT required_signer AS "requiredSigner" FROM dripsign.recipient_grant WHERE tenant_id=$1 AND agreement_id=$2 AND id=$3 AND revoked_at IS NULL FOR UPDATE',[agreement.tenantId,agreement.id,grantId])).rows[0];
+      if (!grant) throw new StoreError('not_found','Resource not found');
+      if (agreement.status==='signing' && grant.requiredSigner) {
+        const round=(await client.query<{status:SigningRound['status']}>('SELECT status FROM dripsign.signing_round WHERE tenant_id=$1 AND agreement_id=$2 AND revision_id=$3 AND status IN (\'active\',\'finalizing\') FOR UPDATE',[agreement.tenantId,agreement.id,agreement.currentRevisionId])).rows[0];
+        if (!round) throw new StoreError('conflict','Signing round changed');
+        if (round.status==='active') await this.voidActiveRound(client,agreement);
+      }
+      await client.query('UPDATE dripsign.recipient_grant SET revoked_at=now() WHERE tenant_id=$1 AND agreement_id=$2 AND id=$3',[agreement.tenantId,agreement.id,grantId]);
+      return this.bump(client,agreement);
+    });
+  }
   async proposeChange(command: Mutation, change: ProposalChange): Promise<Proposal> { return this.proposal(command,change,false); }
   async counterProposal(command: Mutation, change: ProposalChange): Promise<Proposal> { return this.proposal(command,change,true); }
   private async proposal(command: Mutation, change: ProposalChange, counter: boolean): Promise<Proposal> {
     bounded(change.text,'Proposal',20000); source(change.replacementSource);
     return this.mutate(command,counter?'counter':'propose',change,async (client,agreement) => {
-      this.requireEditable(agreement.status);
+      if (agreement.status==='signing' && command.actor.kind==='recipient' && !counter) await this.voidActiveRound(client,agreement);
+      else this.requireEditable(agreement.status);
       if (!agreement.currentRevisionId) throw new StoreError('conflict','Publish a revision before negotiation');
       const pending = (await client.query<Proposal>(`SELECT ${PROPOSAL_COLUMNS} FROM dripsign.proposal WHERE tenant_id=$1 AND agreement_id=$2 AND status='pending' FOR UPDATE`,[agreement.tenantId,agreement.id])).rows[0];
       if (counter) {
@@ -141,6 +168,11 @@ export class AgreementStore extends StoreBase {
       const revision = (await client.query<{source: DocumentDraft['source']}>('SELECT source FROM dripsign.revision WHERE tenant_id=$1 AND id=$2',[agreement.tenantId,agreement.currentRevisionId])).rows[0];
       const result = (await client.query<Proposal>(`INSERT INTO dripsign.proposal(tenant_id,agreement_id,id,base_revision_id,author_kind,author_id,text,replacement_source,original_source,supersedes_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING ${PROPOSAL_COLUMNS}`,[agreement.tenantId,agreement.id,randomUUID(),agreement.currentRevisionId,command.actor.kind,command.actor.kind==='staff'?command.actor.userId:command.actor.grantId,change.text,JSON.stringify(change.replacementSource),JSON.stringify(revision?.source ?? null),change.supersedesId])).rows[0];
       if (!result) throw new Error('Proposal insert returned no row');
+      if (command.actor.kind==='recipient' && revision?.source) {
+        const sourceSha256=createHash('sha256').update(canonicalJson(revision.source)).digest('hex');
+        const jobId=await this.enqueue(client,{tenantId:agreement.tenantId,agreementId:agreement.id,kind:'proposal_ai_suggestion',dedupeKey:`proposal:ai:${result.id}`,payload:{proposalId:result.id,revisionId:result.baseRevisionId,sourceSha256,source:revision.source,instruction:result.text}});
+        await client.query('INSERT INTO dripsign.proposal_ai_candidate(tenant_id,agreement_id,id,proposal_id,revision_id,source_sha256,job_id) VALUES($1,$2,$3,$4,$5,$6,$7)',[agreement.tenantId,agreement.id,randomUUID(),result.id,result.baseRevisionId,sourceSha256,jobId]);
+      }
       await this.bump(client,agreement); return result;
     });
   }
@@ -202,6 +234,56 @@ export class AgreementStore extends StoreBase {
       this.requireEditable(agreement.status);
       if(!agreement.draft.source)throw new StoreError('conflict','Editable source is required');
       return this.enqueue(client,{tenantId:agreement.tenantId,agreementId:agreement.id,kind:'ai_suggestion',dedupeKey:this.derivedKey('ai',`${command.actor.userId}:${command.idempotencyKey}`),payload:{mutation:{...command,idempotencyKey:this.derivedKey('ai:result',command.idempotencyKey)},instruction,source:agreement.draft.source}});
+    });
+  }
+  protected async proposalSuggestionContext(client: PoolClient, fence: JobFence, payload: ProposalAiJobPayload, requireCurrent: boolean): Promise<ProposalAiCandidate> {
+    await this.fence(client,fence);
+    const job=(await client.query<{agreement_id:string;kind:string;payload:unknown}>('SELECT agreement_id,kind,payload FROM dripsign.outbox WHERE tenant_id=$1 AND id=$2',[fence.tenantId,fence.id])).rows[0];
+    if (!job || job.kind!=='proposal_ai_suggestion' || canonicalJson(job.payload)!==canonicalJson(payload)) throw new StoreError('not_found','Resource not found');
+    const agreement=(await client.query<Agreement>(`SELECT ${AGREEMENT_COLUMNS} FROM dripsign.agreement WHERE tenant_id=$1 AND id=$2 FOR UPDATE`,[fence.tenantId,job.agreement_id])).rows[0];
+    const candidate=(await client.query<ProposalAiCandidate>(`SELECT ${CANDIDATE_COLUMNS} FROM dripsign.proposal_ai_candidate WHERE tenant_id=$1 AND agreement_id=$2 AND job_id=$3 AND proposal_id=$4 AND revision_id=$5 AND source_sha256=$6 FOR UPDATE`,[fence.tenantId,job.agreement_id,fence.id,payload.proposalId,payload.revisionId,payload.sourceSha256])).rows[0];
+    if (!agreement || !candidate) throw new StoreError('not_found','Resource not found');
+    if (requireCurrent) {
+      const proposal=(await client.query('SELECT 1 FROM dripsign.proposal WHERE tenant_id=$1 AND agreement_id=$2 AND id=$3 AND base_revision_id=$4 AND status=\'pending\'',[fence.tenantId,agreement.id,payload.proposalId,payload.revisionId])).rowCount;
+      const original=(await client.query<{source:DocumentDraft['source']}>('SELECT source FROM dripsign.revision WHERE tenant_id=$1 AND agreement_id=$2 AND id=$3',[fence.tenantId,agreement.id,payload.revisionId])).rows[0];
+      if (candidate.status!=='queued' || agreement.status!=='negotiating' || agreement.currentRevisionId!==payload.revisionId || !proposal || !original?.source || canonicalJson(original.source)!==canonicalJson(payload.source) || createHash('sha256').update(canonicalJson(payload.source)).digest('hex')!==payload.sourceSha256) throw new StoreError('conflict','Proposal suggestion changed');
+    }
+    return candidate;
+  }
+  async completeProposalSuggestion(fence: JobFence, payload: ProposalAiJobPayload, suggestion: PrivateSuggestion): Promise<ProposalAiCandidate> {
+    if (!suggestion.source) throw new StoreError('invalid','Suggestion source is invalid');
+    source(suggestion.source); bounded(suggestion.summary,'Suggestion summary',20000);
+    if (!Array.isArray(suggestion.questions) || suggestion.questions.length>20) throw new StoreError('invalid','Suggestion questions are invalid');
+    for (const question of suggestion.questions) bounded(question,'Suggestion question',2000);
+    if (Buffer.byteLength(JSON.stringify(suggestion),'utf8')>500000) throw new StoreError('invalid','Suggestion is too large');
+    return transaction(this.pool,async(client)=>{
+      const candidate=await this.proposalSuggestionContext(client,fence,payload,true);
+      const row=(await client.query<ProposalAiCandidate>(`UPDATE dripsign.proposal_ai_candidate SET status='ready',suggestion=$3 WHERE tenant_id=$1 AND id=$2 RETURNING ${CANDIDATE_COLUMNS}`,[fence.tenantId,candidate.id,JSON.stringify(suggestion)])).rows[0];
+      if (!row) throw new Error('Suggestion update returned no row');
+      return row;
+    });
+  }
+  async failProposalSuggestion(fence: JobFence, payload: ProposalAiJobPayload, status: 'failed'|'uncertain'): Promise<boolean> {
+    if (!['failed','uncertain'].includes(status)) throw new StoreError('invalid','Suggestion outcome is invalid');
+    return transaction(this.pool,async(client)=>{
+      const candidate=await this.proposalSuggestionContext(client,fence,payload,false);
+      return (await client.query('UPDATE dripsign.proposal_ai_candidate SET status=$3 WHERE tenant_id=$1 AND id=$2 AND status=\'queued\'',[fence.tenantId,candidate.id,status])).rowCount===1;
+    });
+  }
+  /** Accepts the exact recipient proposal and stages its reviewed candidate privately while the document base remains current. */
+  async adoptProposalSuggestion(command: Mutation, candidateId: string): Promise<Agreement> {
+    return this.mutate(command,'adopt_ai_candidate',{candidateId},async(client,agreement)=>{
+      if (command.actor.kind!=='staff') throw new StoreError('forbidden','Staff permission is required');
+      this.requireEditable(agreement.status);
+      const candidate=(await client.query<ProposalAiCandidate>(`SELECT ${CANDIDATE_COLUMNS} FROM dripsign.proposal_ai_candidate WHERE tenant_id=$1 AND agreement_id=$2 AND id=$3 FOR UPDATE`,[agreement.tenantId,agreement.id,candidateId])).rows[0];
+      const proposal=candidate?(await client.query('SELECT 1 FROM dripsign.proposal WHERE tenant_id=$1 AND agreement_id=$2 AND id=$3 AND status=\'pending\' AND author_kind=\'recipient\' AND base_revision_id=$4 FOR UPDATE',[agreement.tenantId,agreement.id,candidate.proposalId,candidate.revisionId])).rowCount:0;
+      const revision=(await client.query<Revision>(`SELECT ${REVISION_COLUMNS} FROM dripsign.revision WHERE tenant_id=$1 AND agreement_id=$2 AND id=$3`,[agreement.tenantId,agreement.id,agreement.currentRevisionId])).rows[0];
+      if (!candidate?.suggestion || candidate.status!=='ready' || candidate.revisionId!==agreement.currentRevisionId || !proposal || !revision?.source || agreement.publicationNeeded || !isIssuedDraft(agreement.draft,revision) || createHash('sha256').update(canonicalJson(revision.source)).digest('hex')!==candidate.sourceSha256) throw new StoreError('conflict','Suggestion no longer matches the working draft');
+      const value:DocumentDraft={source:candidate.suggestion.source,document:null,originalDocument:null,signingFields:[],requiredGrantIds:[],preparationStatus:'empty',preparationError:null};
+      await client.query('UPDATE dripsign.agreement SET draft=$3,draft_dirty=true WHERE tenant_id=$1 AND id=$2',[agreement.tenantId,agreement.id,JSON.stringify(value)]);
+      await client.query('UPDATE dripsign.proposal SET status=\'accepted\' WHERE tenant_id=$1 AND agreement_id=$2 AND id=$3',[agreement.tenantId,agreement.id,candidate.proposalId]);
+      await client.query('UPDATE dripsign.proposal_ai_candidate SET status=\'adopted\',adopted_at=now() WHERE tenant_id=$1 AND id=$2',[agreement.tenantId,candidate.id]);
+      return this.bump(client,agreement);
     });
   }
   async queueUploadedPdf(command:Mutation,originalDocument:DocumentAsset):Promise<string> {

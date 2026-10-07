@@ -1,15 +1,15 @@
 import { hashBytes } from '@dripsign/core';
-import { createAgreement, createSchema, idSchema } from '../../../../server/api';
+import { createAgreement, createSchema } from '../../../../server/api';
 import { bridgeActor } from '../../../../server/bridge';
 import { handleRequest, json, MAX_COMMAND_BYTES, readBytes, parseJsonBytes } from '../../../../server/http';
-import { listAgreements } from '../../../../server/agreements';
+import { agreementListQuery, listAgreements } from '../../../../server/agreements';
 
 /** Host list/create requests receive native tenant authorization after assertion verification. */
 export async function GET(request: Request): Promise<Response> {
   return handleRequest(async () => {
     const actor = await bridgeActor(request, new Uint8Array(), 'agreements', 'list');
-    const before = new URL(request.url).searchParams.get('before');
-    return json({ agreements: await listAgreements(actor, before ? idSchema.parse(before) : null) });
+    const query = agreementListQuery(request);
+    return json({ agreements: await listAgreements(actor, query.before ?? null, query.view) });
   });
 }
 export async function POST(request: Request): Promise<Response> {

@@ -7,7 +7,7 @@ export function bounded(value: string, name: string, max: number, min = 1): stri
   return value;
 }
 export function emailAddress(value: string): string {
-  const email = bounded(value.trim().toLowerCase(), 'Email', 320, 3);
+  const email = bounded(value.trim().toLowerCase(), 'Email', 254, 3);
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new StoreError('invalid', 'Email is invalid');
   return email;
 }
@@ -27,7 +27,7 @@ export function source(value: DocumentSource | null): void {
     ids.add(section.id);
     for (const paragraph of section.paragraphs) bounded(paragraph, 'Paragraph', 20000, 0);
   }
-  if (JSON.stringify(value).length > 500000) throw new StoreError('invalid', 'Document source is too large');
+  if (Buffer.byteLength(JSON.stringify(value), 'utf8') > 500000) throw new StoreError('invalid', 'Document source is too large');
 }
 export function draft(value: DocumentDraft, tenantId: string, agreementId: string): void {
   source(value.source);
@@ -56,36 +56,31 @@ export function parseMailJobPayload(value:unknown): import('./types.ts').MailJob
   if(data.expiresAt!==null&&(typeof data.expiresAt!=='string'||!Number.isFinite(Date.parse(data.expiresAt))))throw new StoreError('invalid','Mail expiry is invalid');
   return {email:{to:emailAddress(stringField(message.to,320)),subject:stringField(message.subject,300),text:stringField(message.text,20000)},expiresAt:data.expiresAt};
 }
-export function parseSigningJobPayload(value:unknown): import('./types.ts').SigningJobPayload {
-  const data=object(value,['mutation','roundId','fields']);
-  if(!Array.isArray(data.fields)||data.fields.length>1000)throw new StoreError('invalid','Signing fields are invalid');
-  const fields:import('./types.ts').SigningField[]=data.fields.map((value:unknown)=>{
-    const field=object(value,['grantId','type','page','x','y','width','height']);
-    if(field.type!=='signature'&&field.type!=='date'&&field.type!=='text')throw new StoreError('invalid','Signing field type is invalid');
-    if(typeof field.page!=='number'||!Number.isInteger(field.page)||field.page<1||field.page>500)throw new StoreError('invalid','Signing page is invalid');
-    for(const key of ['x','y','width','height'])if(typeof field[key]!=='number'||!Number.isFinite(field[key])||field[key]<0||field[key]>1)throw new StoreError('invalid','Signing coordinates are invalid');
-    // SAFETY: each coordinate was narrowed to a finite bounded number above.
-    const x=field.x as number,y=field.y as number,width=field.width as number,height=field.height as number;
-    if(width<=0||height<=0||x+width>1||y+height>1)throw new StoreError('invalid','Signing bounds are invalid');
-    return {grantId:stringField(field.grantId),type:field.type,page:field.page,x,y,width,height};
-  });
-  return {mutation:jobMutation(data.mutation),roundId:stringField(data.roundId),fields};
+export function parseArchiveJobPayload(value: unknown): import('./types.ts').ArchiveJobPayload {
+  const data = object(value, ['roundId', 'revisionId']);
+  return { roundId: stringField(data.roundId), revisionId: stringField(data.revisionId) };
 }
-export function parseAiJobPayload(value:unknown): import('./types.ts').AiJobPayload {
-  const data=object(value,['mutation','instruction','source']);
-  const raw=object(data.source,['title','sections']);
+function documentSource(value: unknown): DocumentSource {
+  const raw=object(value,['title','sections']);
   if(!Array.isArray(raw.sections))throw new StoreError('invalid','Document source is invalid');
   const document:DocumentSource={title:stringField(raw.title,300),sections:raw.sections.map((item:unknown)=>{
     const section=object(item,['id','heading','paragraphs']);
-    if(typeof section.heading!=='string'||!Array.isArray(section.paragraphs)||section.paragraphs.some((p:unknown)=>typeof p!=='string'))throw new StoreError('invalid','Document section is invalid');
-    return {id:stringField(section.id,100),heading:section.heading,paragraphs:section.paragraphs.map((p:unknown)=>stringField(p,20000))};
+    if(typeof section.heading!=='string'||!Array.isArray(section.paragraphs)||section.paragraphs.some((paragraph:unknown)=>typeof paragraph!=='string'))throw new StoreError('invalid','Document section is invalid');
+    return {id:stringField(section.id,100),heading:section.heading,paragraphs:section.paragraphs.map((paragraph:unknown)=>{
+      if(typeof paragraph!=='string')throw new StoreError('invalid','Document paragraph is invalid');
+      return bounded(paragraph,'Paragraph',20000,0);
+    })};
   })};
   source(document);
-  return {mutation:jobMutation(data.mutation),instruction:stringField(data.instruction,20000),source:document};
+  return document;
+}
+export function parseAiJobPayload(value:unknown): import('./types.ts').AiJobPayload {
+  const data=object(value,['mutation','instruction','source']);
+  return {mutation:jobMutation(data.mutation),instruction:stringField(data.instruction,20000),source:documentSource(data.source)};
 }
 
 export function signingFields(fields: readonly import('./types.ts').SigningField[],grantIds: readonly string[]):void {
-  if(!Array.isArray(fields)||fields.length>1000||!Array.isArray(grantIds)||grantIds.length>100||new Set(grantIds).size!==grantIds.length)throw new StoreError('invalid','Signing preview is invalid');
+  if(!Array.isArray(fields)||fields.length>1000||!Array.isArray(grantIds)||grantIds.length>10||new Set(grantIds).size!==grantIds.length)throw new StoreError('invalid','Signing preview is invalid');
   for(const field of fields) {
     if(!Number.isInteger(field.page)||field.page<1||field.page>500||![field.x,field.y,field.width,field.height].every((v)=>Number.isFinite(v)&&v>=0&&v<=1)||field.width===0||field.height===0||field.x+field.width>1||field.y+field.height>1||!grantIds.includes(field.grantId)||!['signature','date','text'].includes(field.type))throw new StoreError('invalid','Signing field is invalid');
   }
@@ -95,7 +90,7 @@ export function signingFields(fields: readonly import('./types.ts').SigningField
 export function parsePdfPreparationJobPayload(value:unknown): import('./types.ts').PdfPreparationJobPayload {
   const data=object(value,['mutation','originalDocument','requiredGrantIds']);
   const command=jobMutation(data.mutation),raw=object(data.originalDocument,['objectKey','sha256','byteLength','contentType']);
-  if(typeof raw.byteLength!=='number'||raw.contentType!=='application/pdf'||!Array.isArray(data.requiredGrantIds)||data.requiredGrantIds.length<1||data.requiredGrantIds.length>100)throw new StoreError('invalid','PDF preparation payload is invalid');
+  if(typeof raw.byteLength!=='number'||raw.contentType!=='application/pdf'||!Array.isArray(data.requiredGrantIds)||data.requiredGrantIds.length<1||data.requiredGrantIds.length>10)throw new StoreError('invalid','PDF preparation payload is invalid');
   const document:DocumentAsset={objectKey:stringField(raw.objectKey,1000),sha256:stringField(raw.sha256,64),byteLength:raw.byteLength,contentType:'application/pdf'};
   asset(document,command.actor.tenantId,command.agreementId);
   const requiredGrantIds=data.requiredGrantIds.map((id:unknown)=>stringField(id));
@@ -107,4 +102,21 @@ export function isIssuedDraft(draft:DocumentDraft,revision:Pick<Revision,'docume
   return draft.preparationStatus==='ready'&&draft.document!==null&&canonicalJson(draft.document)===canonicalJson(revision.document)
     &&canonicalJson(draft.source)===canonicalJson(revision.source)&&canonicalJson(draft.signingFields)===canonicalJson(revision.signingFields)
     &&canonicalJson(draft.requiredGrantIds)===canonicalJson(revision.requiredGrantIds);
+}
+
+export function parseProposalAiJobPayload(value: unknown): import('./types.ts').ProposalAiJobPayload {
+  const data = object(value, ['proposalId', 'revisionId', 'sourceSha256', 'source', 'instruction']);
+  const sourceSha256 = stringField(data.sourceSha256, 64);
+  if (!/^[a-f0-9]{64}$/.test(sourceSha256)) throw new StoreError('invalid', 'Suggestion source is invalid');
+  return { proposalId: stringField(data.proposalId), revisionId: stringField(data.revisionId), sourceSha256, source: documentSource(data.source), instruction: stringField(data.instruction,20000) };
+}
+export function signatureName(value: string): string {
+  bounded(value, 'Typed name', 200);
+  if (value !== value.trim() || !value.trim() || /[\p{Cc}\p{Cf}]/u.test(value)) throw new StoreError('invalid', 'Typed name is invalid');
+  return value;
+}
+export function requestEvidence(value: import('./types.ts').SignatureRequestEvidence): void {
+  for (const [name, item, limit] of [['IP address', value.ipAddress, 64], ['User agent', value.userAgent, 500], ['Request ID', value.requestId, 200]] as const) {
+    if (item !== null && (typeof item !== 'string' || item.length > limit || /[\p{Cc}\p{Cf}]/u.test(item))) throw new StoreError('invalid', `${name} is invalid`);
+  }
 }

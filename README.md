@@ -14,8 +14,9 @@ the sender, recipient, agreement, and current revision for each operation.
 - Email codes give each recipient access to the agreements shared with that address.
 - A document sits beside a turn-based proposal thread. Accepting a change creates
   a private draft; publishing creates a new immutable PDF version.
-- Required signers consent to the exact published version. DocuSeal handles the
-  signing ceremony. Completion requires every signature and archived evidence.
+- Required signers verify their invited email, accept the signing terms, and
+  sign the exact published PDF with their typed name. Completion requires every
+  signature and archived evidence.
 - A private staff workspace can ask Claude Sonnet 5.5 for suggested edits. A
   staff member must review and publish any resulting change.
 - A host app can mount the shared staff UI through a signed server bridge.
@@ -24,7 +25,7 @@ the sender, recipient, agreement, and current revision for each operation.
 ## Run your own instance
 
 Use Node 24 and pnpm 10.34.6. Supply a PostgreSQL database, private S3 bucket,
-AWS SES identity, DocuSeal API account, and the server-only configuration listed
+AWS SES identity, and the server-only configuration listed
 in [web setup](apps/web/README.md), [jobs setup](apps/jobs/README.md), and the
 [container guide](infra/container/README.md). Run the database migration with
 the owner-capable identity, bootstrap staff membership, then start web and jobs.
@@ -32,7 +33,7 @@ The web app alone does not send codes or process signatures.
 
 The [AWS template](infra/aws/README.md) provides separate web and jobs tasks,
 restricted roles, private storage, and optional host routing. DNS, certificates,
-SES approval, provider credentials, and production secrets are supplied by the
+SES approval and production secrets are supplied by the
 operator. [Paired releases](infra/paired-release.md) describe how a host app can
 pin a DripSign version without sharing its database or credentials.
 

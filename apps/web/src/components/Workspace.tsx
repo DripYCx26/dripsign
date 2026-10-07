@@ -5,7 +5,7 @@ import type { ChangeEvent, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { AgreementWorkspace } from '@dripsign/ui';
 import type { AgreementDetail, ProposalChange } from '@dripsign/db';
-import { SIGNING_CONSENT } from '../signingConsent';
+import { SIGNING_CONSENT_VERSION, SIGNING_CONSENT_HASH } from '../signingConsent';
 
 type Props = { readonly detail: AgreementDetail; readonly isStaff: boolean };
 
@@ -14,8 +14,8 @@ export function Workspace({ detail, isStaff }: Props): ReactNode {
   const router = useRouter();
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasReviewed, setHasReviewed] = useState(false);
-  const [hasConsented, setHasConsented] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [needsVerification, setNeedsVerification] = useState(false);
   const [isRefreshing, startRefresh] = useTransition();
   const id = detail.agreement.id;
   const revision = detail.revisions.find((item) => item.id === detail.agreement.currentRevisionId);
@@ -35,19 +35,47 @@ export function Workspace({ detail, isStaff }: Props): ReactNode {
     } catch { setError('The action outcome is unknown. Reload the agreement before trying again.'); }
     finally { setIsPending(false); }
   }
-  async function handleSign(): Promise<void> {
-    if (!hasConsented || !revision) { setError('Confirm your intent to sign this exact document.'); return; }
-    setIsPending(true); setError(null);
+  async function handleSign(typedName: string): Promise<void> {
+    const round = detail.signingRound;
+    if (!revision || !round) { setError('The signing request changed. Refresh the agreement.'); return; }
+    setIsPending(true); setError(null); setNotice(null);
     try {
       const response = await fetch(`/api/agreements/${id}/sign`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ expectedVersion: detail.agreement.version, idempotencyKey: crypto.randomUUID(), revisionId: revision.id, documentSha256: revision.document.sha256, intentConfirmed: true }),
+        body: JSON.stringify({ expectedVersion: detail.agreement.version, idempotencyKey: crypto.randomUUID(),
+          roundId: round.id, revisionId: revision.id, documentSha256: revision.document.sha256, typedName,
+          consentVersion: SIGNING_CONSENT_VERSION, consentHash: SIGNING_CONSENT_HASH, consentAccepted: true }),
       });
       const value: unknown = await response.json();
-      if (!response.ok || typeof value !== 'object' || value === null || !('signingUrl' in value) || typeof value.signingUrl !== 'string') { setError('Signing is unavailable. Reload the agreement.'); return; }
-      const url = new URL(value.signingUrl);
-      if (url.protocol !== 'https:') { setError('Signing is unavailable.'); return; }
-      window.location.assign(url.href);
-    } catch { setError('Signing is unavailable. Reload the agreement.'); }
+      if (!response.ok) {
+        const code = typeof value === 'object' && value !== null && 'error' in value ? value.error : null;
+        switch (code) {
+          case 'verification_required': case 'authentication_required':
+            setNeedsVerification(true); setError('Verify your email again before signing.'); break;
+          case 'conflict': setError('The agreement changed. Refresh and review the current document before signing.'); break;
+          case 'invalid': case 'invalid_request': setError('The signature could not be accepted. Check your typed name and consent.'); break;
+          case 'admission_paused': setError('Signing is paused. Try again later.'); break;
+          default: setError('The signature outcome is unknown. Refresh the agreement before trying again.');
+        }
+        return;
+      }
+      if (typeof value !== 'object' || value === null || !('roundId' in value) || value.roundId !== round.id
+        || !('revisionId' in value) || value.revisionId !== revision.id
+        || !('documentSha256' in value) || value.documentSha256 !== revision.document.sha256
+        || !('signedAt' in value) || typeof value.signedAt !== 'string' || !Number.isFinite(Date.parse(value.signedAt))) {
+        setError('The signature outcome is unknown. Refresh the agreement before trying again.'); return;
+      }
+      setNotice('Your signature was recorded. The signed PDF and audit record become available after every required signature is recorded and both files are archived.');
+      startRefresh(() => router.refresh());
+    } catch { setError('The signature outcome is unknown. Refresh the agreement before trying again.'); }
+    finally { setIsPending(false); }
+  }
+  async function handleReverify(): Promise<void> {
+    setIsPending(true); setError(null);
+    try {
+      const response = await fetch('/api/auth/logout', { method: 'POST' });
+      if (!response.ok) { setError('Email verification could not be restarted. Try again.'); return; }
+      startRefresh(() => router.refresh());
+    } catch { setError('Email verification could not be restarted. Try again.'); }
     finally { setIsPending(false); }
   }
   async function handleUpload(event: ChangeEvent<HTMLInputElement>): Promise<void> {
@@ -71,19 +99,20 @@ export function Workspace({ detail, isStaff }: Props): ReactNode {
     {isStaff && <section className="workspace-tools stack">
       {detail.allowedActions.includes('save_draft') && <label>Replace with a PDF<input type="file" accept="application/pdf" disabled={isPending} onChange={(event) => { void handleUpload(event); }} /></label>}
       {preview && <p className="notice">Preview SHA-256: <code>{preview.sha256}</code> <a href={pdfUrl ?? '#'} target="_blank" rel="noopener noreferrer">Open full PDF</a></p>}
-      {detail.allowedActions.includes('publish') && <label><input type="checkbox" checked={hasReviewed} onChange={(event) => setHasReviewed(event.target.checked)} />I reviewed the full PDF and its signature fields.</label>}
       {detail.allowedActions.some((action) => action === 'request_signatures') && <button className="primary" disabled={isPending} onClick={() => { void command({ action: 'request_signatures' }); }}>Request signatures on the published version</button>}
       {detail.allowedActions.some((action) => action === 'cancel_signatures') && <button className="secondary" disabled={isPending} onClick={() => { void command({ action: 'cancel_signatures' }); }}>Cancel the current signature request</button>}
     </section>}
-    {!isStaff && detail.allowedActions.includes('sign') && <label className="signing-consent"><input type="checkbox" checked={hasConsented} onChange={(event) => setHasConsented(event.target.checked)} />{SIGNING_CONSENT} Version {revision?.number}.</label>}
-    <AgreementWorkspace detail={detail} documentUrl={pdfUrl} isDraftPreview={isDraftPreview} isPending={isPending} error={error}
+    {notice && <p className="notice" role="status">{notice}</p>}
+    {needsVerification && <button className="secondary" disabled={isPending || isRefreshing} onClick={() => { void handleReverify(); }}>Verify email again</button>}
+    <AgreementWorkspace detail={detail} documentUrl={pdfUrl} isDraftPreview={isDraftPreview} isPending={isPending || isRefreshing} error={error}
       onPropose={handleProposal} onAccept={(proposalId) => { void command({ action: 'accept', proposalId }); }}
       onReject={(proposalId) => { void command({ action: 'reject', proposalId }); }}
       onMessage={(body) => { void command({ action: 'message', body }); }}
       onAskAi={(instruction) => { void command({ action: 'ask_ai', instruction }); }}
+      onAdoptAiCandidate={(candidateId) => { void command({ action: 'adopt_ai_candidate', candidateId }); }}
       onSaveDraft={(draft) => { if (draft.source) void command({ action: 'save_draft', source: draft.source }); }}
-      onPublish={() => { if (!hasReviewed || !detail.draft?.document) { setError('Review the full PDF before publishing.'); return; } void command({ action: 'publish', reviewedSha256: detail.draft.document.sha256 }); }}
-      onSign={() => { void handleSign(); }}
+      onPublish={() => { if (!detail.draft?.document) { setError('Prepare a PDF before publishing.'); return; } void command({ action: 'publish', reviewedSha256: detail.draft.document.sha256 }); }}
+      onSign={(typedName) => { void handleSign(typedName); }}
       onDownload={(kind) => { window.location.assign(`/api/agreements/${id}/pdf?kind=${kind}`); }}
     />
   </>;

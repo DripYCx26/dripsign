@@ -25,15 +25,15 @@ export class StoreBase {
     if (!result.rowCount) throw new StoreError('not_found', 'Resource not found');
   }
   protected async locked(client: PoolClient, actor: Actor, agreementId: string): Promise<LockedAgreement> {
-    await this.authorize(client, actor, agreementId);
     const result = await client.query<LockedAgreement>(`SELECT ${AGREEMENT_COLUMNS}, draft FROM dripsign.agreement WHERE tenant_id=$1 AND id=$2 FOR UPDATE`, [actor.tenantId, agreementId]);
     const agreement = result.rows[0];
     if (!agreement || (actor.kind === 'recipient' && !agreement.currentRevisionId)) throw new StoreError('not_found', 'Resource not found');
+    await this.authorize(client, actor, agreementId);
     return agreement;
   }
   protected async lockedRecovery(client:PoolClient,tenantId:string,agreementId:string,roundId:string):Promise<LockedAgreement> {
     const agreement=(await client.query<LockedAgreement>(`SELECT ${AGREEMENT_COLUMNS},draft FROM dripsign.agreement WHERE tenant_id=$1 AND id=$2 FOR UPDATE`,[tenantId,agreementId])).rows[0];
-    if(!agreement||!agreement.currentRevisionId||!['signing','signed','negotiating'].includes(agreement.status))throw new StoreError('not_found','Resource not found');
+    if(!agreement||!agreement.currentRevisionId||!['signing','signed'].includes(agreement.status))throw new StoreError('not_found','Resource not found');
     const round=(await client.query('SELECT 1 FROM dripsign.signing_round WHERE tenant_id=$1 AND agreement_id=$2 AND id=$3 AND revision_id=$4 FOR UPDATE',[tenantId,agreementId,roundId,agreement.currentRevisionId])).rowCount;
     if(!round)throw new StoreError('not_found','Resource not found');
     return agreement;
@@ -48,7 +48,7 @@ export class StoreBase {
     if (!next) throw new StoreError('not_found', 'Resource not found');
     return next;
   }
-  protected async mutate<T>(command: Mutation, operation: string, data: unknown, action: (client: PoolClient, agreement: LockedAgreement) => Promise<T>, fence?: JobFence): Promise<T> {
+  protected async mutate<T>(command: Mutation, operation: string, data: unknown, action: (client: PoolClient, agreement: LockedAgreement) => Promise<T>, fence?: JobFence, beforeReplay?: (client: PoolClient, agreement: LockedAgreement) => Promise<void>): Promise<T> {
     bounded(command.idempotencyKey, 'Idempotency key', 200, 8);
     if (!Number.isSafeInteger(command.expectedVersion) || command.expectedVersion < 1) throw new StoreError('invalid', 'Version is invalid');
     return transaction(this.pool, async (client) => {
@@ -59,6 +59,7 @@ export class StoreBase {
         if(job?.agreement_id!==command.agreementId)throw new StoreError('not_found','Resource not found');
       }
       const agreement = await this.locked(client, command.actor, command.agreementId);
+      if (beforeReplay) await beforeReplay(client, agreement);
       const hash = createHash('sha256').update(canonicalJson({ agreementId: command.agreementId, expectedVersion: command.expectedVersion, data })).digest('hex');
       const key = actorKey(command.actor);
       const previous = await client.query<{ request_hash: string; result: T }>('SELECT request_hash,result FROM dripsign.idempotency WHERE tenant_id=$1 AND actor_key=$2 AND operation=$3 AND key=$4', [agreement.tenantId, key, operation, command.idempotencyKey]);

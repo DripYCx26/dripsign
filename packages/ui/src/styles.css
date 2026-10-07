@@ -54,8 +54,8 @@
 .ds-badge { display: inline-flex; align-items: center; gap: var(--ds-space-1); padding: var(--ds-space-1) var(--ds-space-2); border-radius: var(--ds-space-1); font-size: var(--ds-small); font-weight: 500; background: var(--ds-chrome); color: var(--ds-muted); }
 .ds-badge[data-tone="blue"] { color: var(--ds-blue); background: var(--ds-blue-wash); }
 .ds-badge[data-tone="green"] { color: var(--ds-green); background: var(--ds-green-wash); }
-.ds-columns { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(360px, 1fr); gap: var(--ds-space-5); padding: 0 var(--ds-space-6) var(--ds-space-6); align-items: start; }
-.ds-panel { border: 1px solid var(--ds-border); border-radius: var(--ds-card-radius); background: var(--ds-card); overflow: hidden; }
+.ds-columns { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(0, 1.65fr); gap: var(--ds-space-5); padding: 0 var(--ds-space-6) var(--ds-space-6); align-items: start; }
+.ds-panel { min-width: 0; border: 1px solid var(--ds-border); border-radius: var(--ds-card-radius); background: var(--ds-card); overflow: hidden; }
 .ds-panel-heading { padding: var(--ds-space-4) var(--ds-space-5); display: flex; align-items: center; justify-content: space-between; gap: var(--ds-space-3); border-bottom: 1px solid var(--ds-border); }
 .ds-document { padding: var(--ds-space-6); min-height: 500px; }
 .ds-document-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.85; }
@@ -95,7 +95,7 @@ textarea.ds-input { resize: vertical; min-height: 90px; }
 .ds-suggestion { margin-top: var(--ds-space-4); padding: var(--ds-space-4); border: 1px solid var(--ds-border); border-radius: var(--ds-radius); background: var(--ds-paper); }
 .ds-suggestion p { white-space: pre-wrap; overflow-wrap: anywhere; }
 .ds-footer { padding: var(--ds-space-4) var(--ds-space-6); border-top: 1px solid var(--ds-border); color: var(--ds-muted); font-size: var(--ds-small); display: flex; justify-content: space-between; gap: var(--ds-space-4); }
-@media (max-width: 1000px) { .ds-columns { grid-template-columns: minmax(0, 1fr) minmax(320px, 1fr); gap: var(--ds-space-4); padding-inline: var(--ds-space-4); } .ds-document { padding: var(--ds-space-5); } }
+@media (max-width: 1000px) { .ds-columns { grid-template-columns: minmax(280px, 1fr) minmax(0, 1.35fr); gap: var(--ds-space-4); padding-inline: var(--ds-space-4); } .ds-document { padding: var(--ds-space-5); } }
 @media (max-width: 760px) { .ds-columns { grid-template-columns: 1fr; } .ds-header, .ds-workspace-heading, .ds-footer { padding-inline: var(--ds-space-4); flex-wrap: wrap; } .ds-workspace-heading { align-items: flex-start; } .ds-document-frame { height: 480px; } .ds-document { min-height: 240px; } .ds-alert { margin-inline: var(--ds-space-4); } }
 .ds-proposal-actions { padding: var(--ds-space-3) var(--ds-space-4); border-top: 1px solid var(--ds-border); }
 .ds-source-section { margin: 0; padding: var(--ds-space-3); border: 1px solid var(--ds-border); border-radius: var(--ds-radius); display: grid; gap: var(--ds-space-3); }
@@ -106,3 +106,12 @@ textarea.ds-input { resize: vertical; min-height: 90px; }
 .ds-ai-drawer::backdrop { background: var(--ds-scrim); }
 .ds-drawer-body { padding: var(--ds-space-5); }
 .ds-document-hash { overflow-wrap: anywhere; font-size: var(--ds-small); }
+.ds-checkbox { display: flex; align-items: flex-start; gap: var(--ds-space-2); font-size: var(--ds-small); line-height: 1.5; }
+.ds-checkbox input { margin: var(--ds-space-1) 0 0; flex-shrink: 0; accent-color: var(--ds-blue); }
+.ds-publish-review { padding: var(--ds-space-4) var(--ds-space-5); border-top: 1px solid var(--ds-border); background: var(--ds-paper); }
+.ds-signature-form { margin-block: var(--ds-space-4); }
+.ds-signature-form p { margin: 0; }
+.ds-signer-list li { align-items: flex-start; }
+.ds-signer-list .ds-badge { flex-shrink: 0; }
+.ds-signature-meta { display: flex; flex-wrap: wrap; gap: var(--ds-space-2); color: var(--ds-muted); font-size: var(--ds-small); overflow-wrap: anywhere; }
+.ds-signer-list li > div { min-width: 0; overflow-wrap: anywhere; }

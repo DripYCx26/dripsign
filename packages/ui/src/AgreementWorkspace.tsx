@@ -2,7 +2,8 @@
 
 import { useId, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
-import type { AgreementDetail, ArchivedArtifact, DocumentDraft, DocumentSource, Proposal, ProposalChange } from '@dripsign/db';
+import { SIGNING_CONSENT_HASH, SIGNING_CONSENT_TEXT, SIGNING_CONSENT_VERSION } from '@dripsign/db/types';
+import type { AgreementDetail, ArchivedArtifact, DocumentDraft, DocumentSource, Proposal, ProposalAiCandidate, ProposalChange, Revision } from '@dripsign/db/types';
 export type AgreementWorkspaceProps = {
   readonly detail: AgreementDetail;
   readonly documentUrl?: string | null;
@@ -13,11 +14,12 @@ export type AgreementWorkspaceProps = {
   readonly onAccept?: ((proposalId: string) => void) | undefined;
   readonly onReject?: ((proposalId: string) => void) | undefined;
   readonly onPublish?: (() => void) | undefined;
-  readonly onSign?: (() => void) | undefined;
+  readonly onSign?: ((typedName: string) => void) | undefined;
   readonly onDownload?: ((kind: ArchivedArtifact['kind']) => void) | undefined;
   readonly onMessage?: ((body: string) => void) | undefined;
   readonly onAskAi?: ((instruction: string) => void) | undefined;
   readonly onSaveDraft?: ((draft: DocumentDraft) => void) | undefined;
+  readonly onAdoptAiCandidate?: ((id: string) => void) | undefined;
 };
 const statusLabels: Record<AgreementDetail['agreement']['status'], string> = {
   draft: 'Draft', negotiating: 'In review', signing: 'Awaiting signatures', signed: 'Signed', void: 'Voided',
@@ -178,8 +180,50 @@ function DraftEditor({ draft, isPending, onSaveDraft }: {
     <button className="ds-button" disabled={isPending || !onSaveDraft}>Save working draft</button>
   </form>;
 }
+function PublishReview({ canReview, isPending, onPublish }: {
+  readonly canReview: boolean;
+  readonly isPending: boolean;
+  readonly onPublish: AgreementWorkspaceProps['onPublish'];
+}): ReactElement {
+  const [hasReviewed, setHasReviewed] = useState(false);
+  return <div className="ds-publish-review ds-form">
+    <label className="ds-checkbox">
+      <input type="checkbox" checked={hasReviewed} disabled={isPending || !canReview} onChange={event => setHasReviewed(event.target.checked)}/>
+      <span>I reviewed the full PDF and its signature fields.</span>
+    </label>
+    <div className="ds-actions">
+      <button className="ds-button" data-primary="true" disabled={isPending || !canReview || !hasReviewed || !onPublish} onClick={() => { if (!isPending && canReview && hasReviewed) onPublish?.(); }}>Publish revision</button>
+    </div>
+  </div>;
+}
+function AiCandidate({ candidate, canAdopt, isPending, onAdoptAiCandidate }: {
+  readonly candidate: ProposalAiCandidate;
+  readonly canAdopt: boolean;
+  readonly isPending: boolean;
+  readonly onAdoptAiCandidate: AgreementWorkspaceProps['onAdoptAiCandidate'];
+}): ReactElement {
+  const statusCopy: Record<ProposalAiCandidate['status'], string> = {
+    queued: 'Preparing suggested wording.', ready: 'Suggested wording', failed: 'Suggested wording could not be prepared.',
+    uncertain: 'The suggestion outcome is unknown.', adopted: 'Proposal accepted into the private working draft.',
+  };
+  return <article className="ds-suggestion">
+    <h3 className="ds-title">{statusCopy[candidate.status]}</h3>
+    {candidate.suggestion && <>
+      <p>{candidate.suggestion.summary}</p>
+      <details className="ds-editor"><summary>Suggested document</summary><SourceText source={candidate.suggestion.source}/></details>
+      {candidate.suggestion.questions.length > 0 && <div>
+        <h4 className="ds-title">Questions to review</h4>
+        <ul>{candidate.suggestion.questions.map((question, index) => <li key={`${candidate.id}-${index}`}>{question}</li>)}</ul>
+      </div>}
+    </>}
+    {candidate.status === 'ready' && candidate.suggestion && canAdopt && <>
+      <p className="ds-muted">Accepting the proposal adds this wording to a private working draft. Review the prepared PDF, then publish separately.</p>
+      <button className="ds-button" disabled={isPending || !onAdoptAiCandidate} onClick={() => { if (!isPending) onAdoptAiCandidate?.(candidate.id); }}>Accept proposal and use this draft</button>
+    </>}
+  </article>;
+}
 /** Renders the server's agreement projection; callbacks submit commands and refresh it. */
-export function AgreementWorkspace({ detail, documentUrl, isDraftPreview = false, isPending = false, error, onPropose, onAccept, onReject, onPublish, onSign, onDownload, onMessage, onAskAi, onSaveDraft }: AgreementWorkspaceProps): ReactElement {
+export function AgreementWorkspace({ detail, documentUrl, isDraftPreview = false, isPending = false, error, onPropose, onAccept, onReject, onPublish, onSign, onDownload, onMessage, onAskAi, onSaveDraft, onAdoptAiCandidate }: AgreementWorkspaceProps): ReactElement {
   const headingId = useId();
   const aiHeadingId = useId();
   const aiDialogRef = useRef<HTMLDialogElement>(null);
@@ -210,39 +254,17 @@ export function AgreementWorkspace({ detail, documentUrl, isDraftPreview = false
         <span className="ds-badge" data-tone={detail.agreement.status === 'signed' ? 'green' : 'blue'}>
           {statusLabels[detail.agreement.status]}
         </span>
-        {detail.allowedActions.includes('publish') && <button className="ds-button" data-primary="true" disabled={isPending || !onPublish} onClick={onPublish}>Publish revision</button>}
       </div>
     </div>
     {error && <div className="ds-alert" role="alert">
       {error}
     </div>}{isPending && <p className="ds-progress" role="status">Saving your request...</p>}
     <main className="ds-columns" aria-labelledby={headingId}>
-      <section className="ds-panel" aria-label="Agreement document">
-        <header className="ds-panel-heading">
-          <h2 className="ds-title">{hasDraftPreview ? 'Private draft preview' : 'Document'}</h2>
-          {url && <a className="ds-button" href={url} target="_blank" rel="noopener noreferrer">Open PDF</a>}
-        </header>
-        {hasDraftPreview && detail.draft?.preparationStatus === 'preparing' && <p className="ds-document-note" role="status">Preparing the PDF.</p>}
-        {hasDraftPreview && detail.draft?.preparationStatus === 'failed' && <p className="ds-document-note" role="alert">The PDF could not be prepared. Upload a replacement.</p>}
-        {hasDraftPreview && detail.draft?.preparationStatus === 'empty' && <p className="ds-document-note">Upload a document to prepare a preview.</p>}
-        {url ? <iframe className="ds-document-frame" src={url} title={`${detail.agreement.title} PDF`} sandbox=""/> : source ? <div className="ds-document">
-          <SourceText source={source}/>
-        </div> : <div className="ds-empty">{hasDraftPreview ? 'A PDF preview is not available yet.' : 'The document preview is unavailable. Ask the sender for the current PDF.'}</div>}
-        <div className="ds-document-note">
-          {hasDraftPreview || !revision ? 'Private draft. Review the PDF before publishing.' : 'Published revisions stay unchanged. Accepted changes update the working draft.'}
-          {url && previewDocument && <details><summary>PDF fingerprint</summary><code className="ds-document-hash">{previewDocument.sha256}</code></details>}
-        </div>
-        {detail.allowedActions.includes('save_draft') && detail.draft && <details className="ds-disclosure">
-          <summary>Working draft</summary>
-          <p className="ds-muted">Review changes here before publishing a new revision.</p>
-          <DraftEditor key={`${detail.agreement.id}-${detail.agreement.version}`} draft={detail.draft} isPending={isPending} onSaveDraft={onSaveDraft}/>
-        </details>}
-      </section>
       <section className="ds-panel" aria-label="Shared review thread">
         <header className="ds-panel-heading">
           <div>
-            <h2 className="ds-title">Shared review</h2>
-            <p className="ds-subtitle">One conversation, a clear record of changes.</p>
+            <h2 className="ds-title">Review chat</h2>
+            <p className="ds-subtitle">Messages and proposed changes.</p>
           </div>
           <span className="ds-badge">Both parties</span>
         </header>
@@ -277,13 +299,14 @@ export function AgreementWorkspace({ detail, documentUrl, isDraftPreview = false
         </div>}{detail.allowedActions.includes('message') && <div className="ds-composer">
           <TextComposer key={`message-${detail.agreement.version}`} label="Message to the other party" buttonLabel="Send message" placeholder="Ask a question or add context." isPending={isPending} onSubmit={onMessage}/>
         </div>}
-        <SigningPanel detail={detail} isPending={isPending} onSign={onSign} onDownload={onDownload}/>
-        {detail.allowedActions.includes('ask_ai') && <>
+        <SigningPanel detail={detail} hasSigningDocument={Boolean(url && !hasDraftPreview && previewDocument?.sha256 === detail.signingRound?.documentSha256)} isPending={isPending} onSign={onSign} onDownload={onDownload}/>
+        {(detail.allowedActions.includes('ask_ai') || detail.allowedActions.includes('adopt_ai_candidate') || detail.privateAiCandidates.length > 0 || detail.privateAiMessages.length > 0) && <>
           <div className="ds-disclosure"><button className="ds-button" onClick={() => aiDialogRef.current?.showModal()}>Private AI suggestions</button></div>
           <dialog className="ds-ai-drawer" ref={aiDialogRef} aria-labelledby={aiHeadingId}>
             <header className="ds-panel-heading"><h2 className="ds-title" id={aiHeadingId}>Private AI suggestions</h2><form method="dialog"><button className="ds-button">Close</button></form></header>
             <div className="ds-drawer-body">
-              <p className="ds-muted">Visible to staff only. Review suggestions before sharing a proposal.</p>
+              <p className="ds-muted">Staff only. Review wording, prepare the PDF, then publish separately.</p>
+              {detail.privateAiCandidates.map(candidate => <AiCandidate key={candidate.id} candidate={candidate} canAdopt={detail.allowedActions.includes('adopt_ai_candidate') && candidate.revisionId === detail.agreement.currentRevisionId} isPending={isPending} onAdoptAiCandidate={onAdoptAiCandidate}/>)}
               {detail.privateAiMessages.map(message => <article className="ds-suggestion" key={message.id}>
                 <span className="ds-eyebrow">
                   {message.role === 'assistant' ? 'Suggestion' : 'Your request'}
@@ -292,10 +315,32 @@ export function AgreementWorkspace({ detail, documentUrl, isDraftPreview = false
                   {message.body}
                 </p>
               </article>)}
-              <TextComposer key={`ai-${detail.privateAiMessages.length}`} label="Ask for a suggestion" buttonLabel="Get suggestion" placeholder="Describe the wording you want to review." isPending={isPending} onSubmit={onAskAi}/>
+              {detail.allowedActions.includes('ask_ai') && <TextComposer key={`ai-${detail.privateAiMessages.length}`} label="Ask for a suggestion" buttonLabel="Get suggestion" placeholder="Describe the wording you want to review." isPending={isPending} onSubmit={onAskAi}/>}
             </div>
           </dialog>
         </>}
+      </section>
+      <section className="ds-panel" aria-label="Agreement document">
+        <header className="ds-panel-heading">
+          <h2 className="ds-title">{hasDraftPreview ? 'Working draft' : 'Document'}</h2>
+          {url && <a className="ds-button" href={url} target="_blank" rel="noopener noreferrer">Open full PDF</a>}
+        </header>
+        {hasDraftPreview && detail.draft?.preparationStatus === 'preparing' && <p className="ds-document-note" role="status">Preparing the PDF.</p>}
+        {hasDraftPreview && detail.draft?.preparationStatus === 'failed' && <p className="ds-document-note" role="alert">The PDF could not be prepared. Upload a replacement.</p>}
+        {hasDraftPreview && detail.draft?.preparationStatus === 'empty' && <p className="ds-document-note">Upload a document to prepare a preview.</p>}
+        {url ? <iframe className="ds-document-frame" src={url} title={`${detail.agreement.title} PDF`} sandbox=""/> : source ? <div className="ds-document">
+          <SourceText source={source}/>
+        </div> : <div className="ds-empty">{hasDraftPreview ? 'A PDF preview is not available yet.' : 'The document preview is unavailable. Ask the sender for the current PDF.'}</div>}
+        <div className="ds-document-note">
+          {hasDraftPreview || !revision ? 'Private draft. Review the PDF before publishing.' : 'Published revisions stay unchanged. Accepted changes update the working draft.'}
+          {url && previewDocument && <details><summary>PDF fingerprint</summary><code className="ds-document-hash">{previewDocument.sha256}</code></details>}
+        </div>
+        {detail.allowedActions.includes('publish') && <PublishReview key={`${detail.agreement.id}-${detail.agreement.version}-${detail.draft?.document?.sha256}`} canReview={Boolean(hasDraftPreview && url && detail.draft?.document && detail.draft.preparationStatus === 'ready')} isPending={isPending} onPublish={onPublish}/>}
+        {detail.allowedActions.includes('save_draft') && detail.draft && <details className="ds-disclosure">
+          <summary>Working draft</summary>
+          <p className="ds-muted">Review changes here before publishing a new revision.</p>
+          <DraftEditor key={`${detail.agreement.id}-${detail.agreement.version}`} draft={detail.draft} isPending={isPending} onSaveDraft={onSaveDraft}/>
+        </details>}
       </section>
     </main>
     <footer className="ds-footer">
@@ -304,34 +349,59 @@ export function AgreementWorkspace({ detail, documentUrl, isDraftPreview = false
     </footer>
   </div>;
 }
-function SigningPanel({ detail, isPending, onSign, onDownload }: Pick<AgreementWorkspaceProps, 'detail' | 'onSign' | 'onDownload'> & {
+function SigningPanel({ detail, hasSigningDocument, isPending, onSign, onDownload }: Pick<AgreementWorkspaceProps, 'detail' | 'onSign' | 'onDownload'> & {
+  readonly hasSigningDocument: boolean;
   readonly isPending: boolean;
 }): ReactElement | null {
   const round = detail.signingRound;
   if (!round && !detail.allowedActions.includes('sign') && !detail.allowedActions.includes('download'))
     return null;
-  const roundCopy = { preparing: 'The signing document is being prepared.', uncertain: 'The signing request is being checked. Please wait before trying again.', active: 'Each required signer signs the published revision.', completed: 'Signatures have been recorded. Completion includes archiving the signed document and audit record.', void: 'This signing request is no longer active.' };
+  const revision = detail.revisions.find(item => item.id === round?.revisionId);
+  const canSign = hasSigningDocument && detail.allowedActions.includes('sign') && round?.status === 'active' && revision
+    && revision.id === detail.agreement.currentRevisionId && revision.document.sha256 === round.documentSha256
+    && round.consentVersion === SIGNING_CONSENT_VERSION && round.consentText === SIGNING_CONSENT_TEXT && round.consentHash === SIGNING_CONSENT_HASH;
+  const roundCopy: Record<NonNullable<AgreementDetail['signingRound']>['status'], string> = {
+    active: 'Each required signer signs this version.', finalizing: 'All signatures recorded. Preparing the completed PDF.',
+    completed: 'The signed PDF and audit record are ready.', void: 'This signing request is closed.',
+  };
   return <section className="ds-signing" aria-label="Signatures">
     <h3 className="ds-title">
-      {detail.agreement.status === 'signed' ? 'Agreement signed' : 'Review and sign'}
+      {round?.status === 'completed' ? 'Agreement signed' : canSign ? 'Review and sign' : 'Signatures'}
     </h3>
     {round && <p>
       {roundCopy[round.status]}
     </p>}
     <ul className="ds-signer-list">
-      {detail.grants.filter(grant => round?.requiredGrantIds.includes(grant.id)).map(grant => <li key={grant.id}>
-        <span>
-          {grant.name || grant.email}
-        </span>
-        <span className="ds-badge" data-tone={detail.signatures.some(signature => signature.roundId === round?.id && signature.grantId === grant.id) ? 'green' : 'blue'}>
-          {detail.signatures.some(signature => signature.roundId === round?.id && signature.grantId === grant.id) ? 'Signed' : 'Awaiting signature'}
-        </span>
-      </li>)}
+      {round?.signers.map(signer => {
+        const signature = detail.signatures.find(item => item.roundId === round.id && item.grantId === signer.grantId);
+        return <li key={signer.grantId}>
+          <div><span>{signer.name || signer.email}</span>{signature && <div className="ds-signature-meta"><span>{signature.typedName}</span><time dateTime={signature.signedAt}>{signature.signedAt.slice(0, 10)}</time></div>}</div>
+          <span className="ds-badge" data-tone={signature ? 'green' : 'blue'}>{signature ? 'Signed' : round.status === 'void' ? 'Not signed' : 'Awaiting signature'}</span>
+        </li>;
+      })}
     </ul>
+    {detail.allowedActions.includes('sign') && !canSign && <p role="status">Signing is unavailable. Refresh the agreement.</p>}
+    {canSign && round && revision && <SignatureForm key={`${round.id}-${revision.id}-${round.documentSha256}-${round.consentHash}`} revision={revision} isPending={isPending} onSign={onSign}/>}
     <div className="ds-actions">
-      {detail.allowedActions.includes('sign') && <button className="ds-button" data-primary="true" disabled={isPending || !onSign} onClick={onSign}>Continue to sign</button>}{detail.allowedActions.includes('download') && detail.artifacts.map(artifact => <button className="ds-button" key={artifact.id} disabled={isPending || !onDownload} onClick={() => onDownload?.(artifact.kind)}>
+      {detail.allowedActions.includes('download') && detail.artifacts.map(artifact => <button className="ds-button" key={artifact.id} disabled={isPending || !onDownload} onClick={() => onDownload?.(artifact.kind)}>
         {artifact.kind === 'signed_document' ? 'Download signed PDF' : 'Download audit record'}
       </button>)}
     </div>
   </section>;
+}
+function SignatureForm({ revision, isPending, onSign }: {
+  readonly revision: Revision;
+  readonly isPending: boolean;
+  readonly onSign: AgreementWorkspaceProps['onSign'];
+}): ReactElement {
+  const [typedName, setTypedName] = useState('');
+  const [hasConsented, setHasConsented] = useState(false);
+  const name = typedName.trim();
+  const canSubmit = !isPending && hasConsented && name.length > 0 && name.length <= 200 && Boolean(onSign);
+  return <form className="ds-form ds-signature-form" onSubmit={event => { event.preventDefault(); if (canSubmit) onSign?.(name); }}>
+    <p>Signing version {revision.number}. Review the full PDF before signing.</p>
+    <label className="ds-field">Full name<input className="ds-input" value={typedName} autoComplete="name" minLength={1} maxLength={200} required disabled={isPending} onChange={event => setTypedName(event.target.value)}/></label>
+    <label className="ds-checkbox"><input type="checkbox" checked={hasConsented} required disabled={isPending} onChange={event => setHasConsented(event.target.checked)}/><span>{SIGNING_CONSENT_TEXT}</span></label>
+    <div className="ds-actions"><button className="ds-button" data-primary="true" type="submit" disabled={!canSubmit}>Sign version {revision.number}</button></div>
+  </form>;
 }

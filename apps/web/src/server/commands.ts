@@ -20,6 +20,7 @@ export const commandSchema = z.discriminatedUnion('action', [
   z.strictObject({ ...envelope, action: z.literal('request_signatures') }),
   z.strictObject({ ...envelope, action: z.literal('cancel_signatures') }),
   z.strictObject({ ...envelope, action: z.literal('ask_ai'), instruction: z.string().min(1).max(10000) }),
+  z.strictObject({ ...envelope, action: z.literal('adopt_ai_candidate'), candidateId: z.uuid() }),
 ]);
 export type WebCommand = z.infer<typeof commandSchema>;
 let storage: S3DocumentStorage | undefined;
@@ -40,7 +41,7 @@ export async function prepareDraft(actor: Actor, agreementId: string, bytes: Uin
   return { source, document, originalDocument: null, preparationStatus: 'ready', preparationError: null, signingFields: prepared.fields, requiredGrantIds: signers.map((grant) => grant.id) };
 }
 
-/** Dispatch validated commands to the transaction owner; providers run only through durable jobs. */
+/** Dispatch validated commands to the transaction owner; document archival runs through durable jobs. */
 export async function executeCommand(actor: Actor, agreementId: string, input: WebCommand): Promise<unknown> {
   if (input.action !== 'cancel_signatures') requireAdmission();
   const store = getStore();
@@ -63,8 +64,9 @@ export async function executeCommand(actor: Actor, agreementId: string, input: W
         || !draft.signingFields || !draft.requiredGrantIds) throw new StoreError('conflict', 'Review the current private document before publishing');
       return store.publishRevision(mutation, { document: draft.document, source: draft.source, signingFields: draft.signingFields, requiredGrantIds: draft.requiredGrantIds });
     }
-    case 'request_signatures': return store.requestSigningRound(mutation, 'docuseal');
+    case 'request_signatures': return store.requestSigningRound(mutation);
     case 'cancel_signatures': return store.requestSigningCancellation(mutation);
     case 'ask_ai': return store.requestPrivateSuggestion(mutation, input.instruction);
+    case 'adopt_ai_candidate': return store.adoptProposalSuggestion(mutation, input.candidateId);
   }
 }

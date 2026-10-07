@@ -20,9 +20,6 @@ export function readConfiguration(env: NodeJS.ProcessEnv): {
   readonly region: string;
   readonly bucket: string;
   readonly kmsKeyId: string | undefined;
-  readonly docusealUrl: string;
-  readonly docusealKey: string;
-  readonly artifactOrigins: readonly string[];
   readonly emailFrom: string;
   readonly publicOrigin: string;
   readonly anthropicKey: string;
@@ -37,13 +34,6 @@ export function readConfiguration(env: NodeJS.ProcessEnv): {
   if (hostEventUrl.protocol !== 'https:' || hostEventUrl.username || hostEventUrl.password || hostEventUrl.hash) {
     throw new Error('Invalid worker configuration: DRIPSIGN_HOST_EVENT_URL');
   }
-  const artifactOrigins = required(env, 'DOCUSEAL_ARTIFACT_ORIGINS').split(',').map((value) => {
-    const url = new URL(value.trim());
-    if (url.protocol !== 'https:' || url.username || url.password || url.href !== `${url.origin}/`) {
-      throw new Error('Invalid worker configuration: DOCUSEAL_ARTIFACT_ORIGINS');
-    }
-    return url.origin;
-  });
   const hostEventSecret = required(env, 'DRIPSIGN_HOST_EVENT_SECRET');
   const publicUrl = new URL(required(env, 'DRIPSIGN_PUBLIC_ORIGIN'));
   if (publicUrl.protocol !== 'https:' || publicUrl.username || publicUrl.password || publicUrl.href !== `${publicUrl.origin}/`) {
@@ -58,9 +48,6 @@ export function readConfiguration(env: NodeJS.ProcessEnv): {
     region: required(env, 'AWS_REGION'),
     bucket: required(env, 'DRIPSIGN_DOCUMENT_BUCKET'),
     kmsKeyId: env['DRIPSIGN_KMS_KEY_ID']?.trim() || undefined,
-    docusealUrl: required(env, 'DOCUSEAL_API_URL'),
-    docusealKey: required(env, 'DOCUSEAL_API_KEY'),
-    artifactOrigins,
     emailFrom: required(env, 'DRIPSIGN_EMAIL_FROM'),
     publicOrigin: publicUrl.origin,
     recoveryOnly: env['DRIPSIGN_RECOVERY_ONLY'] === '1',

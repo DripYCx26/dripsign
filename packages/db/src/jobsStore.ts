@@ -2,13 +2,13 @@ import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { AuthStore } from './auth.ts';
 import { transaction } from './connection.ts';
-import { bounded, jobMutation, parseMailJobPayload } from './validation.ts';
+import { bounded, jobMutation, parseMailJobPayload, parseArchiveJobPayload, parseProposalAiJobPayload } from './validation.ts';
 import { StoreError } from './types.ts';
 import type { AiReservation, ExecutedAgreementEvent, JobFence, NewOutboxMessage, OutboxAdmission, OutboxContext, OutboxMessage } from './types.ts';
 
 const OUTBOX_COLUMNS = 'id,tenant_id AS "tenantId",agreement_id AS "agreementId",kind,dedupe_key AS "dedupeKey",payload,status,lease_token AS "leaseToken",attempts';
-const RETRY_KINDS: readonly OutboxMessage['kind'][] = ['signing_reconcile', 'archive', 'agreement_executed'];
-const RECOVERY_KINDS: readonly OutboxMessage['kind'][] = ['signing_reconcile', 'archive'];
+const RETRY_KINDS: readonly OutboxMessage['kind'][] = ['archive', 'agreement_executed'];
+const RECOVERY_KINDS: readonly OutboxMessage['kind'][] = ['archive'];
 // ASSUMPTION: pilot limits ratified for initial operation; configuration may lower them.
 const ADMISSION: OutboxAdmission = { globalConcurrency: 4, tenantConcurrency: 2, globalPerMinute: 60, tenantPerMinute: 20 };
 // ASSUMPTION: the pilot admits at most $10 of resolved and reserved AI cost per tenant UTC day.
@@ -47,7 +47,7 @@ export class DripSignStore extends AuthStore {
         lease_token=NULL,lease_until=NULL,receipt='lease_expired'
         WHERE tenant_id=$1 AND status='delivering' AND lease_until<=now() RETURNING ${OUTBOX_COLUMNS}`, [tenantId, RETRY_KINDS, MAX_ATTEMPTS]);
       for (const message of expired.rows) {
-        if (message.kind === 'signing_create' || message.kind === 'signing_cancel') await this.queueSigningRecovery(client, message);
+        if (message.kind === 'proposal_ai_suggestion') await this.closeProposalCandidate(client, message, 'uncertain');
         if (message.kind === 'pdf_prepare') await this.failPdfDraft(client, message, 'lease_expired');
       }
       const active = (await client.query<{ global: number; tenant: number }>(`SELECT count(*)::int AS global,
@@ -110,42 +110,35 @@ export class DripSignStore extends AuthStore {
         [message.tenantId, message.dedupeKey.slice(4), payload.email.to]);
         if (!challenge.rowCount) throw new StoreError('not_found', 'Resource not found');
       }
-      return { message, detail: null, executedEvent: null };
+      return { message, detail: null, executedEvent: null, archiveEvidence: null };
     }
-    if (message.kind === 'agreement_executed') return { message, detail: null, executedEvent: await this.executionEvent(client, message) };
+    if (message.kind === 'agreement_executed') return { message, detail: null, executedEvent: await this.executionEvent(client, message), archiveEvidence: null };
     if (message.kind === 'revision_published') {
       const grantId = message.payload['grantId'];
       if (typeof grantId !== 'string' || !message.agreementId) throw new StoreError('invalid', 'Revision notification is invalid');
       const grant = (await client.query<{ email: string }>(`SELECT email FROM dripsign.recipient_grant
-        WHERE tenant_id=$1 AND agreement_id=$2 AND id=$3 AND revoked_at IS NULL FOR SHARE`, [message.tenantId, message.agreementId, grantId])).rows[0];
+        WHERE tenant_id=$1 AND agreement_id=$2 AND id=$3 AND revoked_at IS NULL`, [message.tenantId, message.agreementId, grantId])).rows[0];
       if (!grant) throw new StoreError('not_found', 'Resource not found');
       const detail = await this.detail(client, { kind: 'recipient', tenantId: message.tenantId, agreementId: message.agreementId, grantId, email: grant.email }, message.agreementId);
       if (detail.agreement.currentRevisionId !== message.payload['revisionId']) throw new StoreError('conflict', 'Revision notification changed');
-      return { message, detail, executedEvent: null };
+      return { message, detail, executedEvent: null, archiveEvidence: null };
     }
-    if (message.kind === 'signing_reconcile' || message.kind === 'archive') {
-      const roundId = message.payload['roundId'];
-      if (!message.agreementId || typeof roundId !== 'string') throw new StoreError('invalid', 'Signing recovery scope is invalid');
-      const detail = await this.recoveryDetail(client, message.tenantId, message.agreementId, roundId);
-      return { message, detail, executedEvent: null };
+    if (message.kind === 'archive') {
+      if (!message.agreementId) throw new StoreError('invalid', 'Signing archive scope is invalid');
+      const payload = parseArchiveJobPayload(message.payload);
+      const archiveEvidence = await this.archiveEvidence(client, message.tenantId, message.agreementId, payload.roundId, payload.revisionId);
+      return { message, detail: null, executedEvent: null, archiveEvidence };
     }
-    if (!['ai_suggestion', 'pdf_prepare', 'signing_create', 'signing_cancel'].includes(message.kind)) return { message, detail: null, executedEvent: null };
+    if (message.kind === 'proposal_ai_suggestion') {
+      await this.proposalSuggestionContext(client, fence, parseProposalAiJobPayload(message.payload), true);
+      return { message, detail: null, executedEvent: null, archiveEvidence: null };
+    }
+    if (message.kind !== 'ai_suggestion' && message.kind !== 'pdf_prepare') throw new StoreError('invalid', 'Job kind is invalid');
     const command = jobMutation(message.payload['mutation']);
     if (command.actor.kind !== 'staff' || command.actor.tenantId !== fence.tenantId || command.agreementId !== message.agreementId) throw new StoreError('not_found', 'Resource not found');
     const detail = await this.detail(client, command.actor, command.agreementId);
-    const requiresRound = message.kind !== 'ai_suggestion' && message.kind !== 'pdf_prepare';
-    if ((message.kind === 'ai_suggestion' || message.kind === 'pdf_prepare' || message.kind === 'signing_create') && command.expectedVersion !== detail.agreement.version) throw new StoreError('conflict', 'Agreement changed; reload it');
-    if (requiresRound && (message.payload['roundId'] !== detail.signingRound?.id
-      || detail.signingRound?.revisionId !== detail.agreement.currentRevisionId)) throw new StoreError('conflict', 'Signing round changed');
-    if (requiresRound) {
-      const required = detail.signingRound?.requiredGrantIds;
-      if (!required?.length) throw new StoreError('conflict', 'Required signers changed');
-      const live = await client.query(`SELECT id FROM dripsign.recipient_grant
-        WHERE tenant_id=$1 AND agreement_id=$2 AND id=ANY($3::uuid[]) AND required_signer=true AND revoked_at IS NULL FOR SHARE`,
-      [message.tenantId, message.agreementId, required]);
-      if (live.rowCount !== required.length) throw new StoreError('conflict', 'Required signers changed');
-    }
-    return { message, detail, executedEvent: null };
+    if (command.expectedVersion !== detail.agreement.version) throw new StoreError('conflict', 'Agreement changed; reload it');
+    return { message, detail, executedEvent: null, archiveEvidence: null };
   }
 
   private async executionEvent(client: PoolClient, message: OutboxMessage): Promise<ExecutedAgreementEvent> {
@@ -170,7 +163,7 @@ export class DripSignStore extends AuthStore {
   async beginOutboxEffect(fence: JobFence): Promise<boolean> {
     return transaction(this.pool, async (client) => {
       const { message } = await this.context(client, fence);
-      if (message.kind === 'ai_suggestion' && !(await client.query('SELECT 1 FROM dripsign.ai_reservation WHERE tenant_id=$1 AND job_id=$2', [fence.tenantId, fence.id])).rowCount) return false;
+      if ((message.kind === 'ai_suggestion' || message.kind === 'proposal_ai_suggestion') && !(await client.query('SELECT 1 FROM dripsign.ai_reservation WHERE tenant_id=$1 AND job_id=$2', [fence.tenantId, fence.id])).rowCount) return false;
       const result = await client.query(`UPDATE dripsign.outbox SET effect_started_at=now()
         WHERE tenant_id=$1 AND id=$2 AND lease_token=$3 AND status='delivering'
         AND lease_until>now() AND effect_started_at IS NULL`, [fence.tenantId, fence.id, fence.leaseToken]);
@@ -182,12 +175,11 @@ export class DripSignStore extends AuthStore {
     if (!['delivered', 'uncertain', 'failed'].includes(status)) throw new StoreError('invalid', 'Job outcome is invalid');
     if (receipt !== undefined) bounded(receipt, 'Job receipt', 500);
     return transaction(this.pool, async (client) => {
-      if (status === 'failed') await this.voidUncreatedSigningRound(client, fence);
       const result = await client.query<OutboxMessage>(`UPDATE dripsign.outbox SET status=$4,receipt=$5,lease_token=NULL,lease_until=NULL
         WHERE tenant_id=$1 AND id=$2 AND lease_token=$3 AND status='delivering' AND lease_until>now() RETURNING ${OUTBOX_COLUMNS}`,
       [fence.tenantId, fence.id, fence.leaseToken, status, receipt ?? null]);
       const message = result.rows[0];
-      if (message && status === 'uncertain' && (message.kind === 'signing_create' || message.kind === 'signing_cancel')) await this.queueSigningRecovery(client, message);
+      if (message && message.kind === 'proposal_ai_suggestion') await this.closeProposalCandidate(client, message, status === 'uncertain' ? 'uncertain' : 'failed');
       if (message && status === 'failed' && message.kind === 'pdf_prepare') await this.failPdfDraft(client, message, receipt?.slice(0, 100) ?? 'processing_failed');
       return result.rowCount === 1;
     });
@@ -210,12 +202,8 @@ export class DripSignStore extends AuthStore {
     [message.tenantId, message.agreementId, original.objectKey, original.sha256, reason]);
   }
 
-  private async queueSigningRecovery(client: PoolClient, message: OutboxMessage): Promise<void> {
-    const command = jobMutation(message.payload['mutation']);
-    const roundId = message.payload['roundId'];
-    if (typeof roundId !== 'string' || command.actor.tenantId !== message.tenantId || command.agreementId !== message.agreementId) throw new StoreError('invalid', 'Signing recovery scope is invalid');
-    await this.enqueue(client, { tenantId: message.tenantId, agreementId: message.agreementId, kind: 'signing_reconcile',
-      dedupeKey: message.kind === 'signing_cancel' ? `signing:cancel-reconcile:${roundId}` : `signing:reconcile:${roundId}`, payload: message.payload });
+  private async closeProposalCandidate(client: PoolClient, message: OutboxMessage, status: 'failed' | 'uncertain'): Promise<void> {
+    await client.query('UPDATE dripsign.proposal_ai_candidate SET status=$4 WHERE tenant_id=$1 AND agreement_id=$2 AND job_id=$3 AND status=\'queued\'',[message.tenantId,message.agreementId,message.id,status]);
   }
 
   async retryOutbox(fence: JobFence, retryAt: string, code: string): Promise<boolean> {
@@ -243,7 +231,7 @@ export class DripSignStore extends AuthStore {
     return transaction(this.pool, async (client) => {
       const fence = { tenantId: reservation.tenantId, id: reservation.jobId, leaseToken: reservation.leaseToken };
       const { message } = await this.context(client, fence);
-      if (message.kind !== 'ai_suggestion' || message.agreementId !== reservation.agreementId) throw new StoreError('invalid', 'AI reservation scope is invalid');
+      if ((message.kind !== 'ai_suggestion' && message.kind !== 'proposal_ai_suggestion') || message.agreementId !== reservation.agreementId) throw new StoreError('invalid', 'AI reservation scope is invalid');
       await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [`dripsign:ai-admission:${reservation.tenantId}`]);
       const previous = (await client.query<{ reserved_micros: string; actual_micros: string | null }>('SELECT reserved_micros,actual_micros FROM dripsign.ai_reservation WHERE tenant_id=$1 AND job_id=$2', [reservation.tenantId, reservation.jobId])).rows[0];
       if (previous) return false;
@@ -257,7 +245,7 @@ export class DripSignStore extends AuthStore {
     });
   }
 
-  // Unknown provider outcomes retain their full reservation; only a known cost settles it under the current lease.
+  // Unknown AI outcomes retain their full reservation; only a known cost settles it under the current lease.
   async settleAiBudget(fence: JobFence, actualCostMicros: number): Promise<boolean> {
     if (!Number.isSafeInteger(actualCostMicros) || actualCostMicros < 0 || actualCostMicros > AI_DAILY_LIMIT_MICROS) throw new StoreError('invalid', 'AI cost is invalid');
     return transaction(this.pool, async (client) => {

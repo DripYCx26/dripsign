@@ -1,20 +1,21 @@
 import {
-  DocuSealClient, PrivateSuggestionClient, S3DocumentStorage, SesEmailClient,
-  estimateSuggestionCostMicros, parseEmailMessage, prepareSigningDocument, suggestionCostMicros,
+  PrivateSuggestionClient, S3DocumentStorage, SesEmailClient,
+  estimateSuggestionCostMicros, parseEmailMessage, prepareSigningDocument, renderExecutedArtifacts, suggestionCostMicros,
 } from '@dripsign/core';
 import {
-  StoreError, parseAiJobPayload, parseMailJobPayload, parsePdfPreparationJobPayload, parseSigningJobPayload,
+  StoreError, parseAiJobPayload, parseArchiveJobPayload, parseMailJobPayload,
+  parsePdfPreparationJobPayload, parseProposalAiJobPayload,
 } from '@dripsign/db';
 import type {
   AgreementDetail, DripSignStore, JobFence, OutboxMessage, OutboxStatus,
-  ProviderSubmission, RecipientGrant, SigningJobPayload, SigningOutcome, SigningRequest,
+  RecipientGrant, SigningArchiveEvidence,
 } from '@dripsign/db';
 import type { readConfiguration } from './config.ts';
 import { deliverExecutedEvent } from './hostDelivery.ts';
 import { logMetadata } from './metadataLog.ts';
 
-const RETRY_KINDS = new Set<OutboxMessage['kind']>(['signing_reconcile', 'archive', 'agreement_executed']);
-// ASSUMPTION: five reads with exponential backoff provide bounded recovery before staff attention.
+const RETRY_KINDS = new Set<OutboxMessage['kind']>(['archive', 'agreement_executed']);
+// ASSUMPTION: five idempotent attempts with exponential backoff provide bounded recovery before staff attention.
 const MAX_ATTEMPTS = 5;
 // ASSUMPTION: pilot ceiling ratified by the service owner, counted conservatively after unknown outcomes.
 const AI_DAILY_LIMIT_MICROS = 10_000_000;
@@ -24,27 +25,11 @@ function requireDetail(detail: AgreementDetail | null): AgreementDetail {
   return detail;
 }
 
-function frozenSigners(detail: AgreementDetail): readonly RecipientGrant[] {
-  const round = detail.signingRound;
-  const revision = detail.revisions.find((item) => item.id === round?.revisionId);
-  if (!round || !revision || revision.id !== detail.agreement.currentRevisionId
-    || !round.requiredGrantIds.length || revision.requiredGrantIds.length !== round.requiredGrantIds.length
-    || revision.requiredGrantIds.some((id) => !round.requiredGrantIds.includes(id))) {
-    throw new StoreError('conflict', 'Signing revision changed');
-  }
-  const signers = round.requiredGrantIds.map((id) => detail.grants.find((grant) => grant.id === id));
-  if (signers.some((grant) => !grant || !grant.requiredSigner || grant.revokedAt !== null)) {
-    throw new StoreError('conflict', 'Required signers changed');
-  }
-  return signers.filter((grant): grant is RecipientGrant => grant !== undefined);
-}
-
 /** Executes only the persisted job kind; domain writes remain lease-fenced in the canonical store. */
 export class JobEffects {
   private readonly store: DripSignStore;
   private readonly configuration: ReturnType<typeof readConfiguration>;
   private readonly email: SesEmailClient;
-  private readonly signing: DocuSealClient;
   private readonly storage: S3DocumentStorage;
   private readonly suggestions: PrivateSuggestionClient;
 
@@ -52,7 +37,6 @@ export class JobEffects {
     this.store = store;
     this.configuration = configuration;
     this.email = new SesEmailClient(configuration.region, configuration.emailFrom);
-    this.signing = new DocuSealClient(configuration.docusealUrl, configuration.docusealKey, configuration.artifactOrigins);
     this.storage = new S3DocumentStorage(configuration.region, configuration.bucket, configuration.kmsKeyId);
     this.suggestions = new PrivateSuggestionClient(configuration.anthropicKey);
   }
@@ -99,20 +83,14 @@ export class JobEffects {
           }), begin);
           break;
         }
-        case 'signing_create':
-        case 'signing_reconcile':
-          await this.observeSigning(fence, context.message, requireDetail(context.detail), begin);
-          break;
-        case 'signing_cancel':
-          await this.cancelSigning(fence, context.message, requireDetail(context.detail), begin);
-          break;
         case 'archive':
-          await this.archive(fence, context.message, requireDetail(context.detail), begin);
+          await this.archive(fence, context.message, context.archiveEvidence, begin);
           break;
         case 'pdf_prepare':
           await this.preparePdf(fence, context.message, requireDetail(context.detail), begin);
           break;
         case 'ai_suggestion':
+        case 'proposal_ai_suggestion':
           await this.suggest(fence, context.message, begin);
           break;
         case 'agreement_executed': {
@@ -156,133 +134,48 @@ export class JobEffects {
     else await this.finish(fence, outcome.status === 'rejected' ? 'failed' : 'uncertain', outcome.status === 'rejected' ? outcome.code : undefined);
   }
 
-  private async signingRequest(detail: AgreementDetail, payload: SigningJobPayload): Promise<SigningRequest> {
-    const round = detail.signingRound;
-    const revision = detail.revisions.find((item) => item.id === round?.revisionId);
-    if (!round || round.id !== payload.roundId || !revision) throw new StoreError('conflict', 'Signing round changed');
-    const signers = frozenSigners(detail);
-    const pdf = await this.storage.get(detail.agreement.tenantId, detail.agreement.id, revision.document);
-    return { attemptId: round.attemptId, title: detail.agreement.title, pdf, sha256: revision.document.sha256, signers, fields: revision.signingFields };
-  }
-
-  private async observeSigning(fence: JobFence, message: OutboxMessage, detail: AgreementDetail, begin: () => Promise<void>): Promise<void> {
-    const payload = parseSigningJobPayload(message.payload);
-    const round = detail.signingRound;
-    if (!round || round.id !== payload.roundId) throw new StoreError('conflict', 'Signing round changed');
-    const request = message.kind === 'signing_create' || !round.providerSubmissionId
-      ? await this.signingRequest(detail, payload) : null;
-    const signers = frozenSigners(detail);
-    if (message.kind === 'signing_create' && (round.status !== 'preparing' || round.providerSubmissionId !== null)) {
-      throw new StoreError('conflict', 'Signing creation was already attempted');
+  private async archive(fence: JobFence, message: OutboxMessage, evidence: SigningArchiveEvidence | null, begin: () => Promise<void>): Promise<void> {
+    const payload = parseArchiveJobPayload(message.payload);
+    if (!evidence || !message.agreementId) throw new StoreError('conflict', 'Signing evidence is unavailable');
+    const { revision, round, signatures, title } = evidence;
+    if (round.id !== payload.roundId || revision.id !== payload.revisionId || round.revisionId !== revision.id
+      || round.agreementId !== message.agreementId || revision.agreementId !== message.agreementId
+      || revision.document.sha256 !== round.documentSha256
+      || (round.status !== 'finalizing' && round.status !== 'completed')) {
+      throw new StoreError('conflict', 'Signing evidence changed');
     }
     await begin();
-    let outcome: SigningOutcome;
-    if (message.kind === 'signing_create') {
-      if (!request) throw new StoreError('conflict', 'Signing request is unavailable');
-      outcome = await this.signing.create(request);
-    } else if (round.providerSubmissionId) {
-      outcome = { status: 'created', submission: await this.signing.read(round.providerSubmissionId, signers, round.attemptId) };
-    } else {
-      if (!request) throw new StoreError('conflict', 'Signing request is unavailable');
-      outcome = await this.signing.reconcile(request);
-    }
-    if (outcome.status === 'rejected') {
-      if (message.kind === 'signing_create') {
-        await this.store.rejectSigningCreation(fence, payload.mutation, payload.roundId, outcome);
-      }
-      return this.finish(fence, 'failed', outcome.code);
-    }
-    if (outcome.status === 'uncertain') {
-      if (message.kind === 'signing_create') {
-        await this.store.markSigningUncertain(payload.mutation, payload.roundId, fence);
-        return this.finish(fence, 'uncertain');
-      }
-      return this.retry(fence, message, 'signing_lookup_pending');
-    }
-    if (outcome.submission.status === 'expired') {
-      await this.store.applySigningCancellation(fence, payload.mutation, payload.roundId, outcome.submission);
-      return this.finish(fence, 'delivered', outcome.submission.id);
-    }
-    if (outcome.submission.status === 'declined' || outcome.submission.status === 'archived') {
-      return this.finish(fence, 'uncertain', 'provider_signing_closed');
-    }
-    await this.store.applySigningObservation(fence, payload.mutation, payload.roundId, outcome.submission);
-    if (message.kind === 'signing_reconcile' && outcome.submission.status === 'pending') {
-      return this.retry(fence, message, 'signing_pending');
-    }
-    await this.finish(fence, 'delivered', outcome.submission.id);
-  }
-
-  private async cancelSigning(fence: JobFence, message: OutboxMessage, detail: AgreementDetail, begin: () => Promise<void>): Promise<void> {
-    const payload = parseSigningJobPayload(message.payload);
-    const round = detail.signingRound;
-    if (!round || round.id !== payload.roundId) throw new StoreError('conflict', 'Signing round changed');
-    const signers = frozenSigners(detail);
-    const request = round.providerSubmissionId ? null : await this.signingRequest(detail, payload);
-    await begin();
-    let observed: ProviderSubmission;
-    if (round.providerSubmissionId) observed = await this.signing.read(round.providerSubmissionId, signers, round.attemptId);
-    else {
-      if (!request) throw new StoreError('conflict', 'Signing request is unavailable');
-      const recovered = await this.signing.reconcile(request);
-      if (recovered.status !== 'created') {
-        await this.store.markCancellationUncertain(fence, payload);
-        return this.finish(fence, 'uncertain', 'cancellation_lookup_pending');
-      }
-      observed = recovered.submission;
-      if (observed.status === 'pending' || observed.status === 'completed') {
-        await this.store.applySigningObservation(fence, payload.mutation, payload.roundId, observed);
-      }
-    }
-    const outcome = observed.status === 'expired' ? 'cancelled' : observed.status === 'completed' ? 'uncertain'
-      : await this.signing.cancel(observed.id, signers);
-    if (outcome === 'uncertain') {
-      await this.store.markCancellationUncertain(fence, payload);
-      return this.finish(fence, 'uncertain', 'cancellation_pending');
-    }
-    const evidence = observed.status === 'expired' ? observed : await this.signing.read(observed.id, signers, round.attemptId);
-    if (evidence.status !== 'expired') {
-      await this.store.markCancellationUncertain(fence, payload);
-      return this.finish(fence, 'uncertain', 'cancellation_pending');
-    }
-    await this.store.applySigningCancellation(fence, payload.mutation, payload.roundId, evidence);
-    await this.finish(fence, 'delivered');
-  }
-
-  private async archive(fence: JobFence, message: OutboxMessage, detail: AgreementDetail, begin: () => Promise<void>): Promise<void> {
-    const payload = parseSigningJobPayload(message.payload);
-    const round = detail.signingRound;
-    if (!round || round.id !== payload.roundId || !round.providerSubmissionId) throw new StoreError('conflict', 'Signing round changed');
-    await begin();
-    const submission: ProviderSubmission = await this.signing.read(round.providerSubmissionId, frozenSigners(detail), round.attemptId);
-    if (submission.status !== 'completed' || !submission.signedDocumentUrl || !submission.auditRecordUrl) {
-      return this.retry(fence, message, 'archive_not_ready');
-    }
-    const signedBytes = await this.signing.downloadArtifact(submission.signedDocumentUrl);
-    const signedDocument = await this.storage.putImmutable(message.tenantId, detail.agreement.id, 'signed_document', signedBytes);
-    const auditBytes = await this.signing.downloadArtifact(submission.auditRecordUrl);
-    const auditRecord = await this.storage.putImmutable(message.tenantId, detail.agreement.id, 'audit_record', auditBytes);
-    await this.store.applyArchivedEvidence(fence, payload.mutation, {
-      roundId: round.id, revisionId: round.revisionId, signedDocument, auditRecord,
-    });
+    // Storage verifies the exact issued bytes; rendering uses frozen identities and signatures, never live grants.
+    const pdf = await this.storage.get(message.tenantId, message.agreementId, revision.document);
+    const artifacts = await renderExecutedArtifacts({ title, pdf, round, signatures, fields: revision.signingFields });
+    const signedDocument = await this.storage.putImmutable(message.tenantId, message.agreementId, 'signed_document', artifacts.signedPdf);
+    const auditRecord = await this.storage.putImmutable(message.tenantId, message.agreementId, 'audit_record', artifacts.auditPdf);
+    await this.store.applyArchivedEvidence(fence, { roundId: round.id, revisionId: revision.id, signedDocument, auditRecord });
     await this.finish(fence, 'delivered');
   }
 
   private async suggest(fence: JobFence, message: OutboxMessage, begin: () => Promise<void>): Promise<void> {
-    const payload = parseAiJobPayload(message.payload);
+    const payload = message.kind === 'proposal_ai_suggestion'
+      ? parseProposalAiJobPayload(message.payload) : parseAiJobPayload(message.payload);
+    if (!message.agreementId) throw new StoreError('invalid', 'AI agreement is unavailable');
+    const finishSuggestion = async (status: 'failed' | 'uncertain', code: string): Promise<void> => {
+      if ('proposalId' in payload) await this.store.failProposalSuggestion(fence, payload, status);
+      await this.finish(fence, status, code);
+    };
     const maxCostMicros = estimateSuggestionCostMicros();
     const reserved = await this.store.reserveAiBudget({
-      tenantId: message.tenantId, agreementId: payload.mutation.agreementId, jobId: message.id, leaseToken: fence.leaseToken,
+      tenantId: message.tenantId, agreementId: message.agreementId, jobId: message.id, leaseToken: fence.leaseToken,
       maxCostMicros, dailyLimitMicros: AI_DAILY_LIMIT_MICROS, perRunLimitMicros: maxCostMicros,
     });
-    if (!reserved) return this.finish(fence, 'failed', 'ai_budget_exhausted');
+    if (!reserved) return finishSuggestion('failed', 'ai_budget_exhausted');
     await begin();
     const outcome = await this.suggestions.suggest({ source: payload.source, instruction: payload.instruction });
-    if (outcome.status !== 'suggested') return this.finish(fence, outcome.status === 'uncertain' ? 'uncertain' : 'failed', outcome.code);
+    if (outcome.status !== 'suggested') return finishSuggestion(outcome.status, outcome.code);
     const actualCost = suggestionCostMicros(outcome.inputTokens, outcome.outputTokens);
     if (actualCost > maxCostMicros) throw new Error('AI reported usage above its reserved ceiling');
     if (!await this.store.settleAiBudget(fence, actualCost)) throw new StoreError('conflict', 'AI reservation changed');
-    await this.store.recordPrivateAiMessage(payload.mutation, 'assistant', JSON.stringify(outcome.suggestion), fence);
+    if ('proposalId' in payload) await this.store.completeProposalSuggestion(fence, payload, outcome.suggestion);
+    else await this.store.recordPrivateAiMessage(payload.mutation, 'assistant', JSON.stringify(outcome.suggestion), fence);
     await this.finish(fence, 'delivered');
   }
 

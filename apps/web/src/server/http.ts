@@ -6,7 +6,7 @@ import { getConfiguration } from './config';
 
 // ASSUMPTION: JSON commands fit within 128 KiB; documents use a separate bounded upload.
 export const MAX_COMMAND_BYTES = 128 * 1024;
-export const API_VERSION = '1';
+export const API_VERSION = '2';
 export class HttpError extends Error {
   readonly status: number;
   readonly code: string;
@@ -92,7 +92,7 @@ export async function handleRequest(action: () => Promise<Response>): Promise<Re
     if (error instanceof HttpError) return json({ error: error.code }, error.status);
     if (error instanceof z.ZodError) return json({ error: 'invalid_request' }, 400);
     if (error instanceof StoreError) {
-      const codes = { not_found: 404, forbidden: 404, conflict: 409, invalid: 400, rate_limited: 429 } as const;
+      const codes = { not_found: 404, forbidden: 404, conflict: 409, invalid: 400, rate_limited: 429, verification_required: 401 } as const;
       return json({ error: error.code === 'forbidden' ? 'not_found' : error.code }, codes[error.code]);
     }
     const requestId = randomUUID();

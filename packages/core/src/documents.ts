@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import fontkit from '@pdf-lib/fontkit';
 import { PDFDocument, PDFArray, PDFDict, PDFName, PDFNull, PDFSignature, PDFStream, StandardFonts, rgb } from 'pdf-lib';
 import type { PDFObject } from 'pdf-lib';
 import type { PDFFont } from 'pdf-lib';
@@ -10,6 +12,8 @@ import type { DocumentSource, PreparedSigningDocument, RecipientGrant, SigningFi
 const MAX_SOURCE_CHARACTERS = 60_000;
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
 const MAX_PAGES = 200;
+let nativeFontBytes: Promise<Uint8Array> | undefined;
+const nativeName = z.string().min(1).max(200).refine(value => value === value.trim() && !/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(value));
 const text = z.string().refine(value => !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(value));
 export const documentSourceSchema: z.ZodType<DocumentSource> = z.strictObject({
   title: text.min(1).max(200),
@@ -31,6 +35,60 @@ export function hashBytes(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
+/** Uses the bundled OFL Noto Sans font, shared by name preflight, prepared slots, and execution artifacts. */
+export async function embedNativeSignatureFont(document: PDFDocument): Promise<PDFFont> {
+  nativeFontBytes ??= readFile(new URL('../assets/NotoSans-Regular.ttf', import.meta.url));
+  document.registerFontkit(fontkit);
+  return document.embedFont(await nativeFontBytes, { subset: false });
+}
+
+export function assertPdfTextRenderable(value: string, font: PDFFont): void {
+  const supported = new Set(font.getCharacterSet());
+  for (const character of value) {
+    if (character === '\n') continue;
+    const codePoint = character.codePointAt(0);
+    if (codePoint === undefined || !supported.has(codePoint)) throw new StoreError('invalid', 'The text contains unsupported characters.');
+  }
+  if (font.encodeText(value.replaceAll('\n', ' ')).asString().length === 0 && value.length) {
+    throw new StoreError('invalid', 'The text contains unsupported characters.');
+  }
+}
+
+/** Rejects names that cannot be represented by the exact font used to archive native signatures. */
+export async function assertNativeSignatureNameRenderable(name: string): Promise<void> {
+  if (!nativeName.safeParse(name).success) throw new StoreError('invalid', 'The signature name is invalid.');
+  const document = await PDFDocument.create({ updateMetadata: false });
+  fitNativeSignatureText(name, await embedNativeSignatureFont(document), 330, 46);
+}
+
+/** Uses the same padding, glyph widths, and readable minimum size for preflight and frozen field rendering. */
+export function fitNativeSignatureText(value: string, font: PDFFont, width: number, height: number): { readonly size: number; readonly lineHeight: number; readonly lines: readonly string[] } {
+  assertPdfTextRenderable(value, font);
+  const boxWidth = width - 8;
+  const boxHeight = height - 8;
+  for (let size = 16; size >= 6; size--) {
+    const lines = wrapPdfText(value, font, size, boxWidth);
+    const lineHeight = Math.max(font.heightAtSize(size, { descender: true }), size * 1.2);
+    if (lines.length * lineHeight <= boxHeight && lines.every(line => font.widthOfTextAtSize(line, size) <= boxWidth)) {
+      return { size, lineHeight, lines };
+    }
+  }
+  throw new StoreError('invalid', 'The signature name does not fit its field.');
+}
+
+const fieldSchema: z.ZodType<SigningField> = z.strictObject({
+  grantId: z.uuid(), type: z.enum(['signature', 'date']), page: z.number().int().min(1).max(MAX_PAGES),
+  x: z.number().min(0).max(1), y: z.number().min(0).max(1),
+  width: z.number().positive().max(1), height: z.number().positive().max(1),
+}).refine(field => field.x + field.width <= 1 && field.y + field.height <= 1);
+const fieldsSchema = z.array(fieldSchema).min(2).max(20);
+
+export function parseSigningFields(value: unknown): readonly SigningField[] {
+  const parsed = fieldsSchema.safeParse(value);
+  if (!parsed.success) throw new StoreError('invalid', 'The signing fields are invalid.');
+  return parsed.data;
+}
+
 /** Accepts only the bounded upload envelope; parsing and preparation belong to the isolated jobs task. */
 export function acceptUploadedPdfEnvelope(bytes: Uint8Array, maxBytes = MAX_PDF_BYTES): void {
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 20 * 1024 * 1024
@@ -40,13 +98,15 @@ export function acceptUploadedPdfEnvelope(bytes: Uint8Array, maxBytes = MAX_PDF_
 }
 
 /** Checks format, encryption, page count, and known active objects; run in the isolated jobs task, not web. */
-export async function validateUploadedPdf(bytes: Uint8Array, maxBytes = MAX_PDF_BYTES): Promise<number> {
+export async function validateUploadedPdf(bytes: Uint8Array, maxBytes = MAX_PDF_BYTES, maxPages = MAX_PAGES): Promise<number> {
   acceptUploadedPdfEnvelope(bytes, maxBytes);
+  // Executed renditions may append four certificate pages to a 200-page published PDF; upload limits stay unchanged.
+  if (!Number.isSafeInteger(maxPages) || maxPages < 1 || maxPages > MAX_PAGES + Math.ceil(10 / 3)) throw new StoreError('invalid', 'The PDF page limit is invalid.');
   let document: PDFDocument;
   try { document = await PDFDocument.load(bytes, { updateMetadata: false, throwOnInvalidObject: true }); }
   catch (error: unknown) { throw new StoreError('invalid', 'The PDF could not be read.'); }
   const pages = document.getPageCount();
-  if (document.isEncrypted || pages < 1 || pages > MAX_PAGES) throw new StoreError('invalid', 'The PDF is encrypted or has too many pages.');
+  if (document.isEncrypted || pages < 1 || pages > maxPages) throw new StoreError('invalid', 'The PDF is encrypted or has too many pages.');
   const prohibited = new Set(['JavaScript', 'JS', 'Launch', 'EmbeddedFiles', 'EmbeddedFile', 'RichMedia', 'XFA', 'OpenAction', 'AA']);
   const pending: PDFObject[] = document.context.enumerateIndirectObjects().map(([, object]) => object);
   const visited = new Set<PDFObject>();
@@ -68,7 +128,7 @@ export async function validateUploadedPdf(bytes: Uint8Array, maxBytes = MAX_PDF_
   return pages;
 }
 
-function wrapText(value: string, font: PDFFont, size: number, width: number): readonly string[] {
+export function wrapPdfText(value: string, font: PDFFont, size: number, width: number): readonly string[] {
   const lines: string[] = [];
   for (const paragraph of value.split('\n')) {
     let line = '';
@@ -105,7 +165,7 @@ export async function renderDocumentPdf(value: DocumentSource): Promise<Uint8Arr
   let page = document.addPage([612, 792]);
   let y = 738;
   function write(value: string, size: number, font: PDFFont): void {
-    for (const line of wrapText(value, font, size, 504)) {
+    for (const line of wrapPdfText(value, font, size, 504)) {
       if (y < 54 + size) {
         if (document.getPageCount() >= MAX_PAGES) throw new StoreError('invalid', 'The document has too many pages.');
         page = document.addPage([612, 792]); y = 738;
@@ -146,23 +206,25 @@ export async function prepareSigningDocument(bytes: Uint8Array, grants: readonly
   for (const [, object] of document.context.enumerateIndirectObjects()) {
     if (object instanceof PDFDict && object.get(PDFName.of('Type')) === PDFName.of('Sig')) throw new StoreError('invalid', 'An already signed PDF needs a separate agreement.');
   }
-  const font = await document.embedFont(StandardFonts.Helvetica);
+  const font = await embedNativeSignatureFont(document);
   const bold = await document.embedFont(StandardFonts.HelveticaBold);
   const fields: SigningField[] = [];
   let page = document.addPage([612, 792]);
   try {
     for (const [index, signer] of signers.entries()) {
       if (!z.uuid().safeParse(signer.id).success || !z.email().max(254).safeParse(signer.email).success
-        || !text.min(1).max(200).safeParse(signer.name).success) throw new StoreError('invalid', 'The required signers are invalid.');
+        || !nativeName.safeParse(signer.name).success) throw new StoreError('invalid', 'The required signers are invalid.');
       if (index % 3 === 0) {
         if (index > 0) page = document.addPage([612, 792]);
         page.drawText('Signatures', { x: 54, y: 738, font: bold, size: 18 });
       }
       const top = 680 - (index % 3) * 200;
-      const nameLines = wrapText(signer.name, font, 11, 504);
+      assertPdfTextRenderable(signer.name, font);
+      assertPdfTextRenderable(signer.email, font);
+      const nameLines = wrapPdfText(signer.name, font, 11, 504);
       if (nameLines.length > 3) throw new StoreError('invalid', 'The signer name is too long for its signature slot.');
       nameLines.forEach((line, lineIndex) => page.drawText(line, { x: 54, y: top - lineIndex * 14, font, size: 11 }));
-      const emailLines = wrapText(signer.email, font, 8, 504);
+      const emailLines = wrapPdfText(signer.email, font, 8, 504);
       if (emailLines.length > 3) throw new StoreError('invalid', 'The signer email is too long for its signature slot.');
       emailLines.forEach((line, lineIndex) => page.drawText(line, { x: 54, y: top - 48 - lineIndex * 10, font, size: 8 }));
       const bottom = top - 118;

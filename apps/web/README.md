@@ -6,13 +6,13 @@ resolves current grants before every agreement operation.
 
 | Path | Purpose |
 | --- | --- |
-| `src/app` | Pages, native API, authenticated host bridge, and provider callbacks. |
+| `src/app` | Pages, native signing API, and authenticated host bridge. |
 | `src/components` | Login and transport bindings for the shared agreement interface. |
 | `src/server/config.ts` | Validated private deployment configuration. |
 | `src/server/commands.ts` | Strict command schema and store dispatch. |
 | `src/server/bridge.ts` | Request-bound HMAC assertions and durable replay rejection. |
 | `src/server/sessions.ts` | Opaque native session and challenge cookies. |
-| `src/signingConsent.ts` | The consent statement displayed and hashed before signing. |
+| `src/signingConsent.ts` | Public consent constants exported by the database contract. |
 
 ## Run
 
@@ -33,11 +33,12 @@ pnpm --filter @dripsign/web start
 
 The server listens on port 3000. `/health` reports process health. It does not
 prove database or provider readiness. The jobs application must run for queued
-emails, signatures, reconciliation, archival, and AI suggestions.
+emails, signed-document archival, and AI suggestions. Signature acceptance is a
+synchronous database transaction in the web service.
 
 ## API
 
-Responses carry `X-DripSign-Api-Version: 1`. Native mutations require an exact
+Responses carry `X-DripSign-Api-Version: 2`. Native mutations require an exact
 `Origin` equal to `DRIPSIGN_PUBLIC_ORIGIN`. Identity headers from a browser
 are never used. Routes return private, uncached responses.
 
@@ -51,9 +52,8 @@ are never used. Routes return private, uncached responses.
 | `POST /api/agreements/:id/commands` | Versioned proposal, draft, publication, signing request, or private AI command. |
 | `POST /api/agreements/:id/upload` | Prepare a bounded PDF as a private draft. |
 | `GET /api/agreements/:id/pdf` | Stream an authorized issued, private, signed, or audit PDF. |
-| `POST /api/agreements/:id/sign` | Record exact-version consent and obtain the recipient signing URL. |
+| `POST /api/agreements/:id/sign` | Record the recipient's typed-name signature and exact-version consent; return a durable receipt. |
 | `GET /api/agreements/:id/signature-status` | Read confirmed local signing and archival evidence. |
-| `POST /api/webhooks/docuseal` | Verify a callback and queue provider reconciliation. |
 
 Command shapes live in `src/server/commands.ts`; creation lives in
 `src/server/api.ts`. Assets and identities are selected server-side. Uploaded
@@ -61,6 +61,26 @@ PDFs are checked only for byte length and their PDF envelope in web requests.
 The jobs service parses and prepares a derived asset before staff review;
 publication stays disabled while preparation is pending or failed. Original
 and prepared PDFs stay immutable, and signature fields freeze on publication.
+
+Signing requires the active round ID, revision ID, PDF SHA-256, trimmed typed
+name, current consent version and hash, and explicit `consentAccepted: true`.
+The recipient must have verified email within the database contract's signing
+verification window. The store rechecks the session, exact recipient grant,
+round, revision, consent, and expected agreement version in the transaction.
+Names must pass the signed-PDF renderer's font check before acceptance. The
+response contains signature identity, name, timestamp, revision, and document
+hash; it contains no external signing URL or private session evidence.
+
+The request evidence records a server-generated request ID and bounded user
+agent. IP address remains unknown because no trusted proxy chain is configured.
+Forwarded address headers never establish signer identity. A stale verification
+offers the existing email-code flow at the same agreement URL. The final required
+signature closes negotiation; signed status and downloads wait for both archived
+files. Staff still explicitly review and publish each new revision.
+
+The `adopt_ai_candidate` staff command stages one current, reviewed AI candidate
+as private source. Staff save that working draft to prepare its PDF, then review
+and explicitly publish it. Adoption never publishes or requests signatures.
 
 ## Host bridge
 
@@ -94,11 +114,10 @@ bundle. Logs contain request IDs and error classes, not submitted text.
 
 `DRIPSIGN_ADMISSION_PAUSED=1` blocks new agreements, edits, publications,
 uploads, signature access, signature requests, and AI requests at the server.
-Reads, sign-out, confirmed-cancellation requests, and authenticated provider
-callbacks remain available. Email-code requests return `503 admission_paused` to avoid queuing late
+Reads, sign-out, and cancellation requests remain available. Email-code requests return `503 admission_paused` to avoid queuing late
 codes during recovery. Existing authenticated sessions retain read access. Change the runtime configuration and restart the service;
 the application validates it at startup. `DRIPSIGN_RECOVERY_ONLY=1` on the jobs service admits only signing
-reconciliation and archival. Pending email codes retain their original expiry; the jobs service does not
+archival. Pending email codes retain their original expiry; the jobs service does not
 deliver them in recovery mode.
 
 Bridge creation persists server-derived `createProvenance` with tenant, staff

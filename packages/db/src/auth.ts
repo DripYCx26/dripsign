@@ -45,7 +45,7 @@ export class AuthStore extends SigningStore {
     const email=emailAddress(challenge.scope.email);bounded(challenge.codeHash,'Code hash',128,64);
     if(!/^[a-f0-9]{64}$/.test(challenge.challengeTokenHash))throw new StoreError('invalid','Challenge token hash is invalid');
     const expiry=Date.parse(challenge.expiresAt);
-    if(!Number.isFinite(expiry)||expiry<=Date.now()||expiry>Date.now()+15*60_000)throw new StoreError('invalid','Challenge expiry is invalid');
+    if(!Number.isFinite(expiry)||expiry<=Date.now()||expiry>Date.now()+10*60_000)throw new StoreError('invalid','Challenge expiry is invalid');
     return transaction(this.pool,async(client)=>{
       await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`otp:${email}`]);
       const recent=(await client.query<{count:string}>('SELECT count(*)::text AS count FROM dripsign.otp_request WHERE email=$1 AND created_at>now()-interval \'15 minutes\'',[email])).rows[0];
@@ -70,7 +70,7 @@ export class AuthStore extends SigningStore {
   }
   async consumeOtpChallenge(input:OtpConsumption):Promise<AuthSession|null> {
     bounded(input.codeHash,'Code hash',128,64);
-    if(!/^[a-f0-9]{64}$/.test(input.challengeTokenHash))throw new StoreError('invalid','Challenge token hash is invalid');bounded(input.sessionTokenHash,'Session hash',128,64);
+    if(!/^[a-f0-9]{64}$/.test(input.challengeTokenHash))throw new StoreError('invalid','Challenge token hash is invalid');if(!/^[a-f0-9]{64}$/.test(input.sessionTokenHash))throw new StoreError('invalid','Session hash is invalid');
     const expiry=Date.parse(input.sessionExpiresAt);
     if(!Number.isFinite(expiry)||expiry<=Date.now()||expiry>Date.now()+24*60*60_000)throw new StoreError('invalid','Session expiry is invalid');
     return transaction(this.pool,async(client)=>{
@@ -83,14 +83,15 @@ export class AuthStore extends SigningStore {
       if(!actor)return null;
       const id=randomUUID();
       await client.query('UPDATE dripsign.otp_challenge SET consumed_at=now() WHERE id=$1',[input.challengeId]);
-      await client.query('INSERT INTO dripsign.auth_session(tenant_id,id,token_hash,actor,expires_at) VALUES($1,$2,$3,$4,$5)',[actor.kind==='staff'?actor.tenantId:null,id,input.sessionTokenHash,JSON.stringify(actor),input.sessionExpiresAt]);
-      return {id,actor,expiresAt:input.sessionExpiresAt};
+      const verified=(await client.query<{verifiedAt:string}>('INSERT INTO dripsign.auth_session(tenant_id,id,token_hash,actor,expires_at,verified_at) VALUES($1,$2,$3,$4,$5,now()) RETURNING verified_at::text AS \"verifiedAt\"',[actor.kind==='staff'?actor.tenantId:null,id,input.sessionTokenHash,JSON.stringify(actor),input.sessionExpiresAt])).rows[0];
+      if(!verified)throw new Error('Session insert returned no row');
+      return {id,actor,expiresAt:input.sessionExpiresAt,verifiedAt:verified.verifiedAt};
     });
   }
   async findSession(tokenHash:string):Promise<AuthSession|null> {
     bounded(tokenHash,'Session hash',128,64);
     return transaction(this.pool,async(client)=>{
-      const session=(await client.query<AuthSession>('SELECT id,actor,expires_at::text AS "expiresAt" FROM dripsign.auth_session WHERE token_hash=$1 AND revoked_at IS NULL AND expires_at>now()',[tokenHash])).rows[0];
+      const session=(await client.query<AuthSession>('SELECT id,actor,expires_at::text AS "expiresAt",verified_at::text AS "verifiedAt" FROM dripsign.auth_session WHERE token_hash=$1 AND revoked_at IS NULL AND expires_at>now()',[tokenHash])).rows[0];
       if(!session)return null;
       if(session.actor.kind==='staff') { await this.staff(client,session.actor);return session; }
       return session;
