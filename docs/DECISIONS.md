@@ -1,5 +1,30 @@
 # Decisions
 
+## 2026-10-08: A host app frames the staff workspace through a signed staff session bridge
+
+A host app that signs its own staff in can show DripSign's whole staff
+workspace inside its page. The host's server signs one assertion per opening
+with an Ed25519 key, and its page posts it as a form into a frame on DripSign's
+own origin. DripSign verifies it with the host's public key alone, records its
+nonce once, requires its own current staff membership for that email and tenant,
+and opens an ordinary staff session in a cookie partitioned to the host page.
+DripSign keeps its database, sessions and authorization; the two products share
+one public key and two origins, never a secret or a cookie. Staff pages and the
+bridge entry allow the configured host, and only it, as their frame parent; the
+policy is set per request because the image is built without configuration.
+
+Rejected alternatives: proxying the staff pages through the host's origin,
+which would run DripSign's scripts with the host session's authority and
+require rewriting DripSign's paths and exact-origin checks; rendering the
+shared UI package inside the host over the server bridge, which makes every
+host own a second staff interface and a matched release; and a shared HMAC
+secret, which lets either side mint the other's assertions. The request-bound
+server bridge stays for hosts that call the API from their own servers.
+
+Residual risks are browsers that keep no partitioned cookie inside a frame
+(Safari before 26.2), which need the host's new-tab path, and an assertion
+leaked within its lifetime, which opens one session for a listed member only.
+
 ## 2026-10-08: One host for recipients and staff; a local stack on disk and a mail folder
 
 The standalone portal serves recipients at `/` and staff at `/staff` on one

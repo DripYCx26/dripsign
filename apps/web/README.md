@@ -16,6 +16,8 @@ the code-per-agreement path: the invitation link `/agreements/:id` asks for the
 invited email, and a code goes only to an email with a live grant. **Sign out**
 in the header revokes the session in the database before clearing the cookie.
 One browser holds one session, so signing in as the other kind replaces it.
+A host app can also open a staff session inside its own page; see
+[Staff session bridge](#staff-session-bridge).
 Passkeys do not exist in this repository; sign-in is email codes only.
 
 The interface grants nothing on its own. Every read, command, upload, download,
@@ -35,6 +37,12 @@ domain once its CNAME and `_dnsauth` records exist.
 | `src/server/config.ts` | Validated private deployment configuration. |
 | `src/server/commands.ts` | Strict command schema and store dispatch. |
 | `src/server/bridge.ts` | Request-bound HMAC assertions and durable replay rejection. |
+| `src/server/staffAssertion.ts` | The staff session bridge's Ed25519 assertion verifier; pure, with its own tests. |
+| `src/app/api/bridge/session` | Opens a framed staff session from one verified assertion. |
+| `src/proxy.ts` | Staff pages and the bridge entry take their frame parent from configuration. |
+| `src/framing.ts` | The one Content-Security-Policy, with its frame parent as the only variable. |
+| `src/components/StaffSignIn.tsx` | Staff sign-in, or inside a host page, a note to reopen it there. |
+| `smoke/bridge.test.ts` | The staff session bridge over HTTP, with the test as the host app. |
 | `src/server/sessions.ts` | Opaque native session and challenge cookies. |
 | `src/signingConsent.ts` | Public consent constants exported by the database contract. |
 
@@ -174,6 +182,56 @@ idempotency key separate from the one-use transport nonce.
 Private configuration is validated in `src/server/config.ts`. Bridge secrets,
 session secrets, provider credentials, and document keys never enter a client
 bundle. Logs contain request IDs and error classes, not submitted text.
+
+## Staff session bridge
+
+A host app with its own sign-in can show the whole staff workspace in a frame
+on its page. The host signs one short-lived assertion for the signed-in person,
+and its page posts it as a form, field `assertion`, to
+`POST /api/bridge/session` with the host's own `Origin`. DripSign checks it with
+the host's public key, records its nonce once, and opens a staff session only
+for an email with a current staff membership in the tenant the assertion names.
+The session lives in `dripsign_bridge_session`, a `Secure; HttpOnly;
+SameSite=None; Partitioned` cookie that the browser keeps only inside that host
+page, for at most 12 hours; every request still rechecks the membership. A
+refused assertion opens nothing and shows one fixed page. Inside the frame the
+header offers neither sign-in nor sign-out; the host owns both. A browser that
+keeps no partitioned cookie in a frame needs the host to post a fresh assertion
+to a new tab instead.
+
+| Setting | Value |
+| --- | --- |
+| `DRIPSIGN_BRIDGE_HOST_ORIGIN` | The host app's exact HTTPS origin: the only issuer, form origin and frame parent DripSign accepts. |
+| `DRIPSIGN_BRIDGE_PUBLIC_KEY` | The host's Ed25519 public key, 64 lowercase hex; two keys separated by a comma while the host rotates. |
+
+Both are set together or not at all. With them, staff pages and the bridge
+entry allow the host origin, and nothing else, as `frame-ancestors`, and the
+inline PDF allows its own pages and the host; every other page keeps
+`frame-ancestors 'none'` and `X-Frame-Options: DENY`.
+
+The assertion is a JWS compact token (RFC 7515) signed with Ed25519 (RFC 8037):
+`base64url(header).base64url(claims).base64url(signature)` without padding, the
+signature over the ASCII of the first two parts.
+
+| Part | Content |
+| --- | --- |
+| header | Exactly `{"alg":"EdDSA","kid":K,"typ":"dripsign-staff+jwt"}`; `K` is the first 16 lowercase hex digits of the SHA-256 of the 32-byte public key. |
+| `iss` | The host origin, `DRIPSIGN_BRIDGE_HOST_ORIGIN`. |
+| `aud` | DripSign's own origin, `DRIPSIGN_PUBLIC_ORIGIN`. |
+| `sub` | The host's id for the person, recorded with the nonce. |
+| `firm` | The DripSign tenant id whose staff membership is checked. |
+| `email` | The person's email, matched to that tenant's staff membership. |
+| `iat`, `exp` | Unix seconds; at most 120 seconds apart, and `iat` at most 5 seconds ahead of DripSign's clock. |
+| `jti` | 16 random bytes, base64url; DripSign records it once and refuses it again. |
+
+`pnpm --filter @dripsign/web test` runs the verifier's tests, including a token
+signed by an independent host implementation. With a running stack configured
+with a local test key, `smoke/bridge.test.ts` signs as the host and checks that a
+valid assertion opens that member's workspace and that replayed, forged, foreign,
+expired, unlisted and foreign-tenant assertions open nothing; it needs
+`DRIPSIGN_SMOKE_BRIDGE_SEED`, `DRIPSIGN_SMOKE_BRIDGE_HOST`,
+`DRIPSIGN_SMOKE_BRIDGE_TENANT` and `DRIPSIGN_SMOKE_STAFF_EMAIL`, and is skipped
+without the seed.
 
 ## Admission pause
 

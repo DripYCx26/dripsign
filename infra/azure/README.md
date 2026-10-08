@@ -66,6 +66,8 @@ operator raises the replica counts, and no custom domain exists until `host` is 
   described in the [web setup](../../apps/web/README.md)), `anthropic_api_key`, `host_event_url`,
   and `host_event_secret`. The variable is ephemeral: Terraform writes the values only when the
   secret is created or `operator_secrets_version` changes and never records them.
+- For a host app that frames the staff workspace: `staff_bridge`, its origin and public key
+  ([staff session bridge](../../apps/web/README.md#staff-session-bridge)); both are public.
 - For a custom host: the domain, then the CNAME and `_dnsauth` TXT records from `dns_records`.
 - For production mail volume: a sending domain in `mail_domain`, then its verification, SPF, and
   DKIM records from `dns_records`. The Azure-managed domain has very low sending limits.

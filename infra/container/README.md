@@ -18,6 +18,7 @@ The environment contract follows the actual application owners. Supply these key
 | Both, AWS | `AWS_REGION`, `DRIPSIGN_DOCUMENT_BUCKET` | Stack resources; `DRIPSIGN_STORAGE_PROVIDER` defaults to `s3` |
 | Both, Azure | `DRIPSIGN_STORAGE_PROVIDER=azure`, `DRIPSIGN_BLOB_ENDPOINT`, `DRIPSIGN_DOCUMENT_CONTAINER`, `AZURE_CLIENT_ID` | Template resources and the app's identity |
 | Web | `DRIPSIGN_AUTH_SECRET`, `DRIPSIGN_STAFF_MEMBERSHIPS`, `DRIPSIGN_BRIDGE_ISSUERS` | Web secret JSON on AWS; Key Vault references on Azure |
+| Web, optional | `DRIPSIGN_BRIDGE_HOST_ORIGIN`, `DRIPSIGN_BRIDGE_PUBLIC_KEY` | Public settings for the [staff session bridge](../../apps/web/README.md#staff-session-bridge); both or neither |
 | Jobs | `DRIPSIGN_EMAIL_FROM` | Exact SES sender, or the Communication Services sender |
 | Jobs, Azure | `DRIPSIGN_MAIL_PROVIDER=azure`, `DRIPSIGN_EMAIL_ENDPOINT` | Communication Services endpoint; `DRIPSIGN_MAIL_PROVIDER` defaults to `ses` |
 | Jobs | `ANTHROPIC_API_KEY`, `DRIPSIGN_HOST_EVENT_URL`, `DRIPSIGN_HOST_EVENT_SECRET` | Jobs secret JSON on AWS; Key Vault references on Azure |

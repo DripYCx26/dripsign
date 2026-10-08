@@ -49,6 +49,16 @@ Parameters:
   SesFromAddress:
     Type: String
     AllowedPattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$'
+  BridgeHostOrigin:
+    Type: String
+    Default: ''
+    AllowedPattern: '^$|^https://[a-z0-9.-]+(:[0-9]{1,5})?$'
+    Description: Staff session bridge host app origin; empty turns the bridge off.
+  BridgePublicKey:
+    Type: String
+    Default: ''
+    AllowedPattern: '^$|^[a-f0-9]{64}(,[a-f0-9]{64})?$'
+    Description: The host app's Ed25519 public key, or two during a rotation; set with BridgeHostOrigin.
   WebDesiredCount:
     Type: Number
     MinValue: 0
@@ -64,12 +74,19 @@ Rules:
     Assertions:
       - Assert: !Not [!Equals [!Ref StagingRulePriority, !Ref ProductionRulePriority]]
         AssertDescription: Staging and production listener priorities must differ.
+  StaffBridgePaired:
+    Assertions:
+      - Assert: !Or
+          - !And [!Equals [!Ref BridgeHostOrigin, ''], !Equals [!Ref BridgePublicKey, '']]
+          - !And [!Not [!Equals [!Ref BridgeHostOrigin, '']], !Not [!Equals [!Ref BridgePublicKey, '']]]
+        AssertDescription: Set the bridge host origin and public key together, or neither.
   DistinctStagingHostname:
     Assertions:
       - Assert: !Not [!Equals [!Ref StagingHostname, dripsign.com]]
         AssertDescription: Use a separate staging hostname; enable production explicitly.
 Conditions:
   ProductionHostEnabled: !Equals [!Ref EnableProductionHost, 'true']
+  StaffBridgeEnabled: !Not [!Equals [!Ref BridgePublicKey, '']]
 Resources:
   Cluster:
     Type: AWS::ECS::Cluster
@@ -330,6 +347,16 @@ Resources:
               Value: !Ref PublicOrigin
             - Name: DRIPSIGN_DOCUMENT_BUCKET
               Value: !Ref Artifacts
+            - !If
+              - StaffBridgeEnabled
+              - Name: DRIPSIGN_BRIDGE_HOST_ORIGIN
+                Value: !Ref BridgeHostOrigin
+              - !Ref AWS::NoValue
+            - !If
+              - StaffBridgeEnabled
+              - Name: DRIPSIGN_BRIDGE_PUBLIC_KEY
+                Value: !Ref BridgePublicKey
+              - !Ref AWS::NoValue
           Secrets:
             - Name: DRIPSIGN_DATABASE_URL
               ValueFrom: !Ref DatabaseSecretArn

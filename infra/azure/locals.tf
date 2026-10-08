@@ -48,6 +48,11 @@ locals {
     DRIPSIGN_BLOB_ENDPOINT      = trimsuffix(azurerm_storage_account.documents.primary_blob_endpoint, "/")
     DRIPSIGN_DOCUMENT_CONTAINER = azurerm_storage_container.documents.name
   }
+  # The staff session bridge's public settings, when a host app frames the staff workspace.
+  web_bridge_env = var.staff_bridge == null ? {} : {
+    DRIPSIGN_BRIDGE_HOST_ORIGIN = var.staff_bridge.host_origin
+    DRIPSIGN_BRIDGE_PUBLIC_KEY  = var.staff_bridge.public_key
+  }
   jobs_env = {
     DRIPSIGN_MAIL_PROVIDER  = "azure"
     DRIPSIGN_EMAIL_ENDPOINT = "https://${azurerm_communication_service.main.hostname}"
