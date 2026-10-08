@@ -72,6 +72,15 @@ operator raises the replica counts, and no custom domain exists until `host` is 
 - For production mail volume: a sending domain in `mail_domain`, then its verification, SPF, and
   DKIM records from `dns_records`. The Azure-managed domain has very low sending limits.
 
+## A test mailbox
+
+For a test environment only, `test_mailbox` names a Container Apps environment storage (an
+Azure Files share you create beside this deployment). The jobs app then writes every message
+into it as an `.eml` file with the directory provider instead of sending it, and an automated
+test reads the sign-in codes from the share (`pnpm smoke` with `DRIPSIGN_SMOKE_MAIL_DIRECTORY`
+pointing at a local copy). While it is set nothing is sent, so it never belongs in production.
+The share is mounted private to the image's user (`dir_mode=0700`, uid 1000).
+
 ## Commands
 
 From this directory, with `az login` done and the values in a private `.tfvars` file:

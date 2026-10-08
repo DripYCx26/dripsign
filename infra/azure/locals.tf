@@ -53,9 +53,18 @@ locals {
     DRIPSIGN_BRIDGE_HOST_ORIGIN = var.staff_bridge.host_origin
     DRIPSIGN_BRIDGE_PUBLIC_KEY  = var.staff_bridge.public_key
   }
-  jobs_env = {
+  # A test mailbox replaces sending entirely: messages land as files the test reads (variables.tf).
+  jobs_env = var.test_mailbox == null ? {
     DRIPSIGN_MAIL_PROVIDER  = "azure"
     DRIPSIGN_EMAIL_ENDPOINT = "https://${azurerm_communication_service.main.hostname}"
     DRIPSIGN_EMAIL_FROM     = local.mail_sender
+    } : {
+    DRIPSIGN_MAIL_PROVIDER  = "directory"
+    DRIPSIGN_MAIL_DIRECTORY = local.test_mailbox_path
+    DRIPSIGN_EMAIL_FROM     = local.mail_sender
   }
+
+  # The mailbox mount: private to the image's user (node, uid 1000), as the directory adapter expects.
+  test_mailbox_path    = "/mail"
+  test_mailbox_options = "dir_mode=0700,file_mode=0600,uid=1000,gid=1000"
 }

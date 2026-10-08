@@ -171,6 +171,17 @@ resource "azurerm_container_app" "jobs" {
     # The worker drains in-flight jobs on SIGTERM; leases recover anything cut short.
     termination_grace_period_seconds = 60
 
+    dynamic "volume" {
+      for_each = var.test_mailbox == null ? [] : ["mail"]
+
+      content {
+        name          = volume.value
+        storage_type  = "AzureFile"
+        storage_name  = var.test_mailbox
+        mount_options = local.test_mailbox_options
+      }
+    }
+
     container {
       name    = "jobs"
       image   = var.image
@@ -178,6 +189,15 @@ resource "azurerm_container_app" "jobs" {
       args    = ["--filter", "@dripsign/jobs", "start"]
       cpu     = 0.5
       memory  = "1Gi"
+
+      dynamic "volume_mounts" {
+        for_each = var.test_mailbox == null ? [] : ["mail"]
+
+        content {
+          name = volume_mounts.value
+          path = local.test_mailbox_path
+        }
+      }
 
       dynamic "env" {
         for_each = merge(local.shared_env, local.jobs_env, { AZURE_CLIENT_ID = azurerm_user_assigned_identity.app["jobs"].client_id })
