@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react';
 import { Header } from '../../../components/Header';
-import { Login } from '../../../components/Login';
 import { NewAgreement } from '../../../components/NewAgreement';
-import { readActor } from '../../../server/sessions';
+import { StaffSignIn } from '../../../components/StaffSignIn';
+import { readStaffEntry } from '../../../server/sessions';
 
 export const dynamic = 'force-dynamic';
 export default async function NewAgreementPage(): Promise<ReactNode> {
-  const actor = await readActor('staff');
-  if (!actor) return <><Header isStaff /><Login kind="staff" /></>;
-  return <><Header isStaff isSignedIn /><main className="page"><NewAgreement /></main></>;
+  const { actor, isEmbedded } = await readStaffEntry();
+  if (!actor) return <StaffSignIn isEmbedded={isEmbedded} />;
+  return <><Header isStaff isSignedIn isEmbedded={isEmbedded} /><main className="page"><NewAgreement /></main></>;
 }

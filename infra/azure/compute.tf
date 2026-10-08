@@ -103,7 +103,7 @@ resource "azurerm_container_app" "web" {
       memory  = "1Gi"
 
       dynamic "env" {
-        for_each = merge(local.shared_env, { PORT = "3000", AZURE_CLIENT_ID = azurerm_user_assigned_identity.app["web"].client_id })
+        for_each = merge(local.shared_env, local.web_bridge_env, { PORT = "3000", AZURE_CLIENT_ID = azurerm_user_assigned_identity.app["web"].client_id })
 
         content {
           name  = env.key

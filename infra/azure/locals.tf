@@ -48,6 +48,11 @@ locals {
     DRIPSIGN_BLOB_ENDPOINT      = trimsuffix(azurerm_storage_account.documents.primary_blob_endpoint, "/")
     DRIPSIGN_DOCUMENT_CONTAINER = azurerm_storage_container.documents.name
   }
+  # The staff session bridge's public settings, when a host app frames the staff workspace.
+  web_bridge_env = var.staff_bridge == null ? {} : {
+    DRIPSIGN_BRIDGE_HOST_ORIGIN = var.staff_bridge.host_origin
+    DRIPSIGN_BRIDGE_PUBLIC_KEY  = var.staff_bridge.public_key
+  }
   # A test mailbox replaces sending entirely: messages land as files the test reads (variables.tf).
   jobs_env = var.test_mailbox == null ? {
     DRIPSIGN_MAIL_PROVIDER  = "azure"

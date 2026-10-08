@@ -123,6 +123,11 @@ export interface OtpConsumption {
   readonly sessionTokenHash: string; readonly sessionExpiresAt: string;
 }
 export interface AuthSession { readonly id: string; readonly actor: StaffActor | RecipientMailboxActor; readonly expiresAt: string; readonly verifiedAt: string }
+/** A verified host assertion: its one-use nonce, who the host says it is, and the new session. */
+export interface BridgeSession {
+  readonly issuer: string; readonly nonce: string; readonly subject: string; readonly tenantId: string; readonly email: string;
+  readonly assertionExpiresAt: string; readonly sessionTokenHash: string; readonly sessionExpiresAt: string;
+}
 export type OutboxStatus = 'pending' | 'delivering' | 'delivered' | 'uncertain' | 'failed';
 export interface OutboxMessage {
   readonly id: string; readonly tenantId: string; readonly agreementId: string | null;

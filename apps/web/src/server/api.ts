@@ -5,6 +5,7 @@ import { documentSourceSchema } from '@dripsign/core';
 import { getStore } from './store';
 import { getStorage } from './commands';
 import { HttpError, requireAdmission, apiResponseHeaders } from './http';
+import { getConfiguration } from './config';
 
 export const idSchema = z.uuid();
 export const createSchema = z.strictObject({
@@ -30,11 +31,14 @@ export async function downloadPdf(actor: Actor, agreementId: string, kind: z.inf
   if (!asset || (kind === 'draft' && actor.kind !== 'staff')) throw new HttpError(404, 'not_found');
   const bytes = await getStorage().get(actor.tenantId, agreementId, asset);
   await getStore().getAgreement(actor, agreementId);
+  const host = getConfiguration().staffBridge?.hostOrigin;
   return new Response(Buffer.from(bytes), { headers: {
     ...apiResponseHeaders(),
     'Content-Type': 'application/pdf', 'Content-Length': String(bytes.byteLength),
     'Content-Disposition': `${kind === 'document' || kind === 'draft' ? 'inline' : 'attachment'}; filename="${kind}.pdf"`,
     'X-Content-Type-Options': 'nosniff',
-    'Content-Security-Policy': "sandbox; default-src 'none'; frame-ancestors 'self'", 'X-Frame-Options': 'SAMEORIGIN',
+    // The staff workspace shows this PDF in its own frame, which a configured host app may frame in turn.
+    ...(host ? { 'Content-Security-Policy': `sandbox; default-src 'none'; frame-ancestors 'self' ${host}` }
+      : { 'Content-Security-Policy': "sandbox; default-src 'none'; frame-ancestors 'self'", 'X-Frame-Options': 'SAMEORIGIN' }),
   } });
 }

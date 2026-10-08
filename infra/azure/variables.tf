@@ -79,6 +79,23 @@ variable "host" {
   }
 }
 
+variable "staff_bridge" {
+  description = "The staff session bridge: a host app's exact HTTPS origin and its Ed25519 public key (64 lowercase hex, or two separated by a comma while it rotates); null turns the bridge off. Both are public."
+  type = object({
+    host_origin = string
+    public_key  = string
+  })
+  default = null
+
+  validation {
+    condition = var.staff_bridge == null || (
+      can(regex("^https://[a-z0-9.-]+(:[0-9]{1,5})?$", var.staff_bridge.host_origin)) &&
+      can(regex("^[a-f0-9]{64}(,[a-f0-9]{64})?$", var.staff_bridge.public_key))
+    )
+    error_message = "An exact HTTPS origin and one or two 64-hex public keys."
+  }
+}
+
 variable "mail_domain" {
   description = "The sending domain: null uses the Azure-managed domain (trial volume only); a domain the operator controls needs its verification, SPF and DKIM records."
   type        = string

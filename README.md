@@ -19,8 +19,9 @@ the sender, recipient, agreement, and current revision for each operation.
   signature and archived evidence.
 - A private staff workspace can ask Claude Sonnet 5.5 for suggested edits. A
   staff member must review and publish any resulting change.
-- A host app can mount the shared staff UI through a signed server bridge.
-  DripSign remains the owner of agreement data and signing state.
+- A host app can mount the shared staff UI through a signed server bridge, or
+  frame the whole staff workspace after its own sign-in with a signed staff
+  session bridge. DripSign remains the owner of agreement data and signing state.
 
 ## Sign in
 

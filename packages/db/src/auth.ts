@@ -3,7 +3,7 @@ import { transaction } from './connection.ts';
 import { SigningStore } from './signing.ts';
 import { bounded, emailAddress } from './validation.ts';
 import { StoreError } from './types.ts';
-import type { Agreement, AuthScope, AuthSession, BridgeAssertion, EmailMessage, OtpChallenge, OtpConsumption, RecipientActor, RecipientMailboxActor, StaffActor } from './types.ts';
+import type { Agreement, AuthScope, AuthSession, BridgeAssertion, BridgeSession, EmailMessage, OtpChallenge, OtpConsumption, RecipientActor, RecipientMailboxActor, StaffActor } from './types.ts';
 import type { PoolClient } from 'pg';
 
 export class AuthStore extends SigningStore {
@@ -103,6 +103,31 @@ export class AuthStore extends SigningStore {
   }
   async revokeSession(tokenHash:string):Promise<void> {
     await transaction(this.pool,async(client)=>{await client.query('UPDATE dripsign.auth_session SET revoked_at=now() WHERE token_hash=$1',[tokenHash]);});
+  }
+  /**
+   * Open a staff session for a verified host assertion in one transaction: the email must hold a
+   * current staff membership in the named tenant, and the nonce must be new. A replay, a revoked
+   * or absent membership, or an unknown tenant opens nothing.
+   */
+  async openBridgeSession(input:BridgeSession):Promise<AuthSession|null> {
+    const email=emailAddress(input.email);
+    bounded(input.issuer,'Bridge issuer',200);bounded(input.nonce,'Bridge nonce',22,22);
+    if(!/^[a-f0-9]{64}$/.test(input.sessionTokenHash))throw new StoreError('invalid','Session hash is invalid');
+    const assertionExpiry=Date.parse(input.assertionExpiresAt),sessionExpiry=Date.parse(input.sessionExpiresAt);
+    if(!Number.isFinite(assertionExpiry)||assertionExpiry<=Date.now()||assertionExpiry>Date.now()+125_000)throw new StoreError('invalid','Bridge assertion is invalid');
+    if(!Number.isFinite(sessionExpiry)||sessionExpiry<=Date.now()||sessionExpiry>Date.now()+24*60*60_000)throw new StoreError('invalid','Session expiry is invalid');
+    return transaction(this.pool,async(client)=>{
+      const membership=(await client.query<{user_id:string}>('SELECT user_id FROM dripsign.staff_membership WHERE tenant_id=$1 AND email=$2 AND revoked_at IS NULL FOR SHARE',[input.tenantId,email])).rows[0];
+      if(!membership)return null;
+      const recorded=await client.query('INSERT INTO dripsign.bridge_nonce(tenant_id,nonce,assertion,expires_at) VALUES($1,$2,$3,$4) ON CONFLICT(tenant_id,nonce) DO NOTHING',
+        [input.tenantId,`${input.issuer}:${input.nonce}`,JSON.stringify({kind:'staff_session',issuer:input.issuer,subject:input.subject,email}),input.assertionExpiresAt]);
+      if(!recorded.rowCount)return null;
+      const actor:StaffActor={kind:'staff',tenantId:input.tenantId,userId:membership.user_id};
+      const id=randomUUID();
+      const verified=(await client.query<{verifiedAt:string}>('INSERT INTO dripsign.auth_session(tenant_id,id,token_hash,actor,expires_at,verified_at) VALUES($1,$2,$3,$4,$5,now()) RETURNING verified_at::text AS "verifiedAt"',[input.tenantId,id,input.sessionTokenHash,JSON.stringify(actor),input.sessionExpiresAt])).rows[0];
+      if(!verified)throw new Error('Session insert returned no row');
+      return {id,actor,expiresAt:input.sessionExpiresAt,verifiedAt:verified.verifiedAt};
+    });
   }
   async consumeBridgeAssertion(assertion:BridgeAssertion):Promise<boolean> {
     bounded(assertion.nonce,'Bridge nonce',200,16);bounded(assertion.operation,'Bridge operation',100);bounded(assertion.path,'Bridge path',1000);
