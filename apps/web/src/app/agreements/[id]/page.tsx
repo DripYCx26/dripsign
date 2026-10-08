@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { StoreError } from '@dripsign/db';
 import { Header } from '../../../components/Header';
 import { Login } from '../../../components/Login';
@@ -12,7 +12,8 @@ export const dynamic = 'force-dynamic';
 export default async function AgreementPage({ params }: { readonly params: Promise<{ id: string }> }): Promise<ReactNode> {
   const id = idSchema.safeParse((await params).id);
   if (!id.success) notFound();
-  const actor = await readActor('recipient');
+  const actor = await readActor();
+  if (actor?.kind === 'staff') redirect(`/staff/agreements/${id.data}`);
   if (!actor) return <><Header /><Login kind="recipient" agreementId={id.data} /></>;
   try {
     const detail = await getAgreement(actor, id.data);

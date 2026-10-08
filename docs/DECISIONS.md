@@ -1,5 +1,27 @@
 # Decisions
 
+## 2026-10-08: One host for recipients and staff; a local stack on disk and a mail folder
+
+The standalone portal serves recipients at `/` and staff at `/staff` on one
+host, the Front Door endpoint until the operator names a domain. Each signed-out
+page links to the other sign-in at the top; staff use the same email codes as
+recipients, gated by staff membership. The shared pages carry no authority: the
+store checks membership or the exact grant on every operation.
+
+`@dripsign/core` gains a `filesystem` document store and a `directory` mail
+spool behind the existing ports, chosen in the same factory. They let
+`infra/container/compose.yaml` run web, jobs, and PostgreSQL on one machine with
+no cloud account, and a smoke journey drive the whole negotiation and signing
+flow over HTTP against it or a deployment. The store creates each object once
+through an exclusive hard link and verifies length and SHA-256 on every read;
+the spool writes each message whole and sends nothing.
+
+Rejected alternatives: S3 and Blob emulators, which add images whose
+compatibility with conditional writes and encryption headers would need its own
+proof; reading codes from the database in the smoke, which couples the test to
+the schema and to a private network; and Playwright, a new dependency the
+repository does not need yet. The smoke therefore takes no screenshots.
+
 ## 2026-10-08: Hosting: AWS or Azure through two adapters and two templates; chosen by configuration
 
 DripSign runs on AWS or on Azure. `@dripsign/core` holds one document storage

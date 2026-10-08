@@ -5,6 +5,7 @@ Build the shared image from the repository root using `infra/container/Dockerfil
 | File | Purpose |
 | --- | --- |
 | [Dockerfile](Dockerfile) | Build the web UI and retain TypeScript sources for the jobs runtime |
+| [compose.yaml](compose.yaml) | The local stack: PostgreSQL, release steps, web, jobs, and a TLS edge |
 
 The default command starts `@dripsign/web` on port 3000. ECS and Container Apps override it to `pnpm --filter @dripsign/jobs start` for the jobs service. Both run as the unprivileged Node user. No credentials are accepted at image build time. Configuration is private runtime data and is never passed as a public Next.js variable.
 
@@ -26,3 +27,27 @@ The environment contract follows the actual application owners. Supply these key
 Native signing records consent inside DripSign against the frozen published revision and required signer set. Jobs create the signed PDF and audit record and archive both through the configured private storage, S3 or Blob. No external signing credentials or callback configuration are required. The generic stack retains AES256 bucket encryption; signature archival uses the application's immutable object and hash checks.
 
 Jobs bounds and paid-call admission belong to the jobs/core configuration and database. Initial CPU/memory and task-count limits in the generic stack are assumptions for staging, not measured capacity. The native signer has not been deployed by this change. Keep web and jobs task counts at zero until private release checks establish readiness, email delivery, signing, archival, and recovery.
+
+## Local stack
+
+`compose.yaml` runs the image the way a deployment does, on one machine:
+
+```sh
+docker compose -f infra/container/compose.yaml up --build --detach
+```
+
+It builds the image once, creates the roles from [database.sql](../database.sql), applies the
+migrations with the migrator login, records one staff membership (`staff@example.com`), revokes
+the runtime's migration ledger, then starts web and jobs behind Caddy at `https://localhost:8443`.
+Caddy's local authority signs the certificate, so the HTTPS origin, secure cookies, and redirects
+behave as deployed; its root certificate lands in `infra/container/.local/caddy`. Documents use the
+`filesystem` provider on a volume, and mail uses the `directory` provider: each message is a file in
+`infra/container/.local/mail`, and nothing is sent. Only the edge reaches the host network; the
+other services have no route off the machine, so AI suggestions fail and the executed event retries
+until it needs staff attention. Every password and secret in the file is a local placeholder.
+
+Sign in at `https://localhost:8443/staff` with `staff@example.com` (trust the root certificate, or
+accept the browser warning) and read the code from the newest file in `.local/mail`. The
+[smoke journey](../../apps/web/README.md#smoke-journey) runs against this stack with `pnpm smoke`.
+Stop with `docker compose -f infra/container/compose.yaml down --volumes`, which discards the
+database and documents; delete `.local` to reset mail and the certificate authority.

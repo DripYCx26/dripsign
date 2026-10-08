@@ -24,10 +24,12 @@ Runtime configuration uses the following environment variables.
 | Variables | Requirement |
 | --- | --- |
 | `DRIPSIGN_DATABASE_URL` | Private database connection. |
-| `DRIPSIGN_STORAGE_PROVIDER` | Document store: `s3` (default) or `azure`. |
+| `DRIPSIGN_STORAGE_PROVIDER` | Document store: `s3` (default), `azure`, or `filesystem`. |
 | `AWS_REGION`, `DRIPSIGN_DOCUMENT_BUCKET`, `DRIPSIGN_KMS_KEY_ID` | With `s3`: region, private bucket, and optional KMS key. |
 | `DRIPSIGN_BLOB_ENDPOINT`, `DRIPSIGN_DOCUMENT_CONTAINER` | With `azure`: the account blob endpoint and private container. |
-| `DRIPSIGN_MAIL_PROVIDER` | Mail sender: `ses` (default) or `azure`. |
+| `DRIPSIGN_DOCUMENT_DIRECTORY` | With `filesystem`: the absolute directory web and jobs share on one host. |
+| `DRIPSIGN_MAIL_PROVIDER` | Mail sender: `ses` (default), `azure`, or `directory`. |
+| `DRIPSIGN_MAIL_DIRECTORY` | With `directory`: the absolute spool directory; one file per message, nothing sent. |
 | `DRIPSIGN_EMAIL_FROM`, `DRIPSIGN_PUBLIC_ORIGIN` | Authorized sender and recipient portal HTTPS origin. |
 | `AWS_REGION` | With `ses`: the SES region. |
 | `DRIPSIGN_EMAIL_ENDPOINT` | With `azure`: the Communication Services endpoint. |

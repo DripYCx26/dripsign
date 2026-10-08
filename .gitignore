@@ -12,3 +12,4 @@ coverage/
 *.tfstate.*
 *.tfplan
 *.tfvars
+infra/container/.local/

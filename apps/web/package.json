@@ -6,7 +6,8 @@
     "dev": "next dev --hostname 0.0.0.0 --port 3000",
     "build": "next build",
     "start": "next start --hostname 0.0.0.0 --port 3000",
-    "type-check": "next typegen && tsc --noEmit"
+    "type-check": "next typegen && tsc --noEmit",
+    "smoke": "node --test --test-isolation=none smoke/journey.test.ts"
   },
   "dependencies": {
     "@dripsign/db": "workspace:*",

@@ -3,12 +3,14 @@ import { Header } from '../components/Header';
 import { Login } from '../components/Login';
 import { readActor } from '../server/sessions';
 import { listAgreements } from '../server/agreements';
+import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
 
 export default async function CustomerPage({ searchParams }: { readonly searchParams: Promise<Record<string, string | string[] | undefined>> }): Promise<ReactNode> {
-  const actor = await readActor('recipient');
+  const actor = await readActor();
+  if (actor?.kind === 'staff') redirect('/staff');
   const query = await searchParams;
   const invitedId = z.uuid().safeParse(query.agreement);
   if (!actor) return <><Header /><Login kind="recipient" {...(invitedId.success ? { agreementId: invitedId.data } : {})} /></>;

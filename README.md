@@ -22,6 +22,13 @@ the sender, recipient, agreement, and current revision for each operation.
 - A host app can mount the shared staff UI through a signed server bridge.
   DripSign remains the owner of agreement data and signing state.
 
+## Sign in
+
+One host serves recipients and staff. Recipients open the agreement link from
+their invitation and enter the invited email; staff use **Staff sign-in** at the
+top of the page with their work email. Both receive a one-time code, and
+**Sign out** ends the session. Passkeys are not supported.
+
 ## Run your own instance
 
 Use Node 24 and pnpm 10.34.6. Supply a PostgreSQL database, private document
@@ -37,7 +44,11 @@ restricted roles, private storage, and optional host routing. The
 [Azure template](infra/azure/README.md) provides the same on Container Apps with
 Blob, Key Vault, Communication Services, Front Door, and a private PostgreSQL
 server. DNS, certificates, mail domain approval and production secrets are
-supplied by the operator. `pnpm test` runs the adapter tests. [Paired releases](infra/paired-release.md) describe how a host app can
+supplied by the operator. `pnpm test` runs the adapter tests. The
+[local stack](infra/container/README.md#local-stack) runs everything on one
+machine with documents on disk and mail in a folder, and `pnpm smoke` drives the
+whole journey against it or, with `DRIPSIGN_SMOKE_URL`, against a deployment
+([smoke journey](apps/web/README.md#smoke-journey)). [Paired releases](infra/paired-release.md) describe how a host app can
 pin a DripSign version without sharing its database or credentials.
 
 The architecture and product decisions are recorded in

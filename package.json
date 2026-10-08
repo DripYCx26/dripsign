@@ -9,6 +9,7 @@
   "scripts": {
     "type-check": "pnpm -r type-check",
     "test": "pnpm -r test",
-    "build": "pnpm -r build"
+    "build": "pnpm -r build",
+    "smoke": "pnpm --filter @dripsign/web smoke"
   }
 }
