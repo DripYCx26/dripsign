@@ -180,3 +180,9 @@ variable "operator_secrets_version" {
   type        = number
   default     = 1
 }
+
+variable "test_mailbox" {
+  description = "Test environments only: the name of a Container Apps environment storage (an Azure Files share) that the jobs app writes every message into as an .eml file instead of sending it, so an automated test can read sign-in codes. While it is set, nothing is sent. Never set it in production."
+  type        = string
+  default     = null
+}
