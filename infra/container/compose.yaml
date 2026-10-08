@@ -1,0 +1,139 @@
+# A local DripSign stack: PostgreSQL, the release steps, web, jobs, and a TLS edge at
+# https://localhost:8443. Every value here is a local-only placeholder; nothing leaves the machine.
+# Documents stay in a volume and mail lands in infra/container/.local/mail. See README.md.
+name: dripsign-local
+
+x-database: &database
+  DRIPSIGN_DATABASE_URL: postgres://dripsign_app:local-only-app-password@postgres:5432/dripsign
+x-origin: &origin
+  DRIPSIGN_PUBLIC_ORIGIN: https://localhost:8443
+x-staff: &staff
+  DRIPSIGN_STAFF_MEMBERSHIPS: '[{"tenantId":"00000000-0000-4000-8000-000000000001","tenantName":"Local firm","userId":"local-staff","email":"staff@example.com"}]'
+x-documents: &documents
+  DRIPSIGN_STORAGE_PROVIDER: filesystem
+  DRIPSIGN_DOCUMENT_DIRECTORY: /var/lib/dripsign/documents
+
+services:
+  postgres:
+    image: postgres:18@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+    environment:
+      POSTGRES_PASSWORD: local-only-admin-password
+    volumes:
+      - ../database.sql:/docker-entrypoint-initdb.d/10-database.sql:ro
+    configs:
+      - source: passwords
+        target: /docker-entrypoint-initdb.d/20-passwords.sql
+    networks: [private]
+    healthcheck:
+      test: ["CMD", "pg_isready", "--username", "postgres", "--dbname", "dripsign"]
+      interval: 2s
+      retries: 30
+
+  # Owns the document volume and the mail spool for the unprivileged node user.
+  permissions:
+    image: dripsign:local
+    build:
+      context: ../..
+      dockerfile: infra/container/Dockerfile
+    user: root
+    network_mode: none
+    command: ["chown", "node:node", "/var/lib/dripsign/documents", "/var/spool/dripsign"]
+    volumes:
+      - documents:/var/lib/dripsign/documents
+      - ./.local/mail:/var/spool/dripsign
+
+  # Migrations with the owner-capable login, then the configured staff memberships; no email.
+  release:
+    image: dripsign:local
+    pull_policy: never
+    command: ["sh", "-c", "pnpm --filter @dripsign/db migrate && pnpm --filter @dripsign/db bootstrap-staff"]
+    environment:
+      <<: [*database, *staff]
+      DRIPSIGN_MIGRATION_DATABASE_URL: postgres://dripsign_migrator:local-only-migrator-password@postgres:5432/dripsign
+    networks: [private]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  # The runtime login loses the migration ledger, as the deployed migrate job does.
+  ledger:
+    image: postgres:18@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+    command: ["psql", "postgres://postgres:local-only-admin-password@postgres:5432/dripsign", "-X", "--quiet", "-v", "ON_ERROR_STOP=1",
+      "-c", "SET ROLE dripsign_owner", "-c", "REVOKE ALL PRIVILEGES ON TABLE dripsign.schema_migration FROM PUBLIC, dripsign_app"]
+    networks: [private]
+    depends_on:
+      release: { condition: service_completed_successfully }
+
+  web:
+    image: dripsign:local
+    pull_policy: never
+    environment:
+      <<: [*database, *origin, *staff, *documents]
+      DRIPSIGN_AUTH_SECRET: local-only-session-secret-0123456789abcdef
+      DRIPSIGN_BRIDGE_ISSUERS: '[]'
+    volumes:
+      - documents:/var/lib/dripsign/documents
+    networks: [private]
+    depends_on:
+      permissions: { condition: service_completed_successfully }
+      ledger: { condition: service_completed_successfully }
+
+  # No route out: AI suggestions fail and the executed event retries, then needs staff attention.
+  jobs:
+    image: dripsign:local
+    pull_policy: never
+    command: ["pnpm", "--filter", "@dripsign/jobs", "start"]
+    environment:
+      <<: [*database, *origin, *documents]
+      DRIPSIGN_MAIL_PROVIDER: directory
+      DRIPSIGN_MAIL_DIRECTORY: /var/spool/dripsign
+      DRIPSIGN_EMAIL_FROM: sign@example.com
+      ANTHROPIC_API_KEY: not-configured
+      DRIPSIGN_HOST_EVENT_URL: https://host-events.invalid/dripsign
+      DRIPSIGN_HOST_EVENT_SECRET: local-only-event-secret-0123456789abcdef
+    volumes:
+      - documents:/var/lib/dripsign/documents
+      - ./.local/mail:/var/spool/dripsign
+    networks: [private]
+    depends_on:
+      permissions: { condition: service_completed_successfully }
+      ledger: { condition: service_completed_successfully }
+
+  # HTTPS from Caddy's local authority, so cookies, origins and redirects match a deployment.
+  edge:
+    image: caddy:2.10.2@sha256:c3d7ee5d2b11f9dc54f947f68a734c84e9c9666c92c88a7f30b9cba5da182adb
+    ports:
+      - 127.0.0.1:8443:8443
+    configs:
+      - source: caddyfile
+        target: /etc/caddy/Caddyfile
+    volumes:
+      - ./.local/caddy:/data
+    networks: [private, public]
+    depends_on:
+      - web
+
+volumes:
+  documents:
+
+# Only the edge reaches the host; nothing else has a route off the machine.
+networks:
+  private:
+    internal: true
+  public:
+
+configs:
+  passwords:
+    content: |
+      ALTER ROLE dripsign_app PASSWORD 'local-only-app-password';
+      ALTER ROLE dripsign_migrator PASSWORD 'local-only-migrator-password';
+  caddyfile:
+    content: |
+      {
+        admin off
+        auto_https disable_redirects
+        skip_install_trust
+      }
+      https://localhost:8443 {
+        tls internal
+        reverse_proxy web:3000
+      }

@@ -1,8 +1,32 @@
 # DripSign web
 
-The standalone Next.js application serves recipient review at `/` and native
-staff access at `/staff`. Both use email codes and HttpOnly sessions. The store
-resolves current grants before every agreement operation.
+The standalone Next.js application serves recipients and staff from one host:
+recipient review at `/` and the staff workspace at `/staff`. Both use email codes
+and HttpOnly sessions. The store resolves current grants before every agreement
+operation.
+
+## Sign-in
+
+The top of every signed-out page offers the other entry: recipients see
+**Staff sign-in**, staff see **Recipient access**. Staff enter their work email
+at `/staff`; a code goes only to an email in a current staff membership, and
+the session opens the staff workspace. A staff session that lands on `/` or on
+a recipient agreement link is sent to the matching staff page. Recipients keep
+the code-per-agreement path: the invitation link `/agreements/:id` asks for the
+invited email, and a code goes only to an email with a live grant. **Sign out**
+in the header revokes the session in the database before clearing the cookie.
+One browser holds one session, so signing in as the other kind replaces it.
+Passkeys do not exist in this repository; sign-in is email codes only.
+
+The interface grants nothing on its own. Every read, command, upload, download,
+and signature resolves the session, then the store checks the staff membership
+or the exact recipient grant for that agreement. Mutations also check the
+expected agreement version, and a signature the active round and its frozen
+revision, in the same transaction.
+
+The public host is `DRIPSIGN_PUBLIC_ORIGIN`. The [Azure template](../../infra/azure/README.md)
+sets it to the Front Door endpoint until `host` names a domain, then to that
+domain once its CNAME and `_dnsauth` records exist.
 
 | Path | Purpose |
 | --- | --- |
@@ -35,7 +59,8 @@ Document storage follows `DRIPSIGN_STORAGE_PROVIDER`: `s3` (default) reads
 `AWS_REGION`, `DRIPSIGN_DOCUMENT_BUCKET`, and the optional `DRIPSIGN_KMS_KEY_ID`;
 `azure` reads `DRIPSIGN_BLOB_ENDPOINT`, `DRIPSIGN_DOCUMENT_CONTAINER`, and
 `AZURE_CLIENT_ID` with the identity endpoint Container Apps sets
-(`IDENTITY_ENDPOINT`, `IDENTITY_HEADER`). The [jobs setup](../jobs/README.md)
+(`IDENTITY_ENDPOINT`, `IDENTITY_HEADER`); `filesystem` reads the absolute
+`DRIPSIGN_DOCUMENT_DIRECTORY` shared with jobs, for one host or the local stack. The [jobs setup](../jobs/README.md)
 lists the same keys. The storage is chosen on first use, so a missing key fails
 the first document request rather than startup.
 
@@ -43,6 +68,38 @@ The server listens on port 3000. `/health` reports process health. It does not
 prove database or provider readiness. The jobs application must run for queued
 emails, signed-document archival, and AI suggestions. Signature acceptance is a
 synchronous database transaction in the web service.
+
+## Smoke journey
+
+`smoke/journey.test.ts` is a `node:test` run over `fetch`, with one cookie jar
+per browser and the exact `Origin` a browser sends. The repository has no
+browser harness, so it drives the same HTTP routes the pages call and checks the
+sign-in link in the served HTML; it takes no screenshots. It covers staff
+sign-in at the top of the page, preparing and publishing a document (which
+invites the recipient), the recipient's proposal, staff acceptance and a second
+publication, the signing request, the recipient's signature, both downloads of
+the signed PDF and the audit record, refusals for a signed-out request, a
+recipient reading the private draft or another agreement, and sign-out.
+
+Against the [local stack](../../infra/container/README.md):
+
+```sh
+docker compose -f infra/container/compose.yaml up --build --detach
+pnpm smoke
+docker compose -f infra/container/compose.yaml down --volumes
+```
+
+Against a deployment, name its origin. Staff and recipient emails must reach
+someone who can read the codes: the run asks for each one on stdin unless
+`DRIPSIGN_SMOKE_MAIL_DIRECTORY` names a spool.
+
+```sh
+DRIPSIGN_SMOKE_URL=https://<host> DRIPSIGN_SMOKE_STAFF_EMAIL=<staff email>   DRIPSIGN_SMOKE_RECIPIENT_EMAIL=<inbox you read> pnpm smoke
+```
+
+`DRIPSIGN_SMOKE_CA_FILE` adds a PEM certificate authority; locally it defaults
+to the edge's own. Each run creates one agreement and two sign-in codes; the
+service allows five codes per email in fifteen minutes.
 
 ## API
 
