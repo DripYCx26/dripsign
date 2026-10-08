@@ -1,7 +1,8 @@
 import {
-  PrivateSuggestionClient, S3DocumentStorage, SesEmailClient,
+  PrivateSuggestionClient, createDocumentStorage, createEmailSender,
   estimateSuggestionCostMicros, parseEmailMessage, prepareSigningDocument, renderExecutedArtifacts, suggestionCostMicros,
 } from '@dripsign/core';
+import type { DocumentStorage, EmailSender } from '@dripsign/core';
 import {
   StoreError, parseAiJobPayload, parseArchiveJobPayload, parseMailJobPayload,
   parsePdfPreparationJobPayload, parseProposalAiJobPayload,
@@ -29,15 +30,15 @@ function requireDetail(detail: AgreementDetail | null): AgreementDetail {
 export class JobEffects {
   private readonly store: DripSignStore;
   private readonly configuration: ReturnType<typeof readConfiguration>;
-  private readonly email: SesEmailClient;
-  private readonly storage: S3DocumentStorage;
+  private readonly email: EmailSender;
+  private readonly storage: DocumentStorage;
   private readonly suggestions: PrivateSuggestionClient;
 
   constructor(store: DripSignStore, configuration: ReturnType<typeof readConfiguration>) {
     this.store = store;
     this.configuration = configuration;
-    this.email = new SesEmailClient(configuration.region, configuration.emailFrom);
-    this.storage = new S3DocumentStorage(configuration.region, configuration.bucket, configuration.kmsKeyId);
+    this.email = createEmailSender(configuration.mail);
+    this.storage = createDocumentStorage(configuration.storage);
     this.suggestions = new PrivateSuggestionClient(configuration.anthropicKey);
   }
 
@@ -127,7 +128,7 @@ export class JobEffects {
     if (!committed) logMetadata({ event: 'fenced', jobId: fence.id });
   }
 
-  private async sendMail(fence: JobFence, email: Parameters<SesEmailClient['send']>[0], begin: () => Promise<void>): Promise<void> {
+  private async sendMail(fence: JobFence, email: Parameters<EmailSender['send']>[0], begin: () => Promise<void>): Promise<void> {
     await begin();
     const outcome = await this.email.send(email);
     if (outcome.status === 'accepted') await this.finish(fence, 'delivered', outcome.messageId);

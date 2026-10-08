@@ -8,6 +8,7 @@
   "packageManager": "pnpm@10.34.6",
   "scripts": {
     "type-check": "pnpm -r type-check",
+    "test": "pnpm -r test",
     "build": "pnpm -r build"
   }
 }

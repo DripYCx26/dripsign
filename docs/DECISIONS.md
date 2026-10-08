@@ -1,5 +1,36 @@
 # Decisions
 
+## 2026-10-08: Hosting: AWS or Azure through two adapters and two templates; chosen by configuration
+
+DripSign runs on AWS or on Azure. `@dripsign/core` holds one document storage
+port and one mail port. S3 and SES remain the default adapters, unchanged in
+behaviour; Azure Blob and Azure Communication Services Email are the second
+pair. `DRIPSIGN_STORAGE_PROVIDER` and `DRIPSIGN_MAIL_PROVIDER` choose them at
+startup in one factory; web and jobs hold only the ports. Both now read the
+optional KMS key from `DRIPSIGN_KMS_KEY_ID`; the web app's undocumented
+`DRIPSIGN_DOCUMENT_KMS_KEY_ID` is gone. `infra/aws` and
+`infra/azure` deploy the same shape: separate web and jobs runtimes with their
+own identities, private storage that never overwrites or deletes a document, a
+secret store, mail, a dedicated database with its own logins, and an HTTPS edge.
+
+The Azure adapters call the REST APIs with Node's `fetch` and a token from the
+Container Apps managed identity endpoint. They use no shared key, SAS, or
+connection string, and add no dependency. The Blob adapter writes block blobs
+once with `If-None-Match: *` and pins `x-ms-version`; an existing object counts
+only after a verified read of the same bytes. The mail adapter sends each
+message with its own `Operation-Id`, never resends an accepted send, and treats
+a 5xx or a lost connection as uncertain, as the SES adapter does. The Azure
+template writes secrets through the Key Vault control plane from ephemeral
+values, so no secret enters Terraform state.
+
+Rejected alternatives: the Azure SDK packages, which add dependencies for four
+requests; provider checks at each call site, which would spread a second
+storage path through the applications; and one cloud only, which would bind
+every operator to one provider. Residual risks are the untested first
+deployment of the Azure template, Contributor as the narrowest documented
+mail-sending role, and an ingress host that answers outside Front Door. The
+[Azure template](../infra/azure/README.md) records each.
+
 ## 2026-10-07: DripSign signs agreements itself
 
 Michael rejected DocuSeal as DripSign's signer. DripSign verifies the invited

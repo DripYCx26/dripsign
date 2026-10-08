@@ -31,6 +31,14 @@ pnpm --filter @dripsign/web build
 pnpm --filter @dripsign/web start
 ```
 
+Document storage follows `DRIPSIGN_STORAGE_PROVIDER`: `s3` (default) reads
+`AWS_REGION`, `DRIPSIGN_DOCUMENT_BUCKET`, and the optional `DRIPSIGN_KMS_KEY_ID`;
+`azure` reads `DRIPSIGN_BLOB_ENDPOINT`, `DRIPSIGN_DOCUMENT_CONTAINER`, and
+`AZURE_CLIENT_ID` with the identity endpoint Container Apps sets
+(`IDENTITY_ENDPOINT`, `IDENTITY_HEADER`). The [jobs setup](../jobs/README.md)
+lists the same keys. The storage is chosen on first use, so a missing key fails
+the first document request rather than startup.
+
 The server listens on port 3000. `/health` reports process health. It does not
 prove database or provider readiness. The jobs application must run for queued
 emails, signed-document archival, and AI suggestions. Signature acceptance is a

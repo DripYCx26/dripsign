@@ -24,17 +24,20 @@ the sender, recipient, agreement, and current revision for each operation.
 
 ## Run your own instance
 
-Use Node 24 and pnpm 10.34.6. Supply a PostgreSQL database, private S3 bucket,
-AWS SES identity, and the server-only configuration listed
+Use Node 24 and pnpm 10.34.6. Supply a PostgreSQL database, private document
+storage (an S3 bucket or an Azure Blob container), a mail sender (SES or Azure
+Communication Services), and the server-only configuration listed
 in [web setup](apps/web/README.md), [jobs setup](apps/jobs/README.md), and the
 [container guide](infra/container/README.md). Run the database migration with
 the owner-capable identity, bootstrap staff membership, then start web and jobs.
 The web app alone does not send codes or process signatures.
 
 The [AWS template](infra/aws/README.md) provides separate web and jobs tasks,
-restricted roles, private storage, and optional host routing. DNS, certificates,
-SES approval and production secrets are supplied by the
-operator. [Paired releases](infra/paired-release.md) describe how a host app can
+restricted roles, private storage, and optional host routing. The
+[Azure template](infra/azure/README.md) provides the same on Container Apps with
+Blob, Key Vault, Communication Services, Front Door, and a private PostgreSQL
+server. DNS, certificates, mail domain approval and production secrets are
+supplied by the operator. `pnpm test` runs the adapter tests. [Paired releases](infra/paired-release.md) describe how a host app can
 pin a DripSign version without sharing its database or credentials.
 
 The architecture and product decisions are recorded in

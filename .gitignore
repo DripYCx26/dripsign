@@ -7,3 +7,8 @@ coverage/
 !.env.example
 *.tsbuildinfo
 .DS_Store
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars

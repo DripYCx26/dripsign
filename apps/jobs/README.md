@@ -23,9 +23,15 @@ Runtime configuration uses the following environment variables.
 
 | Variables | Requirement |
 | --- | --- |
-| `DRIPSIGN_DATABASE_URL`, `AWS_REGION` | Private database connection and AWS region. |
-| `DRIPSIGN_DOCUMENT_BUCKET`, `DRIPSIGN_KMS_KEY_ID` | Private document bucket; KMS key is optional. |
+| `DRIPSIGN_DATABASE_URL` | Private database connection. |
+| `DRIPSIGN_STORAGE_PROVIDER` | Document store: `s3` (default) or `azure`. |
+| `AWS_REGION`, `DRIPSIGN_DOCUMENT_BUCKET`, `DRIPSIGN_KMS_KEY_ID` | With `s3`: region, private bucket, and optional KMS key. |
+| `DRIPSIGN_BLOB_ENDPOINT`, `DRIPSIGN_DOCUMENT_CONTAINER` | With `azure`: the account blob endpoint and private container. |
+| `DRIPSIGN_MAIL_PROVIDER` | Mail sender: `ses` (default) or `azure`. |
 | `DRIPSIGN_EMAIL_FROM`, `DRIPSIGN_PUBLIC_ORIGIN` | Authorized sender and recipient portal HTTPS origin. |
+| `AWS_REGION` | With `ses`: the SES region. |
+| `DRIPSIGN_EMAIL_ENDPOINT` | With `azure`: the Communication Services endpoint. |
+| `AZURE_CLIENT_ID`, `IDENTITY_ENDPOINT`, `IDENTITY_HEADER` | With an `azure` provider: the app's user-assigned identity, and the identity endpoint Container Apps sets. |
 | `ANTHROPIC_API_KEY` | Private Sonnet 5.5 access. |
 | `DRIPSIGN_HOST_EVENT_URL`, `DRIPSIGN_HOST_EVENT_SECRET` | Fixed HTTPS host endpoint and signing secret of at least 32 bytes. |
 | `DRIPSIGN_JOBS_CONCURRENCY`, `DRIPSIGN_JOBS_POLL_MS` | Optional process concurrency and idle polling interval. |
@@ -39,8 +45,18 @@ tenant, with 60 global and 20 tenant claims per minute. Each agreement holds
 one dispatch lease. AI reserves the core adapter's maximum call cost against
 the hard $10 tenant ceiling per UTC day. These values are not measured capacity.
 
-SES sends and paid suggestions persist a dispatch marker before calling the
-provider. Unknown outcomes retain their uncertainty and AI reservation.
+Configuration chooses each adapter in `@dripsign/core`; this application holds
+only the storage and mail ports. The Azure adapters use no shared key, SAS, or
+connection string: each request carries a token for the app's managed
+identity, and no token or body is logged.
+
+Mail sends and paid suggestions persist a dispatch marker before calling the
+provider. Unknown outcomes retain their uncertainty and AI reservation. The
+Communication Services adapter gives each send its own `Operation-Id`, never
+resends an accepted (2xx) send, and treats a 5xx or lost connection as
+uncertain. It resends with the same `Operation-Id` only after an answer that
+proves the message was not taken: once after a refused token, and once after a
+429 whose `Retry-After` is at most 30 seconds.
 Immutable archival and idempotent host delivery have at most five attempts
 with exponential backoff, then require staff attention.
 

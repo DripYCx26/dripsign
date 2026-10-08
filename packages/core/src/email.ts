@@ -14,8 +14,17 @@ export function parseEmailMessage(value: unknown): EmailMessage {
   return parsed.data;
 }
 
+/**
+ * The mail port. `accepted` means the provider took the message, not that it was delivered;
+ * `uncertain` means it may have been taken, so the caller must never resend it blindly;
+ * `rejected` means it was not taken. Configuration chooses the adapter (`providers.ts`).
+ */
+export interface EmailSender {
+  send(message: EmailMessage): Promise<EmailOutcome>;
+}
+
 /** An accepted message is submitted to SES; delivery is not implied and uncertain sends cannot be retried blindly. */
-export class SesEmailClient {
+export class SesEmailClient implements EmailSender {
   private readonly client: SESv2Client;
   private readonly from: string;
 
