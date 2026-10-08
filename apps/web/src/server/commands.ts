@@ -1,6 +1,7 @@
 import 'server-only';
 import { z } from 'zod';
-import { documentSourceSchema, prepareSigningDocument, renderDocumentPdf, S3DocumentStorage } from '@dripsign/core';
+import { createDocumentStorage, documentSourceSchema, prepareSigningDocument, readStorageSettings, renderDocumentPdf } from '@dripsign/core';
+import type { DocumentStorage } from '@dripsign/core';
 import type { Actor, DocumentDraft, DocumentSource, Mutation } from '@dripsign/db';
 import { StoreError } from '@dripsign/db';
 import { getStore } from './store';
@@ -23,10 +24,11 @@ export const commandSchema = z.discriminatedUnion('action', [
   z.strictObject({ ...envelope, action: z.literal('adopt_ai_candidate'), candidateId: z.uuid() }),
 ]);
 export type WebCommand = z.infer<typeof commandSchema>;
-let storage: S3DocumentStorage | undefined;
+let storage: DocumentStorage | undefined;
 
-export function getStorage(): S3DocumentStorage {
-  if (!storage) storage = new S3DocumentStorage(process.env.AWS_REGION ?? '', process.env.DRIPSIGN_DOCUMENT_BUCKET ?? '', process.env.DRIPSIGN_DOCUMENT_KMS_KEY_ID);
+/** Configuration chooses the adapter (`DRIPSIGN_STORAGE_PROVIDER`); this module holds only the port. */
+export function getStorage(): DocumentStorage {
+  if (!storage) storage = createDocumentStorage(readStorageSettings(process.env));
   return storage;
 }
 

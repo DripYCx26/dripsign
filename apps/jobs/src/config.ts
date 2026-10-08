@@ -1,3 +1,5 @@
+import { readMailSettings, readStorageSettings } from '@dripsign/core';
+import type { MailSettings, StorageSettings } from '@dripsign/core';
 import type { OutboxAdmission } from '@dripsign/db';
 
 function required(env: NodeJS.ProcessEnv, key: string): string {
@@ -17,10 +19,8 @@ function boundedInteger(env: NodeJS.ProcessEnv, key: string, fallback: number, m
 /** Reads private runtime configuration and rejects invalid operational bounds. */
 export function readConfiguration(env: NodeJS.ProcessEnv): {
   readonly databaseUrl: string;
-  readonly region: string;
-  readonly bucket: string;
-  readonly kmsKeyId: string | undefined;
-  readonly emailFrom: string;
+  readonly storage: StorageSettings;
+  readonly mail: MailSettings;
   readonly publicOrigin: string;
   readonly anthropicKey: string;
   readonly hostEventUrl: URL;
@@ -45,10 +45,8 @@ export function readConfiguration(env: NodeJS.ProcessEnv): {
   }
   return {
     databaseUrl: required(env, 'DRIPSIGN_DATABASE_URL'),
-    region: required(env, 'AWS_REGION'),
-    bucket: required(env, 'DRIPSIGN_DOCUMENT_BUCKET'),
-    kmsKeyId: env['DRIPSIGN_KMS_KEY_ID']?.trim() || undefined,
-    emailFrom: required(env, 'DRIPSIGN_EMAIL_FROM'),
+    storage: readStorageSettings(env),
+    mail: readMailSettings(env),
     publicOrigin: publicUrl.origin,
     recoveryOnly: env['DRIPSIGN_RECOVERY_ONLY'] === '1',
     anthropicKey: required(env, 'ANTHROPIC_API_KEY'),

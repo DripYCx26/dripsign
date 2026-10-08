@@ -2,5 +2,9 @@ export { documentSourceSchema, parseDocumentSource, renderDocumentPdf, prepareSi
 export { parseSigningFields, assertNativeSignatureNameRenderable } from './documents.ts';
 export { renderExecutedArtifacts } from './execution.ts';
 export { S3DocumentStorage } from './storage.ts';
+export type { DocumentKind, DocumentStorage } from './storage.ts';
 export { SesEmailClient, parseEmailMessage } from './email.ts';
+export type { EmailSender } from './email.ts';
+export { readStorageSettings, readMailSettings, createDocumentStorage, createEmailSender } from './providers.ts';
+export type { StorageSettings, MailSettings } from './providers.ts';
 export { PrivateSuggestionClient, estimateSuggestionCostMicros, suggestionCostMicros } from './suggestions.ts';
