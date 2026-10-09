@@ -69,3 +69,36 @@ h1 { margin: 0 0 24px; font: 400 30px/1.25 var(--font-display); letter-spacing: 
   .agreement-row { flex-direction: column; align-items: flex-start; padding: var(--space); }
   .create-panel { padding: 24px 20px; }
 }
+
+/* The standalone shell and existing shared workspace follow the device theme. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --page-bg: #0f1012;
+    --panel-bg: #16171a;
+    --ink: #edece8;
+    --muted: #abaaa4;
+    --line: #6f6e6a;
+    --accent: #8db4e6;
+    --accent-hover: #aac9ee;
+    --accent-wash: #192b40;
+    --risk: #f0a391;
+  }
+  .dripsign {
+    --ds-paper: var(--page-bg);
+    --ds-card: var(--panel-bg);
+    --ds-chrome: #222328;
+    --ds-ink: var(--ink);
+    --ds-muted: var(--muted);
+    --ds-border: #2b2c31;
+    --ds-control: var(--line);
+    --ds-blue: var(--accent);
+    --ds-blue-hover: var(--accent-hover);
+    --ds-blue-wash: var(--accent-wash);
+    --ds-green: #83ceb6;
+    --ds-green-wash: #17352c;
+    --ds-red: var(--risk);
+    --ds-red-wash: #3b211d;
+    --ds-scrim: rgba(0, 0, 0, 0.6);
+  }
+}

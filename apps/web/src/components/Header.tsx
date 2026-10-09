@@ -10,6 +10,7 @@ export function Header({ isStaff = false, isSignedIn = false, isEmbedded = false
   return <header className="site-header"><a className="site-brand" href={isStaff ? '/staff' : '/'}>DripSign</a>
     <nav aria-label={isSignedIn ? 'Agreements' : 'Sign in'}>
       {isStaff && isSignedIn && <a href="/staff/new">New agreement</a>}
+      {isStaff && isSignedIn && !isEmbedded && <a href="/staff/completion-export">Completion exports</a>}
       {!isSignedIn && !isEmbedded && (isStaff ? <a href="/">Recipient access</a> : <a href="/staff">Staff sign-in</a>)}
       {isSignedIn && !isEmbedded && <form action="/api/auth/logout" method="post"><button className="secondary">Sign out</button></form>}
     </nav>

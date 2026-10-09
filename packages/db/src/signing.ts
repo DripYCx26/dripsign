@@ -1,3 +1,4 @@
+import { freezeCompletionExport } from './completionExport.ts';
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { AgreementStore, ROUND_COLUMNS, REVISION_COLUMNS, SIGNATURE_COLUMNS } from './agreements.ts';
@@ -110,10 +111,10 @@ export class SigningStore extends AgreementStore {
       }
       if (existing.length || agreement.status !== 'signing') throw new StoreError('conflict', 'Archived evidence changed');
       for (const [kind, document] of [['signed_document', value.signedDocument], ['audit_record', value.auditRecord]] as const) await client.query('INSERT INTO dripsign.archived_artifact(tenant_id,round_id,id,kind,document) VALUES($1,$2,$3,$4,$5)', [fence.tenantId, value.roundId, randomUUID(), kind, JSON.stringify(document)]);
-      await client.query('UPDATE dripsign.signing_round SET status=\'completed\' WHERE tenant_id=$1 AND id=$2', [fence.tenantId, value.roundId]);
+      await client.query('UPDATE dripsign.signing_round SET status=\'completed\',completed_at=clock_timestamp() WHERE tenant_id=$1 AND id=$2', [fence.tenantId, value.roundId]);
       await client.query('UPDATE dripsign.agreement SET status=\'signed\' WHERE tenant_id=$1 AND id=$2', [fence.tenantId, agreement.id]);
-      const provenance = (await client.query<{ createProvenance: import('./types.ts').CreateProvenance | null }>('SELECT create_provenance AS "createProvenance" FROM dripsign.agreement WHERE tenant_id=$1 AND id=$2', [fence.tenantId, agreement.id])).rows[0]?.createProvenance ?? null;
-      await this.enqueue(client, { tenantId: fence.tenantId, agreementId: agreement.id, kind: 'agreement_executed', dedupeKey: `executed:${value.roundId}`, payload: { eventId: randomUUID(), tenantId: fence.tenantId, agreementId: agreement.id, revisionId: value.revisionId, signedDocumentSha256: value.signedDocument.sha256, auditRecordSha256: value.auditRecord.sha256, createProvenance: provenance } });
+      await this.enqueue(client, { tenantId: fence.tenantId, agreementId: agreement.id, kind: 'agreement_executed', dedupeKey: `executed:${value.roundId}`, payload: { roundId: value.roundId, revisionId: value.revisionId } });
+      await freezeCompletionExport(client, fence.tenantId, agreement.id, value.roundId);
       return this.bump(client, agreement);
     });
   }

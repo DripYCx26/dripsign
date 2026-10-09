@@ -156,11 +156,7 @@ export interface ArchiveJobPayload { readonly roundId: string; readonly revision
 export interface AiJobPayload { readonly mutation: Mutation; readonly instruction: string; readonly source: DocumentSource }
 export interface PdfPreparationJobPayload { readonly mutation: Mutation; readonly originalDocument: DocumentAsset; readonly requiredGrantIds: readonly string[] }
 export interface PdfPreparationResult { readonly document: DocumentAsset; readonly signingFields: readonly SigningField[]; readonly requiredGrantIds: readonly string[] }
-export interface ExecutedAgreementEvent {
-  readonly eventId: string; readonly tenantId: string; readonly agreementId: string; readonly revisionId: string;
-  readonly signedDocumentSha256: string; readonly auditRecordSha256: string;
-  readonly createProvenance: CreateProvenance | null;
-}
+export type ExecutedAgreementEvent = import('./completionExport.ts').FrozenExecutedEvidence;
 export interface BridgeAssertion {
   readonly nonce: string; readonly actor: StaffActor; readonly agreementId: string | null;
   readonly operation: string; readonly method: string; readonly path: string; readonly bodyHash: string;

@@ -1,3 +1,4 @@
+import { completionKeys, type CompletionKey } from './completionDelivery.ts';
 import { readMailSettings, readStorageSettings } from '@dripsign/core';
 import type { MailSettings, StorageSettings } from '@dripsign/core';
 import type { OutboxAdmission } from '@dripsign/db';
@@ -23,23 +24,27 @@ export function readConfiguration(env: NodeJS.ProcessEnv): {
   readonly mail: MailSettings;
   readonly publicOrigin: string;
   readonly anthropicKey: string;
-  readonly hostEventUrl: URL;
-  readonly hostEventSecret: string;
+  readonly hostEventUrl: URL | null;
+  readonly completionKeys: readonly CompletionKey[] | null;
   readonly concurrency: number;
   readonly pollMs: number;
   readonly admission: OutboxAdmission;
   readonly recoveryOnly: boolean;
 } {
-  const hostEventUrl = new URL(required(env, 'DRIPSIGN_HOST_EVENT_URL'));
-  if (hostEventUrl.protocol !== 'https:' || hostEventUrl.username || hostEventUrl.password || hostEventUrl.hash) {
-    throw new Error('Invalid worker configuration: DRIPSIGN_HOST_EVENT_URL');
+  const destination = env['DRIPSIGN_HOST_EVENT_URL']?.trim();
+  const signingKeys = env['DRIPSIGN_COMPLETION_KEYS']?.trim();
+  if (Boolean(destination)!==Boolean(signingKeys)) throw new Error('Incomplete completion signing configuration');
+  const hostEventUrl=destination?new URL(destination):null;
+  const keys=signingKeys?completionKeys(signingKeys):null;
+  if (hostEventUrl && (hostEventUrl.protocol!=='https:'||hostEventUrl.pathname!=='/v1/webhooks/dripsign'
+    ||hostEventUrl.search||hostEventUrl.hash||hostEventUrl.username||hostEventUrl.password)) {
+    throw new Error('Invalid completion destination');
   }
-  const hostEventSecret = required(env, 'DRIPSIGN_HOST_EVENT_SECRET');
   const publicUrl = new URL(required(env, 'DRIPSIGN_PUBLIC_ORIGIN'));
   if (publicUrl.protocol !== 'https:' || publicUrl.username || publicUrl.password || publicUrl.href !== `${publicUrl.origin}/`) {
     throw new Error('Invalid worker configuration: DRIPSIGN_PUBLIC_ORIGIN');
   }
-  if (Buffer.byteLength(hostEventSecret) < 32) throw new Error('Host event signing secret is too short');
+
   if (env['DRIPSIGN_RECOVERY_ONLY'] !== undefined && env['DRIPSIGN_RECOVERY_ONLY'] !== '0' && env['DRIPSIGN_RECOVERY_ONLY'] !== '1') {
     throw new Error('Invalid worker configuration: DRIPSIGN_RECOVERY_ONLY');
   }
@@ -51,7 +56,7 @@ export function readConfiguration(env: NodeJS.ProcessEnv): {
     recoveryOnly: env['DRIPSIGN_RECOVERY_ONLY'] === '1',
     anthropicKey: required(env, 'ANTHROPIC_API_KEY'),
     hostEventUrl,
-    hostEventSecret,
+    completionKeys: keys,
     // ASSUMPTION: a small initial process limit; durable admission is owned by the database.
     concurrency: boundedInteger(env, 'DRIPSIGN_JOBS_CONCURRENCY', 2, 1, 4),
     pollMs: boundedInteger(env, 'DRIPSIGN_JOBS_POLL_MS', 1_000, 250, 30_000),

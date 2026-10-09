@@ -12,7 +12,9 @@ The directory contains the following runtime modules.
 | `src/config.ts` | Validates private configuration and pilot admission bounds. |
 | `src/runner.ts` | Claims available process capacity with durable leases. |
 | `src/effects.ts` | Executes mail, native signature archival, private AI, PDF preparation, and event jobs. |
-| `src/hostDelivery.ts` | Signs and sends the allowlisted executed event. |
+| `src/completionDelivery.ts` | Signs frozen completion evidence with the configured Ed25519 key and checks the destination receipt. |
+| `src/completionDelivery.test.ts` | Checks the shared signing vector and recovery body identity. |
+| `src/completion-vector.json` | Shared Rust/DripSign protocol vector. |
 | `src/metadataLog.ts` | Emits metadata without customer text or credentials. |
 
 Run `pnpm --filter @dripsign/jobs start` with Node 24 and a migrated database.
@@ -35,7 +37,7 @@ Runtime configuration uses the following environment variables.
 | `DRIPSIGN_EMAIL_ENDPOINT` | With `azure`: the Communication Services endpoint. |
 | `AZURE_CLIENT_ID`, `IDENTITY_ENDPOINT`, `IDENTITY_HEADER` | With an `azure` provider: the app's user-assigned identity, and the identity endpoint Container Apps sets. |
 | `ANTHROPIC_API_KEY` | Private Sonnet 5.5 access. |
-| `DRIPSIGN_HOST_EVENT_URL`, `DRIPSIGN_HOST_EVENT_SECRET` | Fixed HTTPS host endpoint and signing secret of at least 32 bytes. |
+| `DRIPSIGN_HOST_EVENT_URL`, `DRIPSIGN_COMPLETION_KEYS` | Optional pair: fixed HTTPS `/v1/webhooks/dripsign` destination and private Ed25519 key configuration. |
 | `DRIPSIGN_JOBS_CONCURRENCY`, `DRIPSIGN_JOBS_POLL_MS` | Optional process concurrency and idle polling interval. |
 | `DRIPSIGN_JOBS_GLOBAL_CONCURRENCY`, `DRIPSIGN_JOBS_TENANT_CONCURRENCY` | Optional lower durable concurrency limits. |
 | `DRIPSIGN_JOBS_GLOBAL_PER_MINUTE`, `DRIPSIGN_JOBS_TENANT_PER_MINUTE` | Optional lower claim rate limits. |
@@ -59,7 +61,7 @@ resends an accepted (2xx) send, and treats a 5xx or lost connection as
 uncertain. It resends with the same `Operation-Id` only after an answer that
 proves the message was not taken: once after a refused token, and once after a
 429 whose `Retry-After` is at most 30 seconds.
-Immutable archival and idempotent host delivery have at most five attempts
+Immutable archival and idempotent completion delivery have at most five attempts
 with exponential backoff, then require staff attention.
 
 The final required native signature queues archival. That job reads the exact
@@ -84,13 +86,21 @@ runs on the same raw asset.
 
 Recovery mode is executable with `DRIPSIGN_RECOVERY_ONLY=1 pnpm --filter
 @dripsign/jobs start`. It admits only archival. It excludes invitations,
-OTP, AI, host delivery, and new PDF preparation. Native signatures are recorded
+OTP, AI, completion delivery, and new PDF preparation. Native signatures are recorded
 by the web boundary; recovery
 only completes the artifacts for an already finalizing round.
 
-Host delivery signs `timestamp + '.' + exact JSON body` with HMAC SHA-256 and
-sends `X-DripSign-Timestamp`, `X-DripSign-Signature`, and `Idempotency-Key`.
-The event contains only event, tenant, agreement, and revision identifiers plus
-signed and audit hashes and nullable creation provenance. Provenance includes
-the tenant, staff subject, idempotency key, and original request hash. The host
-must verify the signature and timestamp and deduplicate the event before acting.
+Completion delivery uses the immutable archived completion body owned by
+[`@dripsign/db`](../../packages/db/README.md). Each attempt signs its exact body
+hash, method, path, issuer, audience, key identity and fresh header times with
+Ed25519. Delivery succeeds only after a matching destination evidence receipt.
+Retries preserve the original event, body and key pins.
+
+`DRIPSIGN_COMPLETION_KEYS` is a JSON array of one to eight exact
+`{keyId,keyVersion,seed}` objects; `seed` is 64 lowercase hexadecimal characters.
+Keep these private process keys out of the database and browser. Retain a key
+while an existing frozen event still names it. The public sender pins are
+configured through the [native staff page](../web/README.md#completion-exports).
+The destination origin must match the frozen audience, and its issuer must
+match `DRIPSIGN_PUBLIC_ORIGIN`. Supplying only the destination or only the keys
+is rejected at startup.

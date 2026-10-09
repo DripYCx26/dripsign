@@ -1,5 +1,7 @@
 'use client';
 
+import { CompletionRecovery } from './CompletionExport';
+
 import { useState, useTransition } from 'react';
 import type { ChangeEvent, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
@@ -104,6 +106,7 @@ export function Workspace({ detail, isStaff }: Props): ReactNode {
     </section>}
     {notice && <p className="notice" role="status">{notice}</p>}
     {needsVerification && <button className="secondary" disabled={isPending || isRefreshing} onClick={() => { void handleReverify(); }}>Verify email again</button>}
+    {isStaff && detail.agreement.status === 'signed' && detail.signingRound?.status === 'completed' && <CompletionRecovery key={detail.signingRound.id} agreementId={id} roundId={detail.signingRound.id} />}
     <AgreementWorkspace detail={detail} documentUrl={pdfUrl} isDraftPreview={isDraftPreview} isPending={isPending || isRefreshing} error={error}
       onPropose={handleProposal} onAccept={(proposalId) => { void command({ action: 'accept', proposalId }); }}
       onReject={(proposalId) => { void command({ action: 'reject', proposalId }); }}
