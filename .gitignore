@@ -13,3 +13,5 @@ coverage/
 *.tfplan
 *.tfvars
 infra/container/.local/
+apps/web/test-results/
+apps/web/playwright-report/

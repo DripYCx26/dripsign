@@ -8,7 +8,9 @@
     "start": "next start --hostname 0.0.0.0 --port 3000",
     "type-check": "next typegen && tsc --noEmit",
     "test": "node --test \"src/**/*.test.ts\"",
-    "smoke": "node --test --test-isolation=none smoke/journey.test.ts smoke/bridge.test.ts"
+    "smoke": "node --test --test-isolation=none smoke/journey.test.ts smoke/bridge.test.ts",
+    "e2e": "playwright test -c playwright.config.ts",
+    "type-check:e2e": "tsc -p tsconfig.e2e.json"
   },
   "dependencies": {
     "@dripsign/db": "workspace:*",
@@ -24,6 +26,8 @@
     "@types/node": "24.12.0",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "@playwright/test": "1.63.0",
+    "axe-core": "4.13.0"
   }
 }

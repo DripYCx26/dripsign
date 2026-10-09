@@ -17,11 +17,28 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+      - name: Install Node for PR coding checks
+        if: github.event_name == 'pull_request'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "24.16.0"
+      - name: Install the repository pnpm for PR coding checks
+        if: github.event_name == 'pull_request'
+        run: npm install --global --ignore-scripts pnpm@10.34.6
+      - name: Install frozen PR dependencies
+        if: github.event_name == 'pull_request'
+        run: pnpm install --frozen-lockfile
+      - name: Type-check PR source including smoke journeys
+        if: github.event_name == 'pull_request'
+        run: pnpm type-check && pnpm type-check:e2e
       - name: Build generic image
+        if: github.event_name != 'pull_request'
         run: docker build --file infra/container/Dockerfile --tag dripsign-artifact:build .
       - name: Save image
+        if: github.event_name != 'pull_request'
         run: docker save dripsign-artifact:build --output dripsign-image.tar
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: github.event_name != 'pull_request'
         with:
           name: generic-image
           path: dripsign-image.tar

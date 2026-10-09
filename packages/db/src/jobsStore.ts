@@ -1,3 +1,4 @@
+import { configureCompletionExport, freezeCompletionExport, recoverCompletionExport, type CompletionExportConfig } from './completionExport.ts';
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { AuthStore } from './auth.ts';
@@ -141,18 +142,47 @@ export class DripSignStore extends AuthStore {
     return { message, detail, executedEvent: null, archiveEvidence: null };
   }
 
-  private async executionEvent(client: PoolClient, message: OutboxMessage): Promise<ExecutedAgreementEvent> {
-    const event = (await client.query<Omit<ExecutedAgreementEvent, 'eventId'>>(`SELECT a.tenant_id AS "tenantId",a.id AS "agreementId",
-      r.revision_id AS "revisionId",signed.document->>'sha256' AS "signedDocumentSha256",audit.document->>'sha256' AS "auditRecordSha256",
-      a.create_provenance AS "createProvenance"
-      FROM dripsign.agreement a JOIN dripsign.signing_round r ON r.tenant_id=a.tenant_id AND r.agreement_id=a.id AND r.revision_id=a.current_revision_id
-      JOIN dripsign.archived_artifact signed ON signed.tenant_id=r.tenant_id AND signed.round_id=r.id AND signed.kind='signed_document'
-      JOIN dripsign.archived_artifact audit ON audit.tenant_id=r.tenant_id AND audit.round_id=r.id AND audit.kind='audit_record'
-      WHERE a.tenant_id=$1 AND a.id=$2 AND a.status='signed' AND r.status='completed' LIMIT 1`, [message.tenantId, message.agreementId])).rows[0];
-    if (!event || event.revisionId !== message.payload['revisionId'] || event.tenantId !== message.payload['tenantId']
-      || event.agreementId !== message.payload['agreementId'] || event.signedDocumentSha256 !== message.payload['signedDocumentSha256']
-      || event.auditRecordSha256 !== message.payload['auditRecordSha256']) throw new StoreError('conflict', 'Execution evidence changed');
-    return { eventId: message.id, ...event };
+  private async executionEvent(client: PoolClient, message: OutboxMessage): Promise<ExecutedAgreementEvent | null> {
+    const round = (await client.query<{ id: string }>(`SELECT id FROM dripsign.signing_round
+      WHERE tenant_id=$1 AND agreement_id=$2 AND status='completed' AND revision_id=$3`,
+      [message.tenantId, message.agreementId, message.payload['revisionId']])).rows[0];
+    if (!round) throw new StoreError('conflict', 'Completion event changed');
+    if (!message.agreementId) throw new StoreError('conflict', 'Completion scope changed');
+    const frozen=await freezeCompletionExport(client, message.tenantId, message.agreementId, round.id);
+    if (frozen&&frozen.event.eventId!==message.id) throw new StoreError('conflict', 'Original completion event changed');
+    return frozen;
+  }
+
+  private async completionStaff(client: PoolClient, actor: import('./types.ts').StaffActor, tokenHash: string): Promise<void> {
+    await this.staff(client, actor);
+    const live = await client.query(`SELECT 1 FROM dripsign.auth_session WHERE token_hash=$1
+      AND revoked_at IS NULL AND expires_at>clock_timestamp() AND actor->>'kind'='staff'
+      AND actor->>'tenantId'=$2 AND actor->>'userId'=$3 FOR SHARE`, [tokenHash, actor.tenantId, actor.userId]);
+    if (!live.rowCount) throw new StoreError('not_found', 'Resource not found');
+  }
+  async readCompletionExportConfig(actor: import('./types.ts').StaffActor, tokenHash: string): Promise<{ revision: number; config: unknown | null }> {
+    return transaction(this.pool, async (client) => {
+      await this.completionStaff(client, actor, tokenHash);
+      const row=(await client.query<{revision:string;config:unknown}>(`SELECT revision::text,config FROM dripsign.completion_export_config WHERE tenant_id=$1 ORDER BY revision DESC LIMIT 1`,[actor.tenantId])).rows[0];
+      await this.completionStaff(client, actor, tokenHash);
+      return {revision:Number(row?.revision??0),config:row?.config??null};
+    });
+  }
+  async configureCompletionExport(actor: import('./types.ts').StaffActor, tokenHash: string,
+    expected: number, config: CompletionExportConfig): Promise<number> {
+    return transaction(this.pool, async (client) => {
+      await this.completionStaff(client, actor, tokenHash);
+      const revision = await configureCompletionExport(client, actor.tenantId, expected, config);
+      await this.completionStaff(client, actor, tokenHash); return revision;
+    });
+  }
+  async recoverCompletionExport(actor: import('./types.ts').StaffActor, tokenHash: string,
+    agreement: string, round: string): Promise<string> {
+    return transaction(this.pool, async (client) => {
+      await this.completionStaff(client, actor, tokenHash);
+      const event = await recoverCompletionExport(client, actor.tenantId, agreement, round);
+      await this.completionStaff(client, actor, tokenHash); return event;
+    });
   }
 
   async getOutboxContext(fence: JobFence): Promise<OutboxContext> {

@@ -80,9 +80,8 @@ synchronous database transaction in the web service.
 ## Smoke journey
 
 `smoke/journey.test.ts` is a `node:test` run over `fetch`, with one cookie jar
-per browser and the exact `Origin` a browser sends. The repository has no
-browser harness, so it drives the same HTTP routes the pages call and checks the
-sign-in link in the served HTML; it takes no screenshots. It covers staff
+per actor and the exact `Origin` a browser sends. It drives the same HTTP routes
+the pages call and checks the sign-in link in served HTML; it takes no screenshots. It covers staff
 sign-in at the top of the page, preparing and publishing a document (which
 invites the recipient), the recipient's proposal, staff acceptance and a second
 publication, the signing request, the recipient's signature, both downloads of
@@ -127,6 +126,9 @@ are never used. Routes return private, uncached responses.
 | `GET /api/agreements/:id/pdf` | Stream an authorized issued, private, signed, or audit PDF. |
 | `POST /api/agreements/:id/sign` | Record the recipient's typed-name signature and exact-version consent; return a durable receipt. |
 | `GET /api/agreements/:id/signature-status` | Read confirmed local signing and archival evidence. |
+| `GET /api/staff/completion-export` | Read public sender pins and their current configuration revision under the native staff session. |
+| `POST /api/staff/completion-export` | Save explicit public sender pins with an expected configuration revision. |
+| `POST /api/staff/completion-export/recover` | Recover the original archived completion event for an exact agreement and round. |
 
 Command shapes live in `src/server/commands.ts`; creation lives in
 `src/server/api.ts`. Assets and identities are selected server-side. Uploaded
@@ -253,3 +255,32 @@ operation `recover_create`, resource `agreements`, and strict body
 `{subject,idempotencyKey,bodySha256}`. Its signed assertion hashes the lookup
 body; `bodySha256` in that body names the original create request. It remains
 available during admission pause and checks current staff membership.
+
+## Browser journey
+
+`pnpm type-check:e2e` checks the standalone browser source against the native database
+types. `pnpm e2e` runs `e2e/portal.spec.ts` against the explicitly running isolated
+local HTTPS stack; it starts no service. Install Chromium separately with
+`pnpm --filter @dripsign/web exec playwright install chromium`.
+
+The three serial desktop projects cover 1920x1080 light/dark and 1440x900 light.
+They exercise staff and recipient email-code sessions, document publication,
+proposal acceptance, the exact signing round, archived PDF/audit downloads,
+access refusals and sign-out. WCAG audits and fixture screenshots run at entry,
+review, signing and completion. Trace/video and automatic error screenshots are
+off; private mail and document bodies never enter diagnostic output.
+
+The default local origin is `https://localhost:8443`; `DRIPSIGN_BROWSER_URL` may
+select another local HTTPS origin. `DRIPSIGN_BROWSER_MAIL_DIRECTORY` selects the
+isolated directory-mail spool. Web, jobs and PostgreSQL must already run with
+local fixture staff and recipient addresses; the journey neither provisions
+cloud services nor proves production readiness.
+
+## Completion exports
+
+Staff open `/staff/completion-export` to read and save public sender enrollment
+pins with the current configuration revision. A refused or uncertain save requires
+a new read. The original native staff session authorizes every operation; signing
+seeds stay in jobs configuration. A completed agreement offers recovery of its
+original archived completion event. Queue acceptance does not confirm destination
+delivery and preserves an existing frozen event body.

@@ -12,7 +12,7 @@ import type {
   RecipientGrant, SigningArchiveEvidence,
 } from '@dripsign/db';
 import type { readConfiguration } from './config.ts';
-import { deliverExecutedEvent } from './hostDelivery.ts';
+import { deliverCompletion } from './completionDelivery.ts';
 import { logMetadata } from './metadataLog.ts';
 
 const RETRY_KINDS = new Set<OutboxMessage['kind']>(['archive', 'agreement_executed']);
@@ -95,11 +95,12 @@ export class JobEffects {
           await this.suggest(fence, context.message, begin);
           break;
         case 'agreement_executed': {
-          if (!context.executedEvent) throw new StoreError('conflict', 'Execution evidence is unavailable');
+          if (!this.configuration.hostEventUrl||!this.configuration.completionKeys||!context.executedEvent) { await this.retry(fence, message, 'host_export_unconfigured'); break; }
           await begin();
-          const outcome = await deliverExecutedEvent(this.configuration.hostEventUrl, this.configuration.hostEventSecret, context.executedEvent);
-          if (outcome === 'retry') await this.retry(fence, message, 'host_delivery_pending');
-          else await this.finish(fence, outcome);
+          const outcome = await deliverCompletion(this.configuration.hostEventUrl, this.configuration.completionKeys, context.executedEvent, BigInt(Date.now()) * 1000n, this.configuration.publicOrigin);
+          if (outcome.status === 'retry') await this.retry(fence, message, 'host_delivery_pending');
+          else if (outcome.status === 'delivered') await this.finish(fence, 'delivered', outcome.receipt);
+          else await this.finish(fence, 'failed', 'host_export_refused');
           break;
         }
         default: {

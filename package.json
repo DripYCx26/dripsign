@@ -10,6 +10,8 @@
     "type-check": "pnpm -r type-check",
     "test": "pnpm -r test",
     "build": "pnpm -r build",
-    "smoke": "pnpm --filter @dripsign/web smoke"
+    "smoke": "pnpm --filter @dripsign/web smoke",
+    "e2e": "pnpm --filter @dripsign/web e2e",
+    "type-check:e2e": "pnpm --filter @dripsign/web type-check:e2e"
   }
 }
