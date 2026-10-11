@@ -1,45 +1,70 @@
 # DripSign
 
-DripSign is an open source agreement workspace. Staff prepare a document,
-recipients propose changes in a shared thread, and staff publish the agreed
-version for signature. The signed PDF and audit record stay with the agreement.
+An open source agreement workspace. Staff prepare an agreement, recipients negotiate in a
+turn-based thread beside the document, staff publish immutable revisions, signers sign with a
+typed name, and a worker archives the signed PDF and audit record. One Next.js app, one Node
+package for everything that decides, PostgreSQL.
 
-The product has one signing authority. A host application may show the staff
-interface through an authenticated bridge, while recipients use the standalone
-portal. A shared interface does not grant access by itself: the server checks
-the sender, recipient, agreement, and current revision for each operation.
+[AGENTS.md](AGENTS.md) owns the working contract. [Architecture](docs/ARCHITECTURE.md) describes
+the system; [decisions](docs/DECISIONS.md) records what was chosen and why.
 
-## What it does
+## Run it locally
 
-- Email codes give each recipient access to the agreements shared with that address.
-- A document sits beside a turn-based proposal thread. Accepting a change creates
-  a private draft; publishing creates a new immutable PDF version.
-- Required signers verify their invited email, accept the signing terms, and
-  sign the exact published PDF with their typed name. Completion requires every
-  signature and archived evidence.
-- A private staff workspace can ask Claude Sonnet 5.5 for suggested edits. A
-  staff member must review and publish any resulting change.
-- A host app can mount the shared staff UI through a signed server bridge.
-  DripSign remains the owner of agreement data and signing state.
+Needs Node >=22.12, pnpm 10 and Docker. Nothing else; no cloud account.
 
-## Run your own instance
+```bash
+pnpm install && pnpm dev
+```
 
-Use Node 24 and pnpm 10.34.6. Supply a PostgreSQL database, private S3 bucket,
-AWS SES identity, and the server-only configuration listed
-in [web setup](apps/web/README.md), [jobs setup](apps/jobs/README.md), and the
-[container guide](infra/container/README.md). Run the database migration with
-the owner-capable identity, bootstrap staff membership, then start web and jobs.
-The web app alone does not send codes or process signatures.
+`pnpm dev` creates `.env` from `.env.example`, starts Postgres and Mailpit with Docker Compose,
+applies the schema, seeds an empty database, then runs the web app and the jobs worker.
 
-The [AWS template](infra/aws/README.md) provides separate web and jobs tasks,
-restricted roles, private storage, and optional host routing. DNS, certificates,
-SES approval and production secrets are supplied by the
-operator. [Paired releases](infra/paired-release.md) describe how a host app can
-pin a DripSign version without sharing its database or credentials.
+| What | Where |
+|---|---|
+| App | http://127.0.0.1:3000 |
+| Dev sign-in (no email round trip) | http://127.0.0.1:3000/dev/sign-in |
+| Mailpit (every email the app sends) | http://127.0.0.1:8025 |
 
-The architecture and product decisions are recorded in
-[docs/DECISIONS.md](docs/DECISIONS.md).
+`pnpm db:reset` wipes the database and reapplies the schema; `pnpm seed` loads the sample data
+into an empty one.
+
+## Try the workflows
+
+Every identity is synthetic. Sign in at `/dev/sign-in`.
+
+| Identity | Try |
+|---|---|
+| `avery@northwind.test` (staff admin) | Create an agreement, publish a revision, request signatures; open the staff dashboard |
+| `sam@northwind.test` (staff member) | Accept a recipient proposal and republish the revision |
+| `jordan@client.test` (recipient) | Propose a change to "Mutual NDA"; read the thread; open a published revision |
+| `morgan@client.test` (recipient) | Sign "Q4 retainer" and download the signed PDF; read the audit record |
+| `taylor@client.test` (recipient) | An optional recipient: sees the agreement, is not asked to sign |
+| `priya@harbor.test` (staff admin, other tenant) | Tenant isolation: sees none of Northwind's agreements |
+| `sam@northwind.test` again | Dual role: also a signer on Harbor Legal's "Speaking engagement"; switch between homes |
+
+The seeded agreements cover every status: draft, in review with a pending proposal, signing,
+signed with both artifacts, and void.
+
+## Subdirectories
+
+| Path | What |
+|---|---|
+| `apps/` | The Next.js web app |
+| `packages/` | `core`: schema, domain rules, auth, PDF, adapters, worker and CLI |
+| `docs/` | Architecture and dated decisions |
+| `infra/` | The container image and what an operator supplies in production |
+| `tools/` | Local development and the gate |
+| `e2e/` | Browser smoke test |
+
+## Verify
+
+```bash
+tools/ci          # static, types, test, build
+tools/ci e2e      # browser smoke against pnpm dev
+```
+
+Tests use a real PostgreSQL (`docker compose up -d --wait`).
 
 ## License
 
-Apache License 2.0. See [LICENSE](LICENSE).
+Apache License 2.0; see [LICENSE](LICENSE).

@@ -1,0 +1,9 @@
+.container {
+  display: grid;
+  width: 100%;
+  align-content: start;
+  gap: var(--ds-space-6);
+  margin-inline: auto;
+  max-width: var(--ds-layout-document-max);
+  padding: var(--ds-space-8) var(--ds-space-4) var(--ds-space-14);
+}

@@ -1,0 +1,53 @@
+/* Desktop: the conversation column and the document column side by side. Under 1024 px one of the
+   two shows, by data-tab: the document when it is chosen, the conversation otherwise. */
+
+.panes {
+  display: grid;
+  grid-template-columns: minmax(0, var(--ds-layout-list)) minmax(0, var(--ds-layout-document-max));
+  align-items: start;
+  gap: var(--ds-space-6);
+}
+
+.toggle {
+  display: none;
+}
+
+.conversation {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+  position: sticky;
+  top: var(--ds-space-4);
+  max-height: calc(100dvh - var(--ds-layout-header) - var(--ds-space-8));
+}
+
+.document {
+  display: grid;
+  min-width: 0;
+  gap: var(--ds-space-4);
+}
+
+.document:focus-visible {
+  border-radius: var(--ds-radius-card);
+}
+
+@media (max-width: 1023px) {
+  .panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .toggle {
+    display: block;
+  }
+
+  .conversation {
+    position: static;
+    max-height: none;
+  }
+
+  .panes[data-tab="document"] > .conversation,
+  .panes:not([data-tab="document"]) > .document {
+    display: none;
+  }
+}

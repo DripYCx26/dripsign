@@ -1,0 +1,20 @@
+.email {
+  max-width: 24ch;
+  overflow: hidden;
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.failure {
+  color: var(--ds-stop);
+  font-size: var(--ds-text-sm);
+}
+
+@media (max-width: 639px) {
+  .email {
+    display: none;
+  }
+}

@@ -1,0 +1,33 @@
+.pages {
+  display: grid;
+  gap: var(--ds-space-4);
+}
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-2) var(--ds-space-4);
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+}
+
+.open {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  min-height: var(--ds-size-target-min);
+}
+
+.open > svg {
+  width: var(--ds-size-icon-inline);
+  height: var(--ds-size-icon-inline);
+  stroke-width: var(--ds-icon-stroke);
+}
+
+.loading {
+  display: grid;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-6) 0;
+}

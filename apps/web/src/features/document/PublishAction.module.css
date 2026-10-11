@@ -1,0 +1,20 @@
+.action {
+  display: grid;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-4);
+  border: var(--ds-hairline);
+  border-radius: var(--ds-radius-card);
+  background: var(--ds-surface);
+}
+
+/* On a phone the action stays reachable under the long PDF. */
+@media (max-width: 640px) {
+  .action {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    border-radius: 0;
+    border-inline: 0;
+    border-bottom: 0;
+  }
+}

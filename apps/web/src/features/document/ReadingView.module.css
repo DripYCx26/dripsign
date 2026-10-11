@@ -1,0 +1,74 @@
+.wrap {
+  display: grid;
+  gap: var(--ds-space-2);
+}
+
+.note {
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+}
+
+/* The sheet is [data-paper]: white with light-theme text on a dark device too. */
+.sheet {
+  padding: var(--ds-space-10);
+  border: var(--ds-hairline);
+  border-radius: var(--ds-radius-card);
+  background: var(--ds-paper);
+  color: var(--ds-text);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-lg);
+  line-height: var(--ds-leading-lg);
+}
+
+@media (max-width: 640px) {
+  .sheet {
+    padding: var(--ds-space-5);
+  }
+}
+
+.title {
+  margin-bottom: var(--ds-space-6);
+}
+
+.section {
+  margin-bottom: var(--ds-space-6);
+  scroll-margin-top: var(--ds-space-14);
+}
+
+.heading {
+  margin-bottom: var(--ds-space-2);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-lg);
+  font-weight: var(--ds-weight-semibold);
+  line-height: var(--ds-leading-lg);
+}
+
+.paragraph {
+  margin-bottom: var(--ds-space-3);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.signatures {
+  margin-top: var(--ds-space-10);
+}
+
+.signers {
+  display: grid;
+  gap: var(--ds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.signer {
+  display: grid;
+  gap: var(--ds-space-1);
+  max-width: var(--ds-layout-sheet-narrow);
+}
+
+.line {
+  height: var(--ds-space-8);
+  border-bottom: 1px solid var(--ds-text-secondary);
+}

@@ -1,0 +1,9 @@
+.list {
+  display: grid;
+  gap: var(--ds-space-4);
+}
+
+.more {
+  display: flex;
+  justify-content: center;
+}

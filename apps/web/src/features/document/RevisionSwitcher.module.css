@@ -1,0 +1,9 @@
+.switcher {
+  max-width: var(--ds-layout-sheet-narrow);
+}
+
+.only {
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-medium);
+}

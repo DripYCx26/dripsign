@@ -206,3 +206,24 @@ export async function failJob(db: Db, lease: JobLease, error: string): Promise<b
   );
   return failed.rowCount === 1;
 }
+
+/** Keeps a live worker's lease claimable only after it stops renewing. */
+export async function renewLease(db: Db, lease: JobLease, leaseMs: number): Promise<boolean> {
+  const renewed = await db.query(
+    `UPDATE dripsign.outbox
+     SET lease_until = now() + $3::float8 * interval '1 millisecond',
+         available_at = now() + $3::float8 * interval '1 millisecond'
+     WHERE id = $1 AND lease_token = $2 AND status = 'running'`,
+    [lease.id, lease.leaseToken, leaseMs],
+  );
+  return renewed.rowCount === 1;
+}
+
+/** Failed deliveries no longer need an OTP code or other private template parameters. */
+export async function scrubEmailParams(db: Db, lease: JobLease): Promise<void> {
+  await db.query(
+    `UPDATE dripsign.outbox SET payload = jsonb_set(payload, '{params}', '{}'::jsonb)
+     WHERE id = $1 AND lease_token = $2 AND status = 'running' AND kind = 'email'`,
+    [lease.id, lease.leaseToken],
+  );
+}

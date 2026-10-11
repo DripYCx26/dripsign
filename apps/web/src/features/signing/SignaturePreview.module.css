@@ -1,0 +1,30 @@
+.preview {
+  display: grid;
+  margin: 0;
+  gap: var(--ds-space-1);
+}
+
+.ink {
+  display: flex;
+  height: 72px;
+  align-items: flex-end;
+  border-bottom: var(--ds-hairline);
+  overflow: hidden;
+  padding-bottom: var(--ds-space-1);
+  color: var(--ds-text);
+  font-family: var(--ds-font-signature, var(--ds-font-display));
+  font-size: var(--ds-display-md);
+  line-height: var(--ds-display-md-leading);
+  overflow-wrap: anywhere;
+}
+
+.ink[data-long] {
+  font-size: var(--ds-display-sm);
+  line-height: var(--ds-display-sm-leading);
+}
+
+.caption {
+  color: var(--ds-text-tertiary);
+  font-size: var(--ds-text-xs);
+  line-height: var(--ds-leading-xs);
+}

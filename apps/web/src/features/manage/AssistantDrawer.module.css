@@ -1,0 +1,56 @@
+.drawer {
+  display: grid;
+  gap: var(--ds-space-4);
+}
+
+.subtitle {
+  color: var(--ds-text-secondary);
+}
+
+.ask {
+  display: grid;
+  gap: var(--ds-space-3);
+}
+
+.ask > button {
+  justify-self: start;
+}
+
+.list {
+  display: grid;
+  gap: var(--ds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: grid;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-4);
+  border: var(--ds-hairline);
+  border-radius: var(--ds-radius-card);
+  background: var(--ds-surface);
+}
+
+.instruction {
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+  overflow-wrap: anywhere;
+}
+
+.summary {
+  overflow-wrap: anywhere;
+}
+
+.questions {
+  display: grid;
+  gap: var(--ds-space-2);
+}
+
+.questions ul {
+  display: grid;
+  gap: var(--ds-space-1);
+  padding-inline-start: var(--ds-space-5);
+}

@@ -1,0 +1,10 @@
+.pane {
+  display: grid;
+  gap: var(--ds-space-4);
+  min-width: 0;
+}
+
+.stack {
+  display: grid;
+  gap: var(--ds-space-4);
+}

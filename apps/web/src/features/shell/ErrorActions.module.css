@@ -1,0 +1,12 @@
+.actions {
+  display: grid;
+  justify-items: start;
+  gap: var(--ds-space-3);
+}
+
+.id {
+  color: var(--ds-text-tertiary);
+  font-family: var(--ds-mono);
+  font-size: var(--ds-text-xs);
+  line-height: var(--ds-leading-xs);
+}

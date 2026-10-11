@@ -1,0 +1,40 @@
+.list {
+  display: grid;
+  gap: var(--ds-space-6);
+}
+
+.group {
+  display: grid;
+  overflow: hidden;
+  border: var(--ds-hairline);
+  border-radius: var(--ds-radius-card);
+  background: var(--ds-surface);
+}
+
+.heading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-3) var(--ds-space-4);
+  border-bottom: var(--ds-hairline);
+  font-size: var(--ds-text-md);
+  line-height: var(--ds-leading-md);
+}
+
+.count {
+  color: var(--ds-text-tertiary);
+  font-family: var(--ds-mono);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-regular);
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The last row's rule would double the group's own border. */
+.rows > li:last-child > a {
+  border-bottom: 0;
+}

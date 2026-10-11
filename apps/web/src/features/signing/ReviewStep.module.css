@@ -1,0 +1,11 @@
+.document {
+  position: relative;
+}
+
+/* A zero-size mark placed at the signature field's page position; the drawn marker replaces it once the pages exist. */
+.anchor {
+  position: absolute;
+  left: 0;
+  width: 0;
+  height: 0;
+}

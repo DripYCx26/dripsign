@@ -1,0 +1,37 @@
+/* A message on the surface, a hairline card; one's own words sit on the subtle well. */
+
+.message {
+  display: grid;
+  gap: var(--ds-space-1);
+  padding: var(--ds-space-3) var(--ds-space-4);
+  border: var(--ds-hairline);
+  border-radius: var(--ds-radius-card);
+  background: var(--ds-surface);
+}
+
+.message[data-own] {
+  background: var(--ds-surface-subtle);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ds-space-1) var(--ds-space-3);
+  color: var(--ds-text-tertiary);
+  font-size: var(--ds-text-xs);
+  line-height: var(--ds-leading-xs);
+}
+
+.author {
+  color: var(--ds-text);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-semibold);
+  line-height: var(--ds-leading-sm);
+}
+
+.body {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}

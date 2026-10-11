@@ -1,0 +1,33 @@
+.timeline {
+  display: grid;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: grid;
+  gap: var(--ds-space-half);
+  padding: var(--ds-space-3) 0 var(--ds-space-3) var(--ds-space-4);
+  border-inline-start: 1px solid var(--ds-border-strong);
+}
+
+.text {
+  overflow-wrap: anywhere;
+}
+
+.evidence {
+  overflow-wrap: anywhere;
+  color: var(--ds-text-secondary);
+  font-family: var(--ds-mono);
+  font-size: var(--ds-text-xs);
+  line-height: var(--ds-leading-xs);
+}
+
+.time {
+  color: var(--ds-text-tertiary);
+  font-size: var(--ds-text-xs);
+  line-height: var(--ds-leading-xs);
+}

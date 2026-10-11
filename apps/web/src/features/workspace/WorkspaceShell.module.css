@@ -1,0 +1,12 @@
+.workspace {
+  display: grid;
+  gap: var(--ds-space-4);
+  padding: var(--ds-space-6);
+}
+
+/* The bottom action bar must not cover the last of the page on a phone. */
+@media (max-width: 639px) {
+  .workspace {
+    padding: var(--ds-space-4) var(--ds-space-4) calc(var(--ds-size-row-list) + var(--ds-space-4));
+  }
+}

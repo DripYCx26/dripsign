@@ -1,0 +1,79 @@
+/* A list row: three columns (who, what next, status and time) at the list row height; stacked
+   under 640. The whole row is the link, so its focus ring surrounds all of it. */
+
+.row {
+  display: grid;
+  min-height: var(--ds-row-height);
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr) auto;
+  align-items: center;
+  gap: var(--ds-space-2) var(--ds-space-4);
+  padding: var(--ds-row-pad) var(--ds-space-4);
+  border-bottom: var(--ds-hairline);
+  color: var(--ds-text);
+  text-decoration: none;
+}
+
+.row:hover {
+  background: var(--ds-surface-subtle);
+  color: var(--ds-text);
+}
+
+.row:focus-visible {
+  outline-offset: calc(var(--ds-space-half) * -1);
+}
+
+.main,
+.next {
+  display: grid;
+  min-width: 0;
+  gap: var(--ds-space-half);
+}
+
+.title {
+  overflow: hidden;
+  font-weight: var(--ds-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subline {
+  overflow: hidden;
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phrase {
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+}
+
+.status {
+  display: grid;
+  justify-items: end;
+  gap: var(--ds-space-half);
+}
+
+.updated {
+  color: var(--ds-text-tertiary);
+  font-size: var(--ds-text-xs);
+  line-height: var(--ds-leading-xs);
+}
+
+@media (max-width: 639px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .next {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .status {
+    grid-row: 1;
+    grid-column: 2;
+  }
+}

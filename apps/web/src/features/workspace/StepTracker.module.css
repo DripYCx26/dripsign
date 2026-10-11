@@ -1,0 +1,54 @@
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2) var(--ds-space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  color: var(--ds-text-tertiary);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+}
+
+.step[data-state="current"] {
+  color: var(--ds-text);
+  font-weight: var(--ds-weight-semibold);
+}
+
+.step[data-state="done"] {
+  color: var(--ds-text-secondary);
+}
+
+.mark {
+  display: inline-grid;
+  width: var(--ds-size-icon-tile);
+  height: var(--ds-size-icon-tile);
+  place-items: center;
+  border: 1px solid var(--ds-border-strong);
+  border-radius: var(--ds-radius-pill);
+  font-size: var(--ds-text-xs);
+  line-height: var(--ds-leading-xs);
+}
+
+.mark > svg {
+  width: var(--ds-size-icon-inline);
+  height: var(--ds-size-icon-inline);
+  stroke-width: var(--ds-icon-stroke);
+}
+
+.step[data-state="current"] .mark {
+  border-color: var(--ds-ink);
+  background: var(--ds-ink);
+  color: var(--ds-on-ink);
+}
+
+.step[data-state="done"] .mark {
+  border-color: var(--ds-confirm);
+  color: var(--ds-confirm);
+}

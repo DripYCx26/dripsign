@@ -1,0 +1,31 @@
+.marker {
+  position: absolute;
+  display: flex;
+  align-items: flex-start;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px dashed var(--ds-text-secondary);
+  border-radius: var(--ds-radius-tag);
+  background: transparent;
+  pointer-events: none;
+}
+
+.marker[data-own] {
+  border: 2px solid var(--ds-accent);
+  background: var(--ds-accent-soft);
+  /* Soft enough that the page's own text beneath stays legible. */
+  opacity: 0.92;
+}
+
+.label {
+  max-width: 100%;
+  overflow: hidden;
+  padding: var(--ds-space-half) var(--ds-space-1);
+  color: var(--ds-text);
+  font-family: var(--ds-font);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-medium);
+  line-height: var(--ds-leading-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

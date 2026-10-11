@@ -1,0 +1,9 @@
+/* Two columns need more than the 880 px document column: the diff beside the PDF. */
+.page {
+  display: grid;
+  width: 100%;
+  gap: var(--ds-space-6);
+  margin-inline: auto;
+  max-width: calc(var(--ds-layout-list) + var(--ds-layout-document-max));
+  padding: var(--ds-space-8) var(--ds-space-4) var(--ds-space-14);
+}

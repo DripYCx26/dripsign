@@ -1,0 +1,27 @@
+.flow {
+  display: grid;
+  gap: var(--ds-space-4);
+}
+
+.form {
+  display: grid;
+  gap: var(--ds-space-4);
+}
+
+.lead {
+  display: grid;
+  gap: var(--ds-space-1);
+  color: var(--ds-text-secondary);
+}
+
+.address {
+  color: var(--ds-text);
+  font-weight: var(--ds-weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.hint {
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+}

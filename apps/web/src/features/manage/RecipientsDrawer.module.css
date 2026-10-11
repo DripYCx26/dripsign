@@ -1,0 +1,71 @@
+.drawer {
+  display: grid;
+  gap: var(--ds-space-4);
+}
+
+.list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: grid;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-3) 0;
+  border-bottom: var(--ds-hairline);
+}
+
+.row[data-removed] {
+  color: var(--ds-text-tertiary);
+}
+
+.who {
+  min-width: 0;
+}
+
+.name {
+  overflow-wrap: anywhere;
+  font-weight: var(--ds-weight-semibold);
+}
+
+.email {
+  overflow-wrap: anywhere;
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+}
+
+.marks,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+
+.add {
+  display: grid;
+  gap: var(--ds-space-3);
+  padding-top: var(--ds-space-2);
+}
+
+.add > button {
+  justify-self: start;
+}
+
+.addTitle {
+  font-size: var(--ds-text-md);
+  line-height: var(--ds-leading-md);
+}
+
+.note {
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+}
+
+.note:empty {
+  display: none;
+}

@@ -1,0 +1,49 @@
+.picker {
+  display: grid;
+  gap: var(--ds-space-4);
+}
+
+.cards {
+  display: grid;
+  gap: var(--ds-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-3) var(--ds-space-4);
+  border: var(--ds-hairline);
+  border-radius: var(--ds-radius-card);
+  background: var(--ds-surface);
+  padding: var(--ds-space-4);
+}
+
+.who {
+  display: grid;
+  min-width: 0;
+  gap: var(--ds-space-half);
+}
+
+.name {
+  font-size: var(--ds-text-lg);
+  font-weight: var(--ds-weight-semibold);
+  line-height: var(--ds-leading-lg);
+}
+
+.email {
+  overflow-wrap: anywhere;
+  font-family: var(--ds-mono);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+}
+
+.role {
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+}

@@ -1,0 +1,62 @@
+.header {
+  display: grid;
+  gap: var(--ds-space-2);
+}
+
+.crumbs {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+}
+
+.line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-3) var(--ds-space-6);
+}
+
+.title {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2) var(--ds-space-3);
+}
+
+.title > h1 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.from {
+  flex-basis: 100%;
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+
+/* A sticky 64 px bar at the foot of the screen carries the actions on a phone. */
+@media (max-width: 639px) {
+  .actions {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 1;
+    height: var(--ds-size-row-list);
+    justify-content: flex-end;
+    padding: 0 var(--ds-space-4);
+    border-top: var(--ds-hairline);
+    background: var(--ds-surface);
+  }
+}

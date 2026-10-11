@@ -35,6 +35,9 @@ Grafted from the other design: one command-receipt table as the only idempotency
 - The Dreach integration uses Dreach's published contracts: an Ed25519 staff assertion posted to
   `/api/bridge/session` and an Ed25519-signed executed event. The earlier HMAC request bridge is
   removed. Both are off unless `DRIPSIGN_HOST` is set.
+- Deployment ships as one container image run twice (web and worker). The CloudFormation stack
+  and the paired-release schema are removed: they encoded the removed bridge and old settings,
+  and an operator's own infrastructure supplies Postgres, a bucket and an email identity.
 
 **Rejected.** One package without tenancy (cheaper now, costly to reverse, and drops isolation
 the old schema already enforced). Cutting host integration (Dreach PD-25 keeps the bridge and

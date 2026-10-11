@@ -1,0 +1,85 @@
+.diff {
+  display: grid;
+  gap: var(--ds-space-4);
+}
+
+.list {
+  display: grid;
+  gap: var(--ds-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.section {
+  display: grid;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-4);
+  border: var(--ds-hairline);
+  border-radius: var(--ds-radius-card);
+  background: var(--ds-surface);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2) var(--ds-space-3);
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--ds-text-md);
+  font-weight: var(--ds-weight-semibold);
+  line-height: var(--ds-leading-md);
+}
+
+.paragraph {
+  font-size: var(--ds-text-md);
+  line-height: var(--ds-leading-md);
+  overflow-wrap: anywhere;
+}
+
+.title {
+  font-size: var(--ds-text-md);
+}
+
+.label {
+  color: var(--ds-text-secondary);
+  font-weight: var(--ds-weight-medium);
+}
+
+/* Colour plus a line style, so a change survives without colour. */
+.ins {
+  background: var(--ds-confirm-soft);
+  color: var(--ds-text);
+  text-decoration: underline;
+  text-decoration-color: var(--ds-confirm);
+  text-underline-offset: var(--ds-space-half);
+}
+
+.del {
+  background: var(--ds-stop-soft);
+  color: var(--ds-text-secondary);
+  text-decoration: line-through;
+  text-decoration-color: var(--ds-stop);
+}
+
+.empty {
+  color: var(--ds-text-secondary);
+}
+
+.unchanged {
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+}
+
+.unchanged summary {
+  min-height: var(--ds-size-target-min);
+  cursor: pointer;
+}
+
+.unchanged ul {
+  margin: var(--ds-space-2) 0 0;
+  padding-left: var(--ds-space-5);
+}

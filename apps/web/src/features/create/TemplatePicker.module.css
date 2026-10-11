@@ -1,0 +1,10 @@
+.picker {
+  display: grid;
+  gap: var(--ds-space-2);
+}
+
+.note {
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+}

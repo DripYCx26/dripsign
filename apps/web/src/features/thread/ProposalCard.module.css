@@ -1,0 +1,96 @@
+/* A proposal card: a hairline card, an attention edge while it waits on someone. */
+
+.card {
+  display: grid;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-4);
+  border: var(--ds-hairline);
+  border-radius: var(--ds-radius-card);
+  background: var(--ds-surface);
+}
+
+.card[data-state="pending"],
+.card[data-state="stale"] {
+  border-inline-start: var(--ds-space-1) solid var(--ds-attention);
+}
+
+.card[data-state="stale"] {
+  background: var(--ds-surface-subtle);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+}
+
+.title {
+  min-width: 0;
+  font-weight: var(--ds-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.reason {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.change > summary,
+.summary {
+  cursor: pointer;
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+}
+
+.change[open] > summary {
+  margin-block-end: var(--ds-space-3);
+}
+
+.time {
+  color: var(--ds-text-tertiary);
+  font-size: var(--ds-text-xs);
+  line-height: var(--ds-leading-xs);
+}
+
+.decisions {
+  display: grid;
+  gap: var(--ds-space-2);
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+}
+
+.note {
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+}
+
+.superseded {
+  display: grid;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border-radius: var(--ds-radius-control);
+  background: var(--ds-surface-subtle);
+}
+
+.summary {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ds-space-3);
+}
+
+.show {
+  color: var(--ds-accent);
+  text-decoration: underline;
+}
+
+.superseded[open] .show {
+  display: none;
+}

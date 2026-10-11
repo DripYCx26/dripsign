@@ -1,0 +1,15 @@
+.form {
+  display: grid;
+  gap: var(--ds-space-5);
+}
+
+/* The consent is evidence: set apart as a well and read at body size, verbatim. */
+.consent {
+  border: var(--ds-hairline);
+  border-radius: var(--ds-radius-card);
+  background: var(--ds-surface);
+  padding: var(--ds-space-4);
+  color: var(--ds-text);
+  font-size: var(--ds-text-lg);
+  line-height: var(--ds-leading-lg);
+}

@@ -1,0 +1,29 @@
+/* The composer sits under the list, on the surface, set off by a hairline. */
+
+.composer {
+  display: grid;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-4);
+  border-top: var(--ds-hairline);
+  background: var(--ds-surface);
+}
+
+.form {
+  display: grid;
+  gap: var(--ds-space-3);
+}
+
+.form > button {
+  justify-self: start;
+}
+
+.note {
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+}
+
+.preview {
+  max-height: 320px;
+  overflow-y: auto;
+}

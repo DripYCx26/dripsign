@@ -1,0 +1,46 @@
+.form {
+  display: grid;
+  max-width: var(--ds-layout-reading);
+  gap: var(--ds-space-6);
+}
+
+.section {
+  display: grid;
+  gap: var(--ds-space-4);
+}
+
+.heading {
+  font-size: var(--ds-text-lg);
+  line-height: var(--ds-leading-lg);
+}
+
+.file {
+  color: var(--ds-text-secondary);
+  font-family: var(--ds-mono);
+  font-size: var(--ds-text-sm);
+}
+
+.error {
+  color: var(--ds-stop);
+  font-size: var(--ds-text-sm);
+}
+
+.actions {
+  display: flex;
+}
+
+/* On a phone the action stays within reach while the form scrolls. */
+@media (max-width: 640px) {
+  .actions {
+    position: sticky;
+    bottom: 0;
+    margin-inline: calc(var(--ds-space-4) * -1);
+    padding: var(--ds-space-3) var(--ds-space-4);
+    border-top: var(--ds-hairline);
+    background: var(--ds-surface);
+  }
+
+  .actions > button {
+    width: 100%;
+  }
+}

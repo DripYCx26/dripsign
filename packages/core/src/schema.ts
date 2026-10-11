@@ -140,6 +140,12 @@ export const documentAssetSchema = z.strictObject({
   pageCount: z.number().int().positive(),
 });
 
+/** Raw uploaded PDF bytes; the page count is known only after the worker parses them. */
+export const uploadAssetSchema = z.strictObject({
+  sha256: sha256Schema,
+  byteLength: z.number().int().positive(),
+});
+
 export const signingFieldSchema = z
   .strictObject({
     recipientId: uuidSchema,
@@ -161,7 +167,7 @@ export const PREPARATION_STATUSES = ["empty", "preparing", "ready", "failed"] as
 export const draftSchema = z
   .strictObject({
     source: documentSourceSchema.nullable(),
-    upload: documentAssetSchema.nullable(),
+    upload: uploadAssetSchema.nullable(),
     document: documentAssetSchema.nullable(),
     signingFields: z.array(signingFieldSchema).max(LIMITS.requiredSigners * 2),
     signerIds: z.array(uuidSchema).max(LIMITS.requiredSigners),
@@ -302,6 +308,7 @@ export const staffListQuerySchema = z.strictObject({
 
 export const EMAIL_TEMPLATES = [
   "otp_code",
+  "step_up",
   "invite",
   "revision_published",
   "sign_request",
@@ -322,7 +329,7 @@ export const jobPayloadSchema = z
     }),
     z.strictObject({
       kind: z.literal("pdf_prepare"),
-      // sha256 of the upload bytes, or of canonicalJson(source) for written terms.
+      // canonicalJson sha256 of { title, source, upload sha256 }: what the renderer consumes.
       inputSha256: sha256Schema,
       signerSetHash: sha256Schema,
     }),
@@ -335,6 +342,7 @@ export const jobPayloadSchema = z
 export type DocumentSection = z.infer<typeof documentSectionSchema>;
 export type DocumentSource = z.infer<typeof documentSourceSchema>;
 export type DocumentAsset = z.infer<typeof documentAssetSchema>;
+export type UploadAsset = z.infer<typeof uploadAssetSchema>;
 export type SigningField = z.infer<typeof signingFieldSchema>;
 export type PreparationStatus = (typeof PREPARATION_STATUSES)[number];
 export type Draft = z.infer<typeof draftSchema>;

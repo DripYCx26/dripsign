@@ -1,0 +1,11 @@
+.unavailable {
+  display: grid;
+  width: min(100%, var(--ds-layout-sheet-narrow));
+  gap: var(--ds-space-4);
+  margin: var(--ds-space-14) auto;
+  padding: 0 var(--ds-space-4);
+}
+
+.unavailable > p {
+  color: var(--ds-text-secondary);
+}

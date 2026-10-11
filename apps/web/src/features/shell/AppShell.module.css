@@ -1,0 +1,47 @@
+/* The frame around every signed-in page: the bar, then the main that takes the rest of the height. */
+
+.shell {
+  display: flex;
+  min-height: 100dvh;
+  flex-direction: column;
+}
+
+.main {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.brand {
+  color: var(--ds-text);
+  text-decoration: none;
+}
+
+.brand:hover {
+  color: var(--ds-text);
+}
+
+.role {
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+}
+
+/* Off screen until it takes focus, then the first thing a keyboard user reaches. */
+.skip {
+  position: absolute;
+  z-index: 1;
+  inset-block-start: var(--ds-space-2);
+  inset-inline-start: var(--ds-space-2);
+  translate: 0 -200%;
+  border-radius: var(--ds-radius-control);
+  background: var(--ds-ink);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  color: var(--ds-on-ink);
+  font-size: var(--ds-text-sm);
+}
+
+.skip:focus-visible {
+  translate: 0 0;
+}

@@ -1,0 +1,36 @@
+.frame {
+  display: grid;
+  min-height: 100dvh;
+  grid-template-rows: var(--ds-layout-header) 1fr;
+  background: var(--ds-surface-subtle);
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-4);
+  border-bottom: var(--ds-hairline);
+  background: var(--ds-surface);
+  padding: 0 var(--ds-space-4);
+}
+
+.title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ds-text);
+  font-size: var(--ds-text-md);
+  font-weight: var(--ds-weight-medium);
+  line-height: var(--ds-leading-md);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.column {
+  display: grid;
+  width: min(var(--ds-layout-flow), 100%);
+  align-content: start;
+  justify-self: center;
+  gap: var(--ds-space-6);
+  padding: var(--ds-space-8) var(--ds-space-4);
+}
