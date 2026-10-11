@@ -17,11 +17,14 @@ export type FieldControl = Readonly<{
  */
 export function Field({
   label,
+  hideLabel = false,
   hint,
   error,
   children,
 }: Readonly<{
   label: string;
+  /** Keeps the label for assistive technology only; the placeholder or context says it by eye. */
+  hideLabel?: boolean | undefined;
   hint?: string | undefined;
   error: string | undefined;
   children: (control: FieldControl) => ReactNode;
@@ -35,7 +38,7 @@ export function Field({
     .join(" ");
   return (
     <div className={styles.field}>
-      <label htmlFor={id} className={styles.label}>
+      <label htmlFor={id} className={hideLabel ? "ds-visually-hidden" : styles.label}>
         {label}
       </label>
       {children({
@@ -60,6 +63,7 @@ export function Field({
 
 type TextFieldProps = Readonly<{
   label: string;
+  hideLabel?: boolean | undefined;
   name: string;
   type?: "text" | "email" | "search" | "url" | undefined;
   /** md everywhere; lg on sign-in, where the field is the page's one question. */
@@ -80,6 +84,7 @@ type TextFieldProps = Readonly<{
 /** A one-line native text input with its label, hint and error. */
 export function TextField({
   label,
+  hideLabel,
   name,
   type = "text",
   size = "md",
@@ -96,7 +101,7 @@ export function TextField({
   error,
 }: TextFieldProps) {
   return (
-    <Field label={label} hint={hint} error={error}>
+    <Field label={label} hideLabel={hideLabel} hint={hint} error={error}>
       {(control) => (
         <input
           {...control}

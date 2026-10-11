@@ -13,16 +13,28 @@ import {
 import type { DocumentSource, SigningField } from "../schema.ts";
 import { assertTextRenderable, embedSignatureFont, SIGNATURE_BOX, wrapPdfText } from "./font.ts";
 import { MAX_PREPARED_PAGES, metadata, pageNumbers, PAPER, savePdf, textWriter } from "./render.ts";
+import { isolateUpload } from "./isolate.ts";
 
 const signerSchema = z.strictObject({ id: uuidSchema, name: personNameSchema, email: emailSchema });
 export type DraftSigner = z.infer<typeof signerSchema>;
 
-export async function prepareDraftPdf(input: {
+export interface PreparationInput {
   title: string;
   source?: DocumentSource;
   uploadBytes?: Uint8Array;
   signers: readonly DraftSigner[];
-}): Promise<{ bytes: Uint8Array; fields: SigningField[]; pageCount: number }> {
+}
+
+export interface PreparedPdf {
+  bytes: Uint8Array;
+  fields: SigningField[];
+  pageCount: number;
+}
+
+export async function prepareDraftPdf(
+  input: PreparationInput,
+  signal?: AbortSignal,
+): Promise<PreparedPdf> {
   const title = titleSchema.parse(input.title);
   const signers = z.array(signerSchema).max(LIMITS.requiredSigners).parse(input.signers);
   if (
@@ -34,6 +46,19 @@ export async function prepareDraftPdf(input: {
   if ((input.source === undefined) === (input.uploadBytes === undefined)) {
     throw new DomainError("invalid", "Use terms or a PDF, not both.");
   }
+  signal?.throwIfAborted();
+  if (input.uploadBytes) {
+    if (input.uploadBytes.byteLength === 0 || input.uploadBytes.byteLength > LIMITS.pdfBytes)
+      throw new DomainError("invalid", "The PDF exceeds the upload limit.");
+    // Parsing, copying and rendering stay in the bounded isolate; no attacker PDF is re-parsed here.
+    return isolateUpload({ ...input, title, signers }, signal);
+  }
+  return preparePdfInProcess({ ...input, title, signers });
+}
+
+/** The isolate entry; callers handling uploads must use prepareDraftPdf's resource supervision. */
+export async function preparePdfInProcess(input: PreparationInput): Promise<PreparedPdf> {
+  const { title, signers } = input;
   const document = await PDFDocument.create({ updateMetadata: false });
   const font = await embedSignatureFont(document);
   let uploadedPages = 0;
@@ -57,7 +82,7 @@ export async function prepareDraftPdf(input: {
   return { bytes: await savePdf(document), fields, pageCount: document.getPageCount() };
 }
 
-export async function loadUploadedPdf(bytes: Uint8Array): Promise<PDFDocument> {
+async function loadUploadedPdf(bytes: Uint8Array): Promise<PDFDocument> {
   if (bytes.byteLength === 0 || bytes.byteLength > LIMITS.pdfBytes) {
     throw new DomainError("invalid", "The PDF exceeds the upload limit.");
   }
@@ -129,17 +154,12 @@ function appendSignaturePages(
     }
     const page = document.getPage(document.getPageCount() - 1);
     const top = 680 - (index % 3) * 200;
-    for (const [value, size, y] of [
-      [signer.name, 11, top],
-      [signer.email, 8, top - 48],
-    ] as const) {
-      assertTextRenderable(value, font);
-      const lines = wrapPdfText(value, font, size, 504);
-      if (lines.length > 3) throw new DomainError("invalid", "The signer label is too long.");
-      lines.forEach((line, lineIndex) => {
-        page.drawText(line, { x: 54, y: y - lineIndex * size * 1.3, size, font });
-      });
-    }
+    assertTextRenderable(signer.name, font);
+    const lines = wrapPdfText(signer.name, font, 11, 504);
+    if (lines.length > 3) throw new DomainError("invalid", "The signer label is too long.");
+    lines.forEach((line, lineIndex) => {
+      page.drawText(line, { x: 54, y: top - lineIndex * 11 * 1.3, size: 11, font });
+    });
     const bottom = top - 118;
     for (const [type, x, width] of [
       ["signature", 54, SIGNATURE_BOX.width],

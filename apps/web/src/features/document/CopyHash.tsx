@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Button, Copy } from "@/ui";
+import { Copy, IconButton } from "@/ui";
 import styles from "./CopyHash.module.css";
 
 const NOTICE_MS = 2500;
@@ -46,16 +46,14 @@ export function CopyHash({ sha256, label }: Readonly<{ sha256: string; label: st
       <code className={styles.value} title={sha256}>
         {sha256.slice(0, SHORT_LENGTH)}
       </code>
-      <Button
-        variant="quiet"
+      <IconButton
+        label="Copy full SHA-256"
+        icon={<Copy aria-hidden="true" />}
         size="sm"
         onClick={() => {
           void copy();
         }}
-      >
-        <Copy aria-hidden="true" />
-        Copy full SHA-256
-      </Button>
+      />
       <span className="ds-visually-hidden" role="status">
         {ANNOUNCE[outcome]}
       </span>

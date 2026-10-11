@@ -1,6 +1,6 @@
 import "server-only";
 import { loadConfig } from "@dripsign/core/config";
-import { listDevIdentities } from "@dripsign/core/seed";
+import { listDevIdentities } from "@dripsign/core/seed/identities";
 import type { DevIdentity } from "./types.ts";
 
 /** The one answer to "is development sign-in on": the config's, which refuses it outside dev. */

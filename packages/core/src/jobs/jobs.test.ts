@@ -1,16 +1,31 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { closePool, getPool, tx } from "../db.ts";
 import { AI_RESERVATION_MICROS, askAi } from "../domain/ai.ts";
 import { loadState, lockAgreement, resolveAccess } from "../domain/state.ts";
 import type { StaffActor } from "../types.ts";
-import { canonicalJson, SIGNING_CONSENT } from "../schema.ts";
-import { getStorage, hashBytes, objectKey, readBytes, storeBytes } from "../adapters/storage.ts";
-import { prepareDraftPdf } from "../pdf/prepare.ts";
-import { claimJobs, enqueue, finishJob } from "./outbox.ts";
-import type { ClaimedJob } from "./outbox.ts";
+import { canonicalJson } from "../schema.ts";
+import { getStorage, hashBytes, objectKey, readBytes } from "../adapters/storage.ts";
+import { completeArchive } from "../domain/signing.ts";
+import { claimJobs, enqueue, finishJob, retryJob } from "./outbox.ts";
+import * as outboxModule from "./outbox.ts";
 import { createHandlers } from "./handlers.ts";
 import { executeJob } from "./runner.ts";
+import { parseConfig } from "../config.ts";
+import { rescueArchives } from "./sweep.ts";
+import {
+  archiveFixture,
+  assertModelPrices,
+  assertRetention,
+  dueAgain,
+  fixture,
+  source,
+} from "./testSupport.ts";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
 
 beforeAll(() => {
   vi.stubEnv("DRIPSIGN_ANTHROPIC_API_KEY", "synthetic-not-a-provider-key");
@@ -21,160 +36,79 @@ afterAll(async () => {
   vi.unstubAllEnvs();
 });
 
-const source = {
-  title: "Synthetic agreement",
-  sections: [{ id: "scope", heading: "Scope", paragraphs: ["Provide synthetic services."] }],
-};
-
-async function fixture(tenantId = randomUUID()) {
-  const db = getPool();
-  const agreementId = randomUUID();
-  const recipientId = randomUUID();
-  const email = "staff@example.test";
-  const draft = {
-    source,
-    upload: null,
-    document: null,
-    signingFields: [],
-    signerIds: [recipientId],
-    preparation: { status: "empty", error: null, inputSha256: null, signerSetHash: null },
-  };
-  await db.query("INSERT INTO dripsign.tenant (id, name) VALUES ($1,$2) ON CONFLICT DO NOTHING", [
-    tenantId,
-    tenantId,
-  ]);
-  await db.query(
-    "INSERT INTO dripsign.staff (tenant_id,email,role) VALUES ($1,$2,'admin') ON CONFLICT DO NOTHING",
-    [tenantId, email],
-  );
-  await db.query(
-    "INSERT INTO dripsign.agreement (tenant_id,id,title,draft,created_by) VALUES ($1,$2,$3,$4,$5)",
-    [tenantId, agreementId, source.title, draft, email],
-  );
-  await db.query(
-    "INSERT INTO dripsign.recipient (tenant_id,agreement_id,id,email,name,is_signer) VALUES ($1,$2,$3,'signer@example.test','Jordan Lee',true)",
-    [tenantId, agreementId, recipientId],
-  );
-  return { tenantId, agreementId, recipientId, email };
-}
-
-async function archiveFixture() {
-  const context = await fixture();
-  const { tenantId, agreementId, recipientId, email } = context;
-  const db = getPool();
-  const revisionId = randomUUID();
-  const roundId = randomUUID();
-  const prepared = await prepareDraftPdf({
-    title: source.title,
-    source,
-    signers: [{ id: recipientId, name: "Jordan Lee", email: "signer@example.test" }],
-  });
-  const document = await storeBytes(tenantId, prepared.bytes);
-  await db.query(
-    `INSERT INTO dripsign.revision (tenant_id,agreement_id,id,number,document_sha256,document_bytes,page_count,source,signing_fields,signer_ids,published_by)
-    VALUES ($1,$2,$3,1,$4,$5,2,$6,$7,$8,$9)`,
-    [
-      tenantId,
-      agreementId,
-      revisionId,
-      document.sha256,
-      document.byteLength,
-      source,
-      JSON.stringify(prepared.fields),
-      [recipientId],
-      email,
-    ],
-  );
-  await db.query(
-    "UPDATE dripsign.agreement SET current_revision_id=$3,status='signing' WHERE tenant_id=$1 AND id=$2",
-    [tenantId, agreementId, revisionId],
-  );
-  await db.query(
-    `INSERT INTO dripsign.signing_round (tenant_id,agreement_id,id,revision_id,document_sha256,consent_version,consent_text,consent_hash,requested_by)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-    [
-      tenantId,
-      agreementId,
-      roundId,
-      revisionId,
-      document.sha256,
-      SIGNING_CONSENT.version,
-      SIGNING_CONSENT.text,
-      SIGNING_CONSENT.sha256,
-      email,
-    ],
-  );
-  await db.query(
-    "INSERT INTO dripsign.round_signer (tenant_id,agreement_id,round_id,recipient_id,name,email) VALUES ($1,$2,$3,$4,'Jordan Lee','signer@example.test')",
-    [tenantId, agreementId, roundId, recipientId],
-  );
-  await db.query(
-    `INSERT INTO dripsign.signature (tenant_id,agreement_id,round_id,recipient_id,typed_name,consent_version,consent_text,consent_hash,document_sha256,session_id,verified_at)
-    VALUES ($1,$2,$3,$4,'Jordan Lee',$5,$6,$7,$8,$9,now())`,
-    [
-      tenantId,
-      agreementId,
-      roundId,
-      recipientId,
-      SIGNING_CONSENT.version,
-      SIGNING_CONSENT.text,
-      SIGNING_CONSENT.sha256,
-      document.sha256,
-      randomUUID(),
-    ],
-  );
-  await db.query(
-    "UPDATE dripsign.signing_round SET status='finalizing',finalizing_at=now() WHERE tenant_id=$1 AND id=$2",
-    [tenantId, roundId],
-  );
-  const jobId = await enqueue(db, {
-    tenantId,
-    agreementId,
-    dedupeKey: null,
-    payload: { kind: "archive", roundId },
-  });
-  return { ...context, roundId, jobId };
-}
-
-async function dueAgain(job: ClaimedJob): Promise<ClaimedJob> {
-  await getPool().query(
-    "UPDATE dripsign.outbox SET available_at=now()-interval '1 second',lease_until=CASE WHEN status='running' THEN now()-interval '1 second' ELSE NULL END WHERE id=$1",
-    [job.id],
-  );
-  const jobs = await claimJobs(getPool(), { limit: 100, leaseMs: 120_000 });
-  const reclaimed = jobs.find((candidate) => candidate.id === job.id);
-  if (!reclaimed) throw new Error("Test job was not reclaimed");
-  return reclaimed;
-}
-
 describe("outbox execution", () => {
-  it("archives despite two storage failures, preserves artifact hashes and refuses stale lease finish", async () => {
+  it("archives through failures with fenced leases, rescue, capped backoff and confidential logs", async () => {
     const context = await archiveFixture();
     const jobs = await claimJobs(getPool(), { limit: 100, leaseMs: 120_000 });
     const stale = jobs.find((job) => job.id === context.jobId);
     if (!stale) throw new Error("Archive was not claimed");
     let current = await dueAgain(stale);
     expect(await finishJob(getPool(), stale)).toBe(false);
+    const row = () => getPool().query("SELECT * FROM dripsign.outbox WHERE id=$1", [stale.id]);
+    const before = await row();
+    expect(
+      await completeArchive(getPool(), {
+        tenantId: context.tenantId,
+        roundId: context.roundId,
+        leaseFence: stale,
+        signedDocument: context.document,
+        auditRecord: context.document,
+      }),
+    ).toBe("lease_lost");
+    expect((await row()).rows).toEqual(before.rows);
+    await getPool().query("UPDATE dripsign.outbox SET attempts=1100 WHERE id=$1", [current.id]);
+    expect(await retryJob(getPool(), current, "storage_unavailable")).toBe("retrying");
+    const delay = await getPool().query<{ seconds: number }>(
+      "SELECT extract(epoch FROM available_at - now())::float8 AS seconds FROM dripsign.outbox WHERE id=$1",
+      [current.id],
+    );
+    expect(delay.rows[0]?.seconds).toBeGreaterThan(3590);
+    expect(delay.rows[0]?.seconds).toBeLessThan(3601);
+    await getPool().query(
+      "UPDATE dripsign.outbox SET status='failed',finished_at=now(),lease_token=NULL,lease_until=NULL WHERE id=$1",
+      [current.id],
+    );
+    await rescueArchives();
+    await rescueArchives();
+    const rescued = await getPool().query<{ id: string }>(
+      "SELECT id FROM dripsign.outbox WHERE kind='archive' AND tenant_id=$1 AND payload->>'roundId'=$2 AND status='pending'",
+      [context.tenantId, context.roundId],
+    );
+    expect(rescued.rows).toHaveLength(1);
+    const replacement = (await claimJobs(getPool(), { limit: 100, leaseMs: 120_000 })).find(
+      (job) => job.id === rescued.rows[0]?.id,
+    );
+    if (!replacement) throw new Error("Rescued archive was not claimed");
+    current = replacement;
     const storage = getStorage();
     let failures = 0;
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const handlers = createHandlers({
       get: (key) => storage.get(key),
       put: async (key, bytes) => {
-        if (failures++ < 2) throw new Error("Synthetic storage outage");
+        if (failures++ < 2)
+          throw Object.assign(new Error("Private email signer@example.test and code 123456"), {
+            code: "08006",
+          });
         await storage.put(key, bytes);
       },
     });
     for (let attempt = 0; attempt < 3; attempt++) {
       await executeJob(current, handlers, new AbortController().signal);
       if (attempt < 2) {
-        const state = await getPool().query<{ status: string }>(
-          "SELECT status FROM dripsign.outbox WHERE id=$1",
+        const state = await getPool().query<{ status: string; last_error: string }>(
+          "SELECT status,last_error FROM dripsign.outbox WHERE id=$1",
           [current.id],
         );
         expect(state.rows[0]?.status).toBe("pending");
+        expect(state.rows[0]?.last_error).toBe("08006");
         current = await dueAgain(current);
       }
     }
+    expect(log.mock.calls).toEqual([
+      ["dripsign: job failed", { id: current.id, code: "08006" }],
+      ["dripsign: job failed", { id: current.id, code: "08006" }],
+    ]);
     const agreement = await getPool().query<{ status: string }>(
       "SELECT status FROM dripsign.agreement WHERE tenant_id=$1 AND id=$2",
       [context.tenantId, context.agreementId],
@@ -192,10 +126,20 @@ describe("outbox execution", () => {
         byteLength: artifact.byte_length,
       });
       expect(hashBytes(bytes)).toBe(artifact.sha256);
+      expect(artifact.sha256).not.toBe(context.document.sha256);
     }
   });
 
-  it("never double claims, reclaims expiry and fails a reclaimed AI job while keeping its reservation", async () => {
+  it("fences claims and AI spend, classifies retries, renews leases, prices models and batches retention", async () => {
+    const concurrency = parseConfig({
+      ...process.env,
+      DRIPSIGN_JOBS_CONCURRENCY: "8",
+    }).jobsConcurrency;
+    expect(concurrency).toBe(8);
+    expect(concurrency).toBeLessThanOrEqual(getPool().options.max - 2);
+    expect(() => parseConfig({ ...process.env, DRIPSIGN_JOBS_CONCURRENCY: "9" })).toThrow(
+      /DRIPSIGN_JOBS_CONCURRENCY/u,
+    );
     const context = await fixture();
     const suggestionId = randomUUID();
     await getPool().query(
@@ -241,17 +185,73 @@ describe("outbox execution", () => {
     expect(reclaimed.attempts).toBe(2);
     expect(reclaimed.leaseToken).not.toBe(aiJob.leaseToken);
     await executeJob(reclaimed, createHandlers(), new AbortController().signal);
-    const state = await getPool().query<{ status: string; reserved_micros: string }>(
-      "SELECT status,reserved_micros FROM dripsign.ai_suggestion WHERE tenant_id=$1 AND id=$2",
+    const state = await getPool().query<{ status: string; cost_micros: string; total: string }>(
+      "SELECT status,cost_micros,(SELECT sum(coalesce(cost_micros,reserved_micros))::text FROM dripsign.ai_suggestion WHERE tenant_id=$1 AND day=(now() AT TIME ZONE 'UTC')::date) AS total FROM dripsign.ai_suggestion WHERE tenant_id=$1 AND id=$2",
       [context.tenantId, suggestionId],
     );
     expect(state.rows[0]?.status).toBe("failed");
-    expect(Number(state.rows[0]?.reserved_micros)).toBe(2_000_000);
+    expect(Number(state.rows[0]?.cost_micros)).toBe(2_000_000);
+    expect(Number(state.rows[0]?.total)).toBe(2_000_000);
     const outbox = await getPool().query<{ status: string }>(
       "SELECT status FROM dripsign.outbox WHERE id=$1",
       [aiId],
     );
     expect(outbox.rows[0]?.status).toBe("failed");
+    await assertModelPrices();
+    const handlers = createHandlers();
+    for (const code of ["08006", "57P01", "40001"]) {
+      const error = Object.assign(new Error("Synthetic database failure"), { code });
+      expect(handlers.host_event.retryable(error)).toBe(true);
+      expect(handlers.host_event.retryable(new Error("Wrapped", { cause: error }))).toBe(true);
+    }
+    expect(
+      handlers.host_event.retryable(Object.assign(new Error("Invalid data"), { code: "23503" })),
+    ).toBe(false);
+    const emailJob = [...first, ...second].find((job) => job.id === emailId);
+    if (!emailJob) throw new Error("Email job not claimed");
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const renew = vi
+      .spyOn(outboxModule, "renewLease")
+      .mockRejectedValueOnce(
+        Object.assign(new Error("Private database failure"), { code: "08006" }),
+      )
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+    vi.useFakeTimers();
+    let jobSignal: AbortSignal | undefined;
+    let release: (() => void) | undefined;
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const running = executeJob(
+      emailJob,
+      {
+        ...handlers,
+        email: {
+          ...handlers.email,
+          handler: async (_job, signal) => {
+            jobSignal = signal;
+            await blocked;
+          },
+        },
+      },
+      new AbortController().signal,
+    );
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(jobSignal?.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(jobSignal?.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(jobSignal?.aborted).toBe(true);
+    expect(renew).toHaveBeenCalledTimes(3);
+    expect(log).toHaveBeenCalledWith("dripsign: lease renewal failed", {
+      id: emailJob.id,
+      code: "08006",
+    });
+    vi.useRealTimers();
+    release?.();
+    await running;
+    await assertRetention(context, suggestionId);
   });
 
   it("admits exactly one of two concurrent ask_ai calls at the daily cap", async () => {

@@ -31,8 +31,9 @@ export function canonicalSha256(value: unknown): string {
 
 /**
  * Runs `fn` once per receipt key inside the caller's transaction, taking the receipt lock first.
- * Same key and payload returns the stored result; a different payload is a `conflict`. The caller
- * resolves the actor's live authority before calling, so a replay is still authorised.
+ * Same key and payload returns the stored result; a different payload is a `conflict`. Callers
+ * recheck the actor's grant (`lockGrant`) after any wait here: inside `fn`, and before handing a
+ * replayed result back.
  */
 export async function withReceipt<T extends object | string | number | boolean>(
   db: Db,

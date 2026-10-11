@@ -13,6 +13,8 @@ export type SectionChange = "added" | "removed" | "changed" | "unchanged";
 export interface SectionDiffItem {
   readonly id: string;
   readonly change: SectionChange;
+  /** The section is in a different place than in the older text; a section can be both. */
+  readonly moved: boolean;
   readonly heading: readonly WordOp[];
   /** One entry per paragraph of the newer text; removed sections keep their old paragraphs. */
   readonly paragraphs: readonly (readonly WordOp[])[];
@@ -139,6 +141,7 @@ function wholeOps(kind: "ins" | "del", tokens: readonly string[]): TokenOp[] {
 function sectionItem(
   before: DocumentSection | undefined,
   after: DocumentSection | undefined,
+  moved: boolean,
 ): SectionDiffItem {
   const current = after ?? before;
   if (current === undefined) throw new TypeError("A section diff needs a section");
@@ -148,6 +151,7 @@ function sectionItem(
     return {
       id,
       change: after === undefined ? "removed" : "added",
+      moved: false,
       heading: toRuns(wholeOps(kind, wordsOf(current.heading))),
       paragraphs: current.paragraphs.map((paragraph) => toRuns(wholeOps(kind, wordsOf(paragraph)))),
     };
@@ -158,6 +162,7 @@ function sectionItem(
   return {
     id,
     change: changed ? "changed" : "unchanged",
+    moved,
     heading: toRuns(headingOps),
     paragraphs: toParagraphs(bodyOps),
   };
@@ -185,8 +190,21 @@ function orderedIds(before: readonly DocumentSection[], after: readonly Document
 }
 
 /**
- * Section-level changes by id, then word-level changes inside a changed section. `before` null
- * is a first revision: every section is added.
+ * The kept sections that sit elsewhere than before: what the shortest edit of the older order into
+ * the newer one inserts. One section jumping over three reports one move, not three.
+ */
+function movedIds(before: readonly DocumentSection[], after: readonly DocumentSection[]) {
+  const inBoth = (own: readonly DocumentSection[], other: readonly DocumentSection[]) => {
+    const ids = new Set(other.map((section) => section.id));
+    return own.filter((section) => ids.has(section.id)).map((section) => section.id);
+  };
+  const ops = diffTokens(inBoth(before, after), inBoth(after, before));
+  return new Set(ops.filter((op) => op.kind === "ins").map((op) => op.token));
+}
+
+/**
+ * Section-level changes by id (added, removed, changed, moved), then word-level changes inside a
+ * changed section. `before` null is a first revision: every section is added.
  */
 export function diffSources(before: DocumentSource | null, after: DocumentSource): SourceDiff {
   const oldSections = before?.sections ?? [];
@@ -196,10 +214,11 @@ export function diffSources(before: DocumentSource | null, after: DocumentSource
     before === null || before.title === after.title
       ? null
       : toRuns(diffTokens(wordsOf(before.title), wordsOf(after.title)));
+  const moved = movedIds(oldSections, after.sections);
   return {
     title: titleOps,
     sections: orderedIds(oldSections, after.sections).map((id) =>
-      sectionItem(oldById.get(id), newById.get(id)),
+      sectionItem(oldById.get(id), newById.get(id), moved.has(id)),
     ),
   };
 }

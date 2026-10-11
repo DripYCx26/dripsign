@@ -47,10 +47,15 @@ export function targetSignerIds(target: DocumentTarget): readonly string[] {
   return target.kind === "draft" ? target.draft.signerIds : target.revision.signerIds;
 }
 
-/** The draft's PDF exists once preparation is ready; a revision's always does. */
-export function targetHasPdf(target: DocumentTarget): boolean {
-  if (target.kind === "revision") return true;
-  return target.draft.preparation.status === "ready" && target.draft.document !== null;
+/**
+ * The SHA-256 of the PDF to show, which is also what a viewer of it is keyed by. The draft's PDF
+ * exists once preparation is ready; a revision's always does.
+ */
+export function targetSha(target: DocumentTarget): string | null {
+  if (target.kind === "revision") return target.revision.sha256;
+  return target.draft.preparation.status === "ready"
+    ? (target.draft.document?.sha256 ?? null)
+    : null;
 }
 
 /** Recipients by id, in the order of `ids`; an id with no recipient row is dropped. */

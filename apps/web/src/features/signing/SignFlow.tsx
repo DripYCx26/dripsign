@@ -5,7 +5,6 @@ import { fileUrl } from "@/features/files.ts";
 import { ReviewStep } from "./ReviewStep.tsx";
 import { SignedStep } from "./SignedStep.tsx";
 import { SignStep } from "./SignStep.tsx";
-import { SignStepper, type StepKey } from "./SignStepper.tsx";
 import { SignUnavailable } from "./SignUnavailable.tsx";
 import { useSignFlow } from "./useSignFlow.ts";
 import { VerifyStep } from "./VerifyStep.tsx";
@@ -21,17 +20,8 @@ type SignFlowProps = Readonly<{
 export function SignFlow({ agreementId, initialView, needsVerification }: SignFlowProps) {
   const flow = useSignFlow(agreementId, initialView, needsVerification);
   const { view, round } = flow;
-  const withConfirm = needsVerification || flow.shown === "verify";
-  const steps: readonly StepKey[] = withConfirm
-    ? ["verify", "review", "sign", "done"]
-    : ["review", "sign", "done"];
   if (view.viewer.hasSigned) {
-    return (
-      <>
-        <SignStepper steps={steps} current="done" />
-        <SignedStep agreementId={agreementId} view={view} autoFocus />
-      </>
-    );
+    return <SignedStep agreementId={agreementId} view={view} autoFocus />;
   }
   const revision = view.revisions.find((candidate) => candidate.id === round?.revisionId);
   if (!flow.open || round === null || revision === undefined) {
@@ -40,7 +30,6 @@ export function SignFlow({ agreementId, initialView, needsVerification }: SignFl
   const grantName = view.recipients.find((r) => r.id === view.viewer.recipientId)?.name ?? "";
   return (
     <>
-      <SignStepper steps={steps} current={flow.shown} />
       {flow.shown === "verify" && (
         <VerifyStep
           email={view.viewer.email}

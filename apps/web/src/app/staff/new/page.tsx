@@ -11,7 +11,7 @@ export default async function NewAgreementPage() {
   await requireStaff();
   return (
     <PageContainer>
-      <PageHeader eyebrow="Agreements" title="New agreement" />
+      <PageHeader title="New agreement" />
       <NewAgreementForm />
     </PageContainer>
   );

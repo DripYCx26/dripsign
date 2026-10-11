@@ -1,10 +1,11 @@
-/* A list row: three columns (who, what next, status and time) at the list row height; stacked
-   under 640. The whole row is the link, so its focus ring surrounds all of it. */
+/* A list row: three columns (who, what next at 36% of the row, status and time in a fixed
+   column so every row's middle starts at the same place) at the list row height; stacked under
+   640. The whole row is the link, so its focus ring surrounds all of it. */
 
 .row {
   display: grid;
   min-height: var(--ds-row-height);
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 36%) calc(var(--ds-space-10) * 3);
   align-items: center;
   gap: var(--ds-space-2) var(--ds-space-4);
   padding: var(--ds-row-pad) var(--ds-space-4);

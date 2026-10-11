@@ -1,6 +1,5 @@
 import type { SigningField } from "@dripsign/core/schema";
 import type { AgreementView, RevisionView } from "@dripsign/core/types";
-import Link from "next/link";
 import { fileUrl } from "@/features/files";
 import { Notice, Pill } from "@/ui";
 import { CopyHash } from "./CopyHash.tsx";
@@ -10,15 +9,6 @@ import { PublishAction } from "./PublishAction.tsx";
 import { SectionDiff } from "./SectionDiff.tsx";
 
 const SHORT_LENGTH = 12;
-
-function Unavailable({ view, message }: Readonly<{ view: AgreementView; message: string }>) {
-  return (
-    <Notice tone="attention">
-      <p>{message}</p>
-      <Link href={`/staff/agreements/${view.agreement.id}`}>Back to the agreement</Link>
-    </Notice>
-  );
-}
 
 function fieldWords(field: SigningField): string {
   return `${field.type === "signature" ? "Signature" : "Date"} · page ${String(field.page)}`;
@@ -85,7 +75,7 @@ function PdfChange({
 /**
  * The last look before a revision is published: what changed since the current revision, who
  * signs where, and the exact PDF that will be published with its SHA. Publishing needs the
- * reviewer's word that they read the PDF.
+ * reviewer's word that they read the PDF, and a different PDF asks for it again.
  */
 export function PublishReview({ view }: Readonly<{ view: AgreementView }>) {
   const { draft } = view;
@@ -93,18 +83,15 @@ export function PublishReview({ view }: Readonly<{ view: AgreementView }>) {
   if (draft === null || document === null || draft.preparation.status !== "ready") {
     const failed = draft?.preparation.status === "failed";
     return (
-      <Unavailable
-        view={view}
-        message={
-          failed
-            ? "The PDF couldn’t be prepared, so it can’t be published."
-            : "The PDF is still being prepared. Come back when it’s ready."
-        }
-      />
+      <Notice tone="attention">
+        {failed
+          ? "The PDF couldn’t be prepared, so it can’t be published."
+          : "The PDF is still being prepared. Come back when it’s ready."}
+      </Notice>
     );
   }
   if (!view.allowedActions.includes("publish")) {
-    return <Unavailable view={view} message="There’s nothing to publish right now." />;
+    return <Notice tone="attention">There’s nothing to publish right now.</Notice>;
   }
   const currentNumber = view.agreement.currentRevisionNumber;
   const previous = view.revisions.find((revision) => revision.number === currentNumber);
@@ -119,7 +106,6 @@ export function PublishReview({ view }: Readonly<{ view: AgreementView }>) {
               ? "What’s in this revision"
               : `What changed since revision ${String(previous.number)}`}
           </h2>
-          {previous === undefined && <p>First revision. Everything below is new.</p>}
           {draft.source === null ? (
             <PdfChange
               draftPages={document.pageCount}
@@ -133,17 +119,19 @@ export function PublishReview({ view }: Readonly<{ view: AgreementView }>) {
         <SignerFields view={view} previous={previous} />
       </div>
       <div className={styles.right}>
-        <section className={styles.card} aria-labelledby="exact-pdf">
-          <h2 id="exact-pdf">The PDF that will be published</h2>
-          <CopyHash sha256={document.sha256} label="SHA-256" />
+        <section className={styles.card} aria-label="The PDF that will be published">
           <PdfView
             src={fileUrl(view.agreement.id, "draft", { as: "staff" })}
+            sha256={document.sha256}
             fields={draft.signingFields}
             viewerRecipientId={null}
             people={view.recipients.map(({ id, name }) => ({ id, name }))}
+            lead={<CopyHash sha256={document.sha256} label="SHA-256" />}
           />
         </section>
         <PublishAction
+          // A different PDF is a new review: the checkbox starts unchecked.
+          key={document.sha256}
           view={view}
           reviewedSha256={document.sha256}
           number={number}

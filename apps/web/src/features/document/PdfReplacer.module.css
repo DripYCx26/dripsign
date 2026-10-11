@@ -2,7 +2,3 @@
   display: grid;
   gap: var(--ds-space-2);
 }
-
-.title {
-  font-weight: var(--ds-weight-medium);
-}

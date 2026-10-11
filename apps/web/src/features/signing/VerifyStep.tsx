@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { stepUpRequest, stepUpVerify } from "@/server/actions/auth.ts";
 import { Button, CodeField, Notice } from "@/ui";
-import { StepActions, StepFrame, StepLede } from "./StepFrame.tsx";
+import { StepActions, StepFrame } from "./StepFrame.tsx";
 import styles from "./VerifyStep.module.css";
 
 type VerifyStepProps = Readonly<{
@@ -64,10 +64,7 @@ export function VerifyStep({ email, autoFocus, onVerified }: VerifyStepProps) {
 
   return (
     <StepFrame title="Confirm it’s you." autoFocus={autoFocus}>
-      <StepLede>
-        Your last email check was a while ago. We’ll send a code to {email} so your signature is
-        tied to your address.
-      </StepLede>
+      {!sent && <p className={styles.note}>We’ll send a code to {email}.</p>}
       {message !== null && (
         <Notice tone="stop" live="alert">
           {message}

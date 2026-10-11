@@ -1,6 +1,23 @@
 import { getPool } from "../db.ts";
 import { enqueue } from "./outbox.ts";
 
+const RETENTION_BATCH_SIZE = 1000;
+const RETENTION = [
+  ["otp_challenge", "created_at < now() - interval '1 day'"],
+  ["auth_session", "expires_at < now() - interval '30 days'"],
+  ["rate_limit", "window_start < now() - interval '1 day'"],
+  ["bridge_nonce", "expires_at < now()"],
+  [
+    "outbox",
+    "(status = 'done' AND finished_at < now() - interval '30 days') OR (status = 'failed' AND finished_at < now() - interval '90 days')",
+  ],
+  ["command_receipt", "created_at < now() - interval '30 days'"],
+  [
+    "ai_suggestion",
+    "status <> 'queued' AND coalesce(applied_at, finished_at) < now() - interval '90 days'",
+  ],
+] as const;
+
 export async function sweepRetention(): Promise<void> {
   const client = await getPool().connect();
   let locked = false;
@@ -10,22 +27,19 @@ export async function sweepRetention(): Promise<void> {
     );
     locked = result.rows[0]?.locked === true;
     if (!locked) return;
-    await client.query("BEGIN");
-    await client.query("SET LOCAL statement_timeout = '30s'");
-    await client.query(
-      "DELETE FROM dripsign.otp_challenge WHERE created_at < now() - interval '1 day'",
-    );
-    await client.query(
-      "DELETE FROM dripsign.auth_session WHERE expires_at < now() - interval '30 days'",
-    );
-    await client.query(
-      "DELETE FROM dripsign.rate_limit WHERE window_start < now() - interval '1 day'",
-    );
-    await client.query("DELETE FROM dripsign.bridge_nonce WHERE expires_at < now()");
-    await client.query(
-      "DELETE FROM dripsign.outbox WHERE (status = 'done' AND finished_at < now() - interval '30 days') OR (status = 'failed' AND finished_at < now() - interval '90 days')",
-    );
-    await client.query("COMMIT");
+    // One bounded batch and transaction per table per sweep, so a backlog cannot monopolize locks.
+    for (const [table, predicate] of RETENTION) {
+      await client.query("BEGIN");
+      await client.query("SET LOCAL statement_timeout = '30s'");
+      await client.query(
+        `DELETE FROM dripsign.${table} WHERE ctid IN (
+           SELECT ctid FROM dripsign.${table} WHERE ${predicate}
+           LIMIT $1 FOR UPDATE SKIP LOCKED
+         )`,
+        [RETENTION_BATCH_SIZE],
+      );
+      await client.query("COMMIT");
+    }
   } catch (error: unknown) {
     await client.query("ROLLBACK");
     throw error;

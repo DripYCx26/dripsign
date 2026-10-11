@@ -6,7 +6,13 @@ import type {
   ParticipantRef,
   ProposalView,
   RevisionView,
+  TimelineItem,
+  TimelineKind,
 } from "@dripsign/core/types";
+import type { TextScope } from "./useStoredText.ts";
+
+/** Where focus returns when proposing ends, so typing can go on. */
+export const MESSAGE_FIELD_ID = "message-field";
 
 /** The revision the agreement stands on; null before the first publish. */
 export function currentRevision(view: AgreementView): RevisionView | null {
@@ -22,9 +28,21 @@ export function pendingProposal(view: AgreementView): ProposalView | null {
 
 export type ThreadItem =
   | Readonly<{ kind: "message"; key: string; at: string; message: MessageView }>
-  | Readonly<{ kind: "proposal"; key: string; at: string; proposal: ProposalView }>;
+  | Readonly<{ kind: "proposal"; key: string; at: string; proposal: ProposalView }>
+  | Readonly<{ kind: "activity"; key: string; at: string; item: TimelineItem }>;
 
-/** Messages and proposals as one conversation, oldest first. */
+/**
+ * Timeline rows the thread already shows as proposal cards, and the staff-private assistant
+ * request, which is not part of the conversation.
+ */
+const NOT_SYSTEM_ROWS: ReadonlySet<TimelineKind> = new Set([
+  "proposal_created",
+  "proposal_accepted",
+  "proposal_rejected",
+  "ai_requested",
+]);
+
+/** Messages, proposals and the agreement's milestones as one conversation, oldest first. */
 export function threadItems(view: AgreementView): readonly ThreadItem[] {
   const items: ThreadItem[] = [
     ...view.messages.map((message): ThreadItem => ({
@@ -39,8 +57,26 @@ export function threadItems(view: AgreementView): readonly ThreadItem[] {
       at: proposal.createdAt,
       proposal,
     })),
+    ...view.timeline.flatMap((item, index): ThreadItem[] =>
+      NOT_SYSTEM_ROWS.has(item.kind)
+        ? []
+        : // The view has no row id; time, kind and position are stable for one snapshot.
+          [
+            {
+              kind: "activity",
+              key: `activity-${item.at}-${item.kind}-${String(index)}`,
+              at: item.at,
+              item,
+            },
+          ],
+    ),
   ];
   return items.sort((a, b) => Date.parse(a.at) - Date.parse(b.at) || a.key.localeCompare(b.key));
+}
+
+/** The scope a viewer's stored composer text lives under. */
+export function textScope(view: AgreementView, capacity: Capacity): TextScope {
+  return { email: view.viewer.email, capacity, agreementId: view.agreement.id };
 }
 
 /** Staff are one side; each recipient is their own voice. */
@@ -62,27 +98,27 @@ export function sectionLabel(heading: string, index: number): string {
   return trimmed === "" ? `Section ${String(index + 1)}` : trimmed;
 }
 
-/** The first section a proposal adds, removes or rewrites, named for the sentence about it. */
-export function changedSectionLabel(
+type Section = DocumentSource["sections"][number];
+
+/** The first section a proposal adds, removes or rewrites, with its position in the source it is in. */
+export function changedSection(
   before: DocumentSource | null,
   after: DocumentSource | null,
-): string | null {
+): Readonly<{ section: Section; index: number }> | null {
   if (before === null || after === null) return null;
-  const sameWords = (
-    a: DocumentSource["sections"][number],
-    b: DocumentSource["sections"][number],
-  ) => a.heading === b.heading && a.paragraphs.join("\n") === b.paragraphs.join("\n");
+  const sameWords = (a: Section, b: Section) =>
+    a.heading === b.heading && a.paragraphs.join("\n") === b.paragraphs.join("\n");
   const rewritten = after.sections.findIndex((section) => {
     const old = before.sections.find((candidate) => candidate.id === section.id);
     return old === undefined || !sameWords(old, section);
   });
   const rewrittenSection = after.sections[rewritten];
-  if (rewrittenSection !== undefined) return sectionLabel(rewrittenSection.heading, rewritten);
+  if (rewrittenSection !== undefined) return { section: rewrittenSection, index: rewritten };
   const removed = before.sections.findIndex(
     (section) => !after.sections.some((candidate) => candidate.id === section.id),
   );
   const removedSection = before.sections[removed];
-  return removedSection === undefined ? null : sectionLabel(removedSection.heading, removed);
+  return removedSection === undefined ? null : { section: removedSection, index: removed };
 }
 
 /** The source the proposal was written against. */
@@ -92,8 +128,19 @@ export function baseSourceOf(view: AgreementView, proposal: ProposalView): Docum
 
 /** "a change to Term" or, for a PDF or an unchanged-terms proposal, "a change". */
 export function describeChange(view: AgreementView, proposal: ProposalView): string {
-  const section = changedSectionLabel(baseSourceOf(view, proposal), proposal.replacementSource);
-  return section === null ? "a change" : `a change to ${section}`;
+  const changed = changedSection(baseSourceOf(view, proposal), proposal.replacementSource);
+  if (changed === null) return "a change";
+  return `a change to ${sectionLabel(changed.section.heading, changed.index)}`;
+}
+
+/** Whose move it is, as one sentence for the status announcer; null when nobody is waiting. */
+export function turnSentence(view: AgreementView, capacity: Capacity): string | null {
+  const pending = pendingProposal(view);
+  if (pending === null) return null;
+  if (pending.author.capacity !== capacity) {
+    return `Your turn: ${pending.author.label} proposed ${describeChange(view, pending)}.`;
+  }
+  return `Waiting for ${otherSideLabel(view, capacity)} to respond.`;
 }
 
 /** The proposal that replaced this one, when a counterproposal superseded it. */
@@ -109,7 +156,7 @@ export function counterTarget(view: AgreementView, capacity: Capacity): Proposal
 }
 
 /** A section's wording as one editable string, paragraphs separated by a blank line. */
-export function wordingOf(section: DocumentSource["sections"][number]): string {
+export function wordingOf(section: Section): string {
   return section.paragraphs.join("\n\n");
 }
 

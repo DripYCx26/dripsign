@@ -14,7 +14,7 @@ import { emailSchema, uuidSchema } from "../schema.ts";
 
 const TOKEN_TYPE = "dripsign-staff+jwt";
 const MAX_ASSERTION_CHARS = 2_048;
-const MAX_LIFETIME_SECONDS = 120;
+const MAX_LIFETIME_SECONDS = 60;
 /** How far the host's clock may run ahead of ours when stamping `iat`. */
 const CLOCK_SKEW_SECONDS = 30;
 const SEGMENT = /^[A-Za-z0-9_-]+$/u;

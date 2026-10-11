@@ -1,5 +1,4 @@
 import "server-only";
-import { isIP } from "node:net";
 import { isLoopbackHostname, loadConfig } from "@dripsign/core/config";
 import type { DomainErrorCode } from "@dripsign/core/errors";
 import { failure, toFailure, type ActionResult } from "./action.ts";
@@ -44,22 +43,6 @@ export function failureResponse(error: unknown): Response {
   if (error instanceof HttpError)
     return jsonResult(failure(error.code, error.message), error.status);
   return jsonResult(toFailure(error));
-}
-
-/**
- * The client address for rate limits. Each of the configured trusted proxies appends the peer it
- * saw, so the client is that many entries from the right. With no trusted proxy the header is
- * whatever the client sent (Next only fills it when absent), so the address is unknown.
- */
-export function clientIp(requestHeaders: Headers): string | null {
-  const hops = loadConfig().trustedProxyHops;
-  if (hops === 0) return null;
-  const chain = (requestHeaders.get("x-forwarded-for") ?? "")
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter((entry) => entry !== "");
-  const candidate = chain[chain.length - hops];
-  return candidate !== undefined && isIP(candidate) !== 0 ? candidate : null;
 }
 
 /** True only when every host the request names (Host and any X-Forwarded-Host) is loopback. */

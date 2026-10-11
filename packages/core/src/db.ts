@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { loadConfig } from "./config.ts";
 import { DomainError } from "./errors.ts";
@@ -7,7 +9,8 @@ import { DomainError } from "./errors.ts";
 /** What store functions take: a pool, or the client of an open transaction. */
 export type Db = Pick<pg.ClientBase, "query">;
 
-const SCHEMA_URL = new URL("../schema/schema.sql", import.meta.url);
+// A path, not `new URL(..., import.meta.url)`, which Next's bundler rewrites into an asset URL.
+const SCHEMA_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), "../schema/schema.sql");
 const SCHEMA_LOCK = "dripsign.schema";
 const WRITE_SETTINGS =
   "SET LOCAL statement_timeout = '10s'; SET LOCAL lock_timeout = '5s'; " +
@@ -112,7 +115,7 @@ export interface SchemaFile {
 }
 
 export async function readSchemaFile(): Promise<SchemaFile> {
-  const bytes = await readFile(SCHEMA_URL);
+  const bytes = await readFile(SCHEMA_PATH);
   return {
     sql: bytes.toString("utf8"),
     sha256: createHash("sha256").update(bytes).digest("hex"),

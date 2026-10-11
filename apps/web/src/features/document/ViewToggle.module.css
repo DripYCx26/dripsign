@@ -1,8 +1,0 @@
-.toggle {
-  display: grid;
-  gap: var(--ds-space-4);
-}
-
-.toggle > div:not([hidden]) {
-  min-width: 0;
-}

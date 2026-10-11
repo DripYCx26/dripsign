@@ -9,7 +9,7 @@ import { nextStep } from "./nextStep.ts";
 import { PrimaryAction } from "./PrimaryAction.tsx";
 import type { Panel } from "./WorkspacePanels.tsx";
 
-type WorkspaceActionsProps = Readonly<{
+type PrimaryProps = Readonly<{
   view: AgreementView;
   capacity: Capacity;
   run: RunCommand;
@@ -19,18 +19,35 @@ type WorkspaceActionsProps = Readonly<{
 }>;
 
 /**
- * The header's actions: the primary one `nextStep` chose and the overflow menu, if it has items.
- * Requesting signatures goes through its confirmation dialog; other commands run at once.
+ * The header's primary action, the one `nextStep` chose. Requesting signatures goes through its
+ * confirmation dialog; other commands run at once.
  */
-export function WorkspaceActions({
+export function WorkspacePrimary({ view, capacity, run, busy, onPanel, onReveal }: PrimaryProps) {
+  return (
+    <PrimaryAction
+      step={nextStep(capacity, view)}
+      busy={busy}
+      onCommand={(command) => {
+        if (command.kind === "request_signatures") onPanel("request");
+        else void run(command, command.kind);
+      }}
+      onReveal={onReveal}
+    />
+  );
+}
+
+/** The overflow menu, if the policy gives this viewer any item. */
+export function WorkspaceMenu({
   view,
   capacity,
-  run,
-  busy,
   onPanel,
-  onReveal,
-}: WorkspaceActionsProps) {
+}: Readonly<{
+  view: AgreementView;
+  capacity: Capacity;
+  onPanel: (panel: Panel) => void;
+}>) {
   const items = menuItems(view, capacity);
+  if (items.length === 0) return null;
 
   function onMenu(id: MenuId) {
     if (id !== "download") {
@@ -41,20 +58,5 @@ export function WorkspaceActions({
     window.location.assign(fileUrl(view.agreement.id, kind, { as: capacity }));
   }
 
-  return (
-    <>
-      <PrimaryAction
-        step={nextStep(capacity, view)}
-        busy={busy}
-        onCommand={(command) => {
-          if (command.kind === "request_signatures") onPanel("request");
-          else void run(command, command.kind);
-        }}
-        onReveal={onReveal}
-      />
-      {items.length > 0 && (
-        <Menu label="More actions" icon={<Ellipsis />} items={items} onAction={onMenu} />
-      )}
-    </>
-  );
+  return <Menu label="More actions" icon={<Ellipsis />} items={items} onAction={onMenu} />;
 }

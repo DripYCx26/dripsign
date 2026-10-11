@@ -7,7 +7,7 @@ import { markInvited, notify } from "./notify.ts";
 import { restageForSigners } from "./revisions.ts";
 import { endRound } from "./signing.ts";
 import { conflict, uniqueOrConflict } from "./state.ts";
-import type { CommandContext, LiveSigner } from "./state.ts";
+import type { CommandContext } from "./state.ts";
 
 /** One invitation resend per recipient in this window. */
 const RESEND_INTERVAL_MINUTES = 10;
@@ -56,7 +56,7 @@ export async function addRecipient(
     await notify(db, { agreement, template: "invite", to: [recipient], resourceId: recipient.id });
     await markInvited(db, agreement.tenantId, [recipient.id]);
   }
-  if (command.isSigner) await restageForSigners(db, agreement, [...state.signers, recipient]);
+  if (command.isSigner) await restageForSigners(db, agreement);
 }
 
 /** Removing a frozen signer of the active round voids it; their signature, if any, stays. */
@@ -83,10 +83,7 @@ export async function removeRecipient(
       causedBy: command.recipientId,
     });
   }
-  if (row.isSigner) {
-    const signers = state.signers.filter((signer) => signer.id !== command.recipientId);
-    await restageForSigners(db, agreement, signers);
-  }
+  if (row.isSigner) await restageForSigners(db, agreement);
 }
 
 export async function setSigner(
@@ -94,8 +91,8 @@ export async function setSigner(
   command: CommandOf<"set_signer">,
 ): Promise<void> {
   const { db, agreement, state } = ctx;
-  const found = await db.query<LiveSigner & { isSigner: boolean }>(
-    `SELECT id, name, email, is_signer AS "isSigner" FROM dripsign.recipient
+  const found = await db.query<{ isSigner: boolean }>(
+    `SELECT is_signer AS "isSigner" FROM dripsign.recipient
      WHERE tenant_id = $1 AND agreement_id = $2 AND id = $3 AND revoked_at IS NULL`,
     [agreement.tenantId, agreement.id, command.recipientId],
   );
@@ -107,14 +104,10 @@ export async function setSigner(
   }
   await db.query("UPDATE dripsign.recipient SET is_signer = $3 WHERE tenant_id = $1 AND id = $2", [
     agreement.tenantId,
-    recipient.id,
+    command.recipientId,
     command.isSigner,
   ]);
-  const { id, name, email } = recipient;
-  const signers = command.isSigner
-    ? [...state.signers, { id, name, email }]
-    : state.signers.filter((signer) => signer.id !== id);
-  await restageForSigners(db, agreement, signers);
+  await restageForSigners(db, agreement);
 }
 
 /** An unsigned signer of the active round gets the signing request again, others the invite. */

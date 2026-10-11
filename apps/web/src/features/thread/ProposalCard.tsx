@@ -3,8 +3,9 @@
 import type { AgreementView, Capacity, ProposalView } from "@dripsign/core/types";
 import { useState } from "react";
 import { SectionDiff } from "@/features/document/SectionDiff.tsx";
-import { Button, Moment, Pill } from "@/ui";
-import { baseSourceOf, counteredBy, describeChange } from "./model.ts";
+import { Avatar, Button, Moment, Pill } from "@/ui";
+import { startProposal } from "./intent.ts";
+import { baseSourceOf, counteredBy, describeChange, isOwn, otherSideLabel } from "./model.ts";
 import styles from "./ProposalCard.module.css";
 
 export type Decision = "accept" | "reject";
@@ -16,7 +17,6 @@ type ProposalCardProps = Readonly<{
   /** True while any command of this workspace is in flight. */
   busy: boolean;
   onDecide: (decision: Decision, proposal: ProposalView) => Promise<void>;
-  onCounter: () => void;
 }>;
 
 type CardState = "pending" | "stale" | "accepted" | "declined" | "superseded";
@@ -29,14 +29,29 @@ function cardState(view: AgreementView, proposal: ProposalView): CardState {
   return proposal.baseRevisionNumber < current ? "stale" : "pending";
 }
 
-function StateMark({
-  state,
-  proposal,
+function canAnswer(view: AgreementView): boolean {
+  return view.allowedActions.some(
+    (action) => action === "accept" || action === "counter" || action === "reject",
+  );
+}
+
+function OpenMark({
+  view,
   capacity,
-}: Readonly<{ state: CardState; proposal: ProposalView; capacity: Capacity }>) {
-  switch (state) {
+  proposal,
+}: Readonly<Omit<ProposalCardProps, "busy" | "onDecide">>) {
+  if (canAnswer(view)) return <Pill tone="attention">Your turn</Pill>;
+  if (isOwn(proposal.author, view)) {
+    return <Pill tone="info">{`Waiting on ${otherSideLabel(view, capacity)}`}</Pill>;
+  }
+  return <Pill tone="info">Open</Pill>;
+}
+
+function StateMark(props: Readonly<Omit<ProposalCardProps, "busy" | "onDecide">>) {
+  const { view, capacity, proposal } = props;
+  switch (cardState(view, proposal)) {
     case "pending":
-      return <Pill tone="attention">Open</Pill>;
+      return <OpenMark {...props} />;
     case "stale":
       return (
         <Pill tone="attention">{`Based on revision ${String(proposal.baseRevisionNumber)}`}</Pill>
@@ -56,12 +71,12 @@ function StateMark({
   }
 }
 
-function Decisions({ view, capacity, proposal, busy, onDecide, onCounter }: ProposalCardProps) {
+function Decisions({ view, proposal, busy, onDecide }: ProposalCardProps) {
   const [acting, setActing] = useState<Decision | null>(null);
   const canAccept = view.allowedActions.includes("accept");
   const canCounter = view.allowedActions.includes("counter");
   const canDecline = view.allowedActions.includes("reject");
-  if (!canAccept && !canCounter && !canDecline) return null;
+  if (!canAnswer(view)) return null;
 
   async function decide(decision: Decision) {
     setActing(decision);
@@ -73,47 +88,47 @@ function Decisions({ view, capacity, proposal, busy, onDecide, onCounter }: Prop
   }
 
   return (
-    <div className={styles.decisions}>
-      <div className={styles.buttons}>
-        {canAccept && (
-          <Button
-            variant="ink"
-            size="sm"
-            loading={acting === "accept"}
-            disabled={busy && acting !== "accept"}
-            onClick={() => void decide("accept")}
-          >
-            Accept
-          </Button>
-        )}
-        {canCounter && (
-          <Button variant="secondary" size="sm" disabled={busy} onClick={onCounter}>
-            Counter
-          </Button>
-        )}
-        {canDecline && (
-          <Button
-            variant="quiet"
-            size="sm"
-            loading={acting === "reject"}
-            disabled={busy && acting !== "reject"}
-            onClick={() => void decide("reject")}
-          >
-            Decline
-          </Button>
-        )}
-      </div>
-      {capacity === "staff" && canAccept && proposal.replacementSource !== null && (
-        <p className={styles.note}>
-          Accepting updates your private draft. You&rsquo;ll review and publish it.
-        </p>
+    <div className={styles.buttons}>
+      {canAccept && (
+        <Button
+          variant="ink"
+          size="sm"
+          loading={acting === "accept"}
+          disabled={busy && acting !== "accept"}
+          onClick={() => void decide("accept")}
+        >
+          Accept
+        </Button>
+      )}
+      {canCounter && (
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={busy}
+          onClick={() => {
+            startProposal({ counterOf: proposal.id });
+          }}
+        >
+          Counter
+        </Button>
+      )}
+      {canDecline && (
+        <Button
+          variant="quiet"
+          size="sm"
+          loading={acting === "reject"}
+          disabled={busy && acting !== "reject"}
+          onClick={() => void decide("reject")}
+        >
+          Decline
+        </Button>
       )}
     </div>
   );
 }
 
 function ProposalBody(props: ProposalCardProps) {
-  const { view, capacity, proposal } = props;
+  const { view, proposal } = props;
   const state = cardState(view, proposal);
   const open = state === "pending" || state === "stale";
   const diff = (
@@ -122,10 +137,11 @@ function ProposalBody(props: ProposalCardProps) {
   return (
     <>
       <header className={styles.head}>
+        <Avatar name={proposal.author.label} />
         <p className={styles.title}>
           {`${proposal.author.label} proposed ${describeChange(view, proposal)}`}
         </p>
-        <StateMark state={state} proposal={proposal} capacity={capacity} />
+        <StateMark {...props} />
       </header>
       <p className={styles.reason}>{proposal.text}</p>
       {proposal.replacementSource !== null &&
@@ -133,21 +149,23 @@ function ProposalBody(props: ProposalCardProps) {
           diff
         ) : (
           <details className={styles.change}>
-            <summary>Show the change</summary>
+            <summary>Show change</summary>
             {diff}
           </details>
         ))}
-      <p className={styles.time}>
-        <Moment value={proposal.createdAt} format="absolute" />
-      </p>
-      {open && <Decisions {...props} />}
+      <footer className={styles.foot}>
+        <p className={styles.time}>
+          <Moment value={proposal.createdAt} format="absolute" />
+        </p>
+        {open && <Decisions {...props} />}
+      </footer>
     </>
   );
 }
 
 /**
- * A proposal in the thread. Open ones carry an attention edge and the actions the policy allows;
- * decided ones fold their diff away; a superseded one is a single line that can be opened.
+ * A proposal in the thread: who proposed what, whose turn it is, the change itself and the
+ * actions the policy allows. A decided one folds its diff away; a superseded one is one line.
  */
 export function ProposalCard(props: ProposalCardProps) {
   const { view, proposal } = props;
@@ -157,14 +175,15 @@ export function ProposalCard(props: ProposalCardProps) {
     return (
       <details className={styles.superseded}>
         <summary className={styles.summary}>
+          <span aria-hidden="true">↳</span>
           <span>{by === null ? "Countered" : `Countered by ${by.label}`}</span>
           <span className={styles.show} aria-hidden="true">
             Show
           </span>
         </summary>
-        <div className={styles.card} data-state="superseded">
+        <article className={styles.card} data-state="superseded">
           <ProposalBody {...props} />
-        </div>
+        </article>
       </details>
     );
   }

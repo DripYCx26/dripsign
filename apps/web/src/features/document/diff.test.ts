@@ -10,13 +10,17 @@ const source = (title: string, ...sections: [string, string, string][]): Documen
 const mark = (ops: readonly WordOp[]) =>
   ops.map((op) => (op.kind === "same" ? op.text : `[${op.kind === "ins" ? "+" : "-"}${op.text}]`));
 
-/** One line per change: the title when it moved, then `id:change:text with [+added] [-removed]`. */
+/**
+ * One line per change: the title when it moved, then `id:change:text with [+added] [-removed]`;
+ * a section in a new place reads `change+moved`.
+ */
 function show(before: DocumentSource | null, after: DocumentSource): string[] {
   const diff = diffSources(before, after);
   return [
     ...(diff.title === null ? [] : [`title:${mark(diff.title).join(" ")}`]),
     ...diff.sections.map(
-      (item) => `${item.id}:${item.change}:${item.paragraphs.flatMap(mark).join(" ")}`,
+      (item) =>
+        `${item.id}:${item.change}${item.moved ? "+moved" : ""}:${item.paragraphs.flatMap(mark).join(" ")}`,
     ),
   ];
 }
@@ -58,6 +62,12 @@ describe("diffSources", () => {
       base,
       source("Deal", ["a", "Term", "One year.|Renews yearly."], fees),
       ["a:changed:One year. [+Renews yearly.]", "b:unchanged:Pay within 30 days."],
+    ],
+    [
+      "sections reordered",
+      base,
+      source("Deal", fees, term),
+      ["b:unchanged:Pay within 30 days.", "a:unchanged+moved:One year."],
     ],
     [
       "title changed",

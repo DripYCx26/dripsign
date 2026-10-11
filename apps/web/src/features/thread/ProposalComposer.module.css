@@ -1,0 +1,78 @@
+/* Proposal mode: the composer's box grows to hold the wording, the change and the reason. */
+
+.box {
+  composes: box from "./Composer.module.css";
+  gap: var(--ds-space-2);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+}
+
+.title {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-1) var(--ds-space-2);
+  color: var(--ds-text-secondary);
+}
+
+.title strong {
+  color: var(--ds-text);
+  font-weight: var(--ds-weight-semibold);
+}
+
+.section {
+  max-width: 100%;
+  min-height: var(--ds-size-control-sm);
+  border: 0;
+  border-radius: var(--ds-radius-control);
+  background: var(--ds-surface-subtle);
+  padding: 0 var(--ds-space-2);
+  color: var(--ds-text);
+  font-weight: var(--ds-weight-semibold);
+}
+
+.body {
+  display: grid;
+  min-height: 0;
+  gap: var(--ds-space-2);
+  overflow-y: auto;
+}
+
+.field {
+  composes: field from "./Composer.module.css";
+}
+
+.wording {
+  composes: field from "./Composer.module.css";
+  background: var(--ds-surface-subtle);
+  padding: var(--ds-space-2) var(--ds-space-3);
+}
+
+.preview {
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.error {
+  color: var(--ds-stop);
+  font-size: var(--ds-text-xs);
+  line-height: var(--ds-leading-xs);
+}
+
+.foot {
+  composes: foot from "./Composer.module.css";
+}
+
+.warning {
+  color: var(--ds-attention);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+}

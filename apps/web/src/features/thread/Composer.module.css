@@ -1,29 +1,58 @@
-/* The composer sits under the list, on the surface, set off by a hairline. */
+/* The composer: one raised, rounded box pinned under the list, like any chat app. */
 
 .composer {
-  display: grid;
-  gap: var(--ds-space-3);
-  padding: var(--ds-space-4);
-  border-top: var(--ds-hairline);
+  padding: 0 var(--ds-space-4) var(--ds-space-4);
   background: var(--ds-surface);
 }
 
-.form {
-  display: grid;
+.box {
+  display: flex;
+  min-height: 0;
+  max-height: 50dvh;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: var(--ds-hairline);
+  border-radius: var(--ds-radius-panel);
+  background: var(--ds-surface-raised);
+}
+
+.box:focus-within {
+  border-color: var(--ds-focus);
+  box-shadow: var(--ds-ring);
+}
+
+/* Height is set by useAutosize between this floor and ceiling; past the ceiling it scrolls. */
+.field {
+  width: 100%;
+  min-height: var(--ds-size-control-lg);
+  max-height: 200px;
+  resize: none;
+  border: 0;
+  border-radius: var(--ds-radius-control);
+  background: transparent;
+  padding: var(--ds-space-3) 0;
+  color: var(--ds-text);
+  line-height: var(--ds-leading-md);
+  outline-color: transparent;
+  overflow-y: auto;
+}
+
+.field::placeholder {
+  color: var(--ds-text-tertiary);
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--ds-space-3);
 }
 
-.form > button {
-  justify-self: start;
-}
-
-.note {
+.closed {
+  padding: var(--ds-space-4);
+  border-top: var(--ds-hairline);
+  background: var(--ds-surface);
   color: var(--ds-text-secondary);
-  font-size: var(--ds-text-sm);
-  line-height: var(--ds-leading-sm);
-}
-
-.preview {
-  max-height: 320px;
-  overflow-y: auto;
+  text-align: center;
 }

@@ -3,13 +3,15 @@
 import { headers } from "next/headers";
 import { z } from "zod";
 import * as sessions from "@dripsign/core/auth/sessions";
+import type { SessionCookie } from "@dripsign/core/auth/sessions";
 import { loadConfig } from "@dripsign/core/config";
 import { DomainError, notFound } from "@dripsign/core/errors";
 import { emailSchema, uuidSchema } from "@dripsign/core/schema";
 import type { SessionView } from "@dripsign/core/types";
 import { action } from "../action.ts";
 import { clearCookie, readCookie, writeCookie } from "../cookies.ts";
-import { clientIp, isLoopbackRequest } from "../http.ts";
+import { isLoopbackRequest } from "../http.ts";
+import { clientIp } from "../request.ts";
 import { actionSession } from "../session.ts";
 
 const codeInput = z.strictObject({
@@ -33,12 +35,8 @@ export const verifyCode = action(codeInput, async ({ code }) => {
 });
 
 export const signOut = action(z.void(), async () => {
-  for (const kind of ["session", "embed"] as const) {
-    const token = await readCookie(kind);
-    if (token === null) continue;
-    await sessions.signOut(token);
-    await clearCookie(kind);
-  }
+  await endSession("session");
+  await endSession("embed");
   return null;
 });
 
@@ -82,11 +80,19 @@ export const stepUpVerify = action(codeInput, async ({ code }) => {
   return viewOf(issued.sessionToken);
 });
 
+/** A first-party sign-in replaces both kinds: they are exclusive per browser (readRequestSession). */
 async function startSession(issued: sessions.IssuedSession): Promise<SessionView> {
-  const previous = await readCookie("session");
-  if (previous !== null && previous !== issued.sessionToken) await sessions.signOut(previous);
+  await endSession("embed");
+  await endSession("session");
   await writeCookie("session", issued.sessionToken, new Date(issued.expiresAt));
   return viewOf(issued.sessionToken);
+}
+
+async function endSession(kind: SessionCookie): Promise<void> {
+  const token = await readCookie(kind);
+  if (token === null) return;
+  await sessions.signOut(token);
+  await clearCookie(kind);
 }
 
 // Read by token: the request's cookies still hold the value from before this action.
@@ -103,5 +109,5 @@ async function challengeToken(): Promise<string> {
 }
 
 async function requestIp(): Promise<string | null> {
-  return clientIp(await headers());
+  return clientIp(await headers(), loadConfig().trustedProxyHops);
 }

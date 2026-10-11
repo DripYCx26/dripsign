@@ -2,9 +2,8 @@ import { loadConfig } from "../config.ts";
 import type { Mail } from "../adapters/email.ts";
 import type { EmailTemplate } from "../schema.ts";
 
-type Template = EmailTemplate | "otp" | "step_up";
 const COPY: Record<
-  Exclude<Template, "otp_code" | "otp" | "step_up">,
+  Exclude<EmailTemplate, "otp_code" | "step_up">,
   { subject: string; text: string }
 > = {
   invite: {
@@ -44,14 +43,14 @@ function escapeHtml(value: string): string {
 
 export function renderMail(
   input: {
-    template: Template;
+    template: EmailTemplate;
     to: string;
     params: Readonly<Record<string, string>>;
     agreementId?: string | null;
   },
   origin = loadConfig().publicOrigin,
 ): Mail {
-  if (input.template === "otp_code" || input.template === "otp" || input.template === "step_up") {
+  if (input.template === "otp_code" || input.template === "step_up") {
     const code = input.params.code;
     if (!code || !/^\d{6}$/u.test(code)) throw new Error("Mail code is invalid");
     const subject =
@@ -70,10 +69,7 @@ export function renderMail(
   const copy = COPY[input.template];
   const id = input.agreementId ?? input.params.agreementId;
   if (!id) throw new Error("Mail agreement is missing");
-  const staff = input.params.capacity === "staff";
-  const path = staff
-    ? `/staff/agreements/${encodeURIComponent(id)}`
-    : `/agreements/${encodeURIComponent(id)}${input.template === "sign_request" ? "/sign" : ""}`;
+  const path = `/agreements/${encodeURIComponent(id)}${input.template === "sign_request" ? "/sign" : ""}`;
   const url = new URL(path, origin).href;
   const title = input.params.title ?? "Agreement";
   return {

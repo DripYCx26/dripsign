@@ -108,7 +108,7 @@ export async function claimJobs(
     const payload = jobPayloadSchema.safeParse(row.payload);
     const lease = { id: row.id, leaseToken: row.lease_token };
     if (!payload.success) {
-      await failJob(db, lease, "Stored payload is invalid");
+      await failJob(db, lease, "invalid_payload");
       continue;
     }
     jobs.push({
@@ -122,12 +122,6 @@ export async function claimJobs(
     });
   }
   return jobs;
-}
-
-/** A reclaimed job past its kind's limit must be failed (with its fail hook), not run. */
-export function isExhausted(job: ClaimedJob): boolean {
-  const max = JOB_MAX_ATTEMPTS[job.payload.kind];
-  return max !== null && job.attempts > max;
 }
 
 /**
@@ -165,28 +159,20 @@ export type RetryOutcome = "retrying" | "failed" | "lost";
 
 /**
  * Schedules another attempt with backoff min(10s * 2^(attempts-1), 1h) plus up to 1s jitter, or
- * fails the job once its kind's attempts are spent. `delayMs` overrides the backoff (Retry-After).
+ * fails the job once its kind's attempts are spent.
  */
-export async function retryJob(
-  db: Db,
-  job: ClaimedJob,
-  error: string,
-  delayMs?: number,
-): Promise<RetryOutcome> {
+export async function retryJob(db: Db, job: ClaimedJob, error: string): Promise<RetryOutcome> {
   const retried = await db.query<{ status: "pending" | "failed" }>(
     `UPDATE dripsign.outbox
      SET status = CASE WHEN attempts >= $3::integer THEN 'failed' ELSE 'pending' END,
          finished_at = CASE WHEN attempts >= $3::integer THEN now() END,
-         available_at = now() + coalesce(
-           $4::float8 * interval '1 millisecond',
-           make_interval(secs => least(10 * power(2, attempts - 1), 3600) + random())
-         ),
+         available_at = now() + make_interval(secs => least(10 * power(2, least(attempts - 1, 9)), 3600) + random()),
          lease_token = NULL,
          lease_until = NULL,
-         last_error = left($5, 2000)
+         last_error = left($4, 2000)
      WHERE id = $1 AND lease_token = $2 AND status = 'running'
      RETURNING status`,
-    [job.id, job.leaseToken, JOB_MAX_ATTEMPTS[job.payload.kind], delayMs ?? null, error],
+    [job.id, job.leaseToken, JOB_MAX_ATTEMPTS[job.payload.kind], error],
   );
   const status = retried.rows[0]?.status;
   if (status === undefined) return "lost";

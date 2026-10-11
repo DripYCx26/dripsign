@@ -11,7 +11,7 @@ import styles from "./TeamRoster.module.css";
 
 type Props = Readonly<{ members: readonly RosterMember[]; selfEmail: string }>;
 
-/** The people with access to this workspace: revoke one (never yourself), or add one. */
+/** The people with access to this workspace: remove one (never yourself), or add one. */
 export function TeamRoster({ members, selfEmail }: Props) {
   const router = useRouter();
   const [revoking, setRevoking] = useState<RosterMember | null>(null);
@@ -38,22 +38,21 @@ export function TeamRoster({ members, selfEmail }: Props) {
       <ul className={styles.members}>
         {members.map((member) => (
           <li key={member.email} className={styles.member}>
-            <div className={styles.who}>
-              <p className={styles.name}>{member.name ?? member.email}</p>
-              <p className={styles.detail}>
-                {member.name !== null && <span>{member.email} · </span>}
-                {member.role === "admin" ? "Admin" : "Member"} · added{" "}
-                <Moment value={member.addedAt} format="relative" />
-              </p>
-            </div>
+            <p className={styles.name}>{member.name ?? "—"}</p>
+            <p className={styles.detail}>{member.email}</p>
+            <p className={styles.detail}>{member.role === "admin" ? "Admin" : "Member"}</p>
+            <p className={styles.detail}>
+              Added <Moment value={member.addedAt} format="relative" />
+            </p>
             {member.email !== selfEmail && (
               <Button
-                variant="secondary"
+                variant="quiet"
+                size="sm"
                 onClick={() => {
                   setRevoking(member);
                 }}
               >
-                Revoke access
+                Remove
               </Button>
             )}
           </li>
@@ -62,8 +61,8 @@ export function TeamRoster({ members, selfEmail }: Props) {
       <AddStaffForm />
       <Dialog
         open={revoking !== null}
-        title={`Revoke access for ${revoking?.name ?? revoking?.email ?? "this person"}?`}
-        confirmLabel="Revoke access"
+        title={`Remove ${revoking?.name ?? revoking?.email ?? "this person"}?`}
+        confirmLabel="Remove"
         tone="danger"
         loading={pending}
         onConfirm={() => {

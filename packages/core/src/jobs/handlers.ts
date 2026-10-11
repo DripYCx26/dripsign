@@ -1,5 +1,5 @@
 import type { Db } from "../db.ts";
-import { getPool, readTx } from "../db.ts";
+import { getPool, pgErrorCode, readTx } from "../db.ts";
 import { loadConfig } from "../config.ts";
 import { DomainError } from "../errors.ts";
 import { draftSchema } from "../schema.ts";
@@ -13,17 +13,16 @@ import { loadSuggestionInput, completeSuggestion, failSuggestion } from "../doma
 import { loadCompletionExport, recordCompletionDelivery } from "../domain/completionExport.ts";
 import { applyPreparedDraft, failPreparation } from "../domain/revisions.ts";
 import { loadArchiveEvidence, completeArchive } from "../domain/signing.ts";
+import { liveSigners } from "../domain/state.ts";
 import { parseExecutedReceipt, prepareExecutedEvent } from "../host/event.ts";
 import { prepareDraftPdf } from "../pdf/prepare.ts";
-import type { DraftSigner } from "../pdf/prepare.ts";
 import { renderAuditRecord, renderSignedPdf } from "../pdf/archive.ts";
-import { JOB_MAX_ATTEMPTS, scrubEmailParams } from "./outbox.ts";
+import { scrubEmailParams } from "./outbox.ts";
 import type { ClaimedJob, JobOf } from "./outbox.ts";
 import { renderMail } from "./mail.ts";
 
 export interface HandlerDefinition {
   readonly handler: (job: ClaimedJob, signal: AbortSignal) => Promise<void>;
-  readonly maxAttempts: number | null;
   readonly retryable: (error: unknown) => boolean;
   readonly onFinalFailure: (
     db: Db,
@@ -63,11 +62,9 @@ async function prepare(
       draft.preparation.signerSetHash !== job.payload.signerSetHash
     )
       return null;
-    const signers = await db.query<DraftSigner>(
-      "SELECT id, name, email FROM dripsign.recipient WHERE tenant_id = $1 AND agreement_id = $2 AND id = ANY($3::uuid[]) ORDER BY id",
-      [tenantId, agreementId, draft.signerIds],
-    );
-    return { title: row.title, draft, signers: signers.rows };
+    // The domain's one signer order, the order the draft's signer-set hash was taken in.
+    const signers = await liveSigners(db, tenantId, agreementId);
+    return { title: row.title, draft, signers };
   });
   if (!input) return;
   signal.throwIfAborted();
@@ -82,12 +79,15 @@ async function prepare(
         storage,
       )
     : undefined;
-  const prepared = await prepareDraftPdf({
-    title: input.title,
-    signers: input.signers,
-    ...(input.draft.source ? { source: input.draft.source } : {}),
-    ...(uploadBytes ? { uploadBytes } : {}),
-  });
+  const prepared = await prepareDraftPdf(
+    {
+      title: input.title,
+      signers: input.signers,
+      ...(input.draft.source ? { source: input.draft.source } : {}),
+      ...(uploadBytes ? { uploadBytes } : {}),
+    },
+    signal,
+  );
   signal.throwIfAborted();
   const document = await storeBytes(tenantId, prepared.bytes, storage);
   await applyPreparedDraft(getPool(), {
@@ -176,13 +176,23 @@ async function hostEvent(job: JobOf<"host_event">, signal: AbortSignal): Promise
   await recordCompletionDelivery(getPool(), { tenantId, roundId, receipt });
 }
 
+function retryableHostEvent(error: unknown): boolean {
+  if (retryableDelivery(error)) return true;
+  // Transactions wrap busy/deadlock errors; inspect their bounded cause chain as well.
+  for (let depth = 0; depth < 4 && error instanceof Error; depth++) {
+    const code = pgErrorCode(error);
+    if (code && /^(?:08|57|40)/u.test(code)) return true;
+    error = error.cause;
+  }
+  return false;
+}
+
 export function createHandlers(storage = getStorage()): Record<JobKind, HandlerDefinition> {
   const none = async (): Promise<void> => {
     /* No domain effect needs a failure transition. */
   };
   return {
     email: {
-      maxAttempts: JOB_MAX_ATTEMPTS.email,
       retryable: retryableDelivery,
       onFinalFailure: async (db, job) => {
         await scrubEmailParams(db, job);
@@ -193,7 +203,6 @@ export function createHandlers(storage = getStorage()): Record<JobKind, HandlerD
       },
     },
     pdf_prepare: {
-      maxAttempts: JOB_MAX_ATTEMPTS.pdf_prepare,
       retryable: (error) => !(error instanceof DomainError && error.code === "invalid"),
       handler: async (job, signal) => {
         if (job.payload.kind === "pdf_prepare")
@@ -210,7 +219,6 @@ export function createHandlers(storage = getStorage()): Record<JobKind, HandlerD
       },
     },
     archive: {
-      maxAttempts: JOB_MAX_ATTEMPTS.archive,
       retryable: () => true,
       onFinalFailure: none,
       handler: async (job, signal) => {
@@ -219,7 +227,6 @@ export function createHandlers(storage = getStorage()): Record<JobKind, HandlerD
       },
     },
     ai_suggest: {
-      maxAttempts: JOB_MAX_ATTEMPTS.ai_suggest,
       retryable: () => false,
       handler: async (job, signal) => {
         if (job.payload.kind === "ai_suggest") await ai({ ...job, payload: job.payload }, signal);
@@ -239,8 +246,7 @@ export function createHandlers(storage = getStorage()): Record<JobKind, HandlerD
       },
     },
     host_event: {
-      maxAttempts: JOB_MAX_ATTEMPTS.host_event,
-      retryable: retryableDelivery,
+      retryable: retryableHostEvent,
       onFinalFailure: none,
       handler: async (job, signal) => {
         if (job.payload.kind === "host_event")

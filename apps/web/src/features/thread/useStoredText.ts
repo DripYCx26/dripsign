@@ -1,10 +1,59 @@
-import { useCallback, useSyncExternalStore } from "react";
+import type { Capacity } from "@dripsign/core/types";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 
-// Composer text lives in sessionStorage, keyed by agreement, so it survives a refresh, a conflict
-// reload and a navigation back. The map is the working copy: it also holds the text when storage
-// is blocked (private mode), and it keeps the snapshot of a key stable between reads.
+// Composer text lives in sessionStorage, keyed by who is typing and where, so it survives a
+// refresh, a conflict reload and a navigation back, and never reaches another person who signs in
+// on the same browser tab. The map is the working copy: it also holds the text when storage is
+// blocked (private mode), and it keeps the snapshot of a key stable between reads.
 const cache = new Map<string, string | null>();
 const listeners = new Set<() => void>();
+
+const ROOT = "dripsign:";
+export const IDENTITY_STAMP = `${ROOT}identity`;
+
+/** Whose text it is and which agreement it is about. */
+export type TextScope = Readonly<{ email: string; capacity: Capacity; agreementId: string }>;
+
+function identityPrefix(scope: Pick<TextScope, "email" | "capacity">): string {
+  return `${ROOT}${scope.email}:${scope.capacity}:`;
+}
+
+export function storageKey(scope: TextScope, field: string): string {
+  return `${identityPrefix(scope)}${scope.agreementId}:${field}`;
+}
+
+/**
+ * Removes every stored working copy that belongs to another identity and stamps this one, so a
+ * person who signs in after someone else on the same tab inherits nothing. Returns the keys it
+ * removed. Nothing happens when the stamp already names this identity.
+ */
+export function adoptIdentity(
+  storage: Pick<Storage, "length" | "key" | "getItem" | "setItem" | "removeItem">,
+  scope: Pick<TextScope, "email" | "capacity">,
+): readonly string[] {
+  const prefix = identityPrefix(scope);
+  if (storage.getItem(IDENTITY_STAMP) === prefix) return [];
+  const foreign: string[] = [];
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (key !== null && key.startsWith(ROOT) && key !== IDENTITY_STAMP && !key.startsWith(prefix)) {
+      foreign.push(key);
+    }
+  }
+  for (const key of foreign) storage.removeItem(key);
+  storage.setItem(IDENTITY_STAMP, prefix);
+  return foreign;
+}
+
+function forgetOtherIdentities(scope: Pick<TextScope, "email" | "capacity">): void {
+  const prefix = identityPrefix(scope);
+  for (const key of cache.keys()) if (!key.startsWith(prefix)) cache.delete(key);
+  try {
+    adoptIdentity(window.sessionStorage, scope);
+  } catch {
+    // Storage is blocked; the in-memory copy above is all there is to clear.
+  }
+}
 
 function read(key: string): string | null {
   const hit = cache.get(key);
@@ -45,11 +94,15 @@ const serverSnapshot = (): null => null;
  * `null`, so hydration agrees; the stored text appears right after.
  */
 export function useStoredText(
-  agreementId: string,
+  scope: TextScope,
   field: string,
 ): readonly [string | null, (value: string | null) => void] {
-  const key = `dripsign:${agreementId}:${field}`;
+  const { email, capacity } = scope;
+  const key = storageKey(scope, field);
   const value = useSyncExternalStore(subscribe, () => read(key), serverSnapshot);
+  useEffect(() => {
+    forgetOtherIdentities({ email, capacity });
+  }, [email, capacity]);
   const set = useCallback(
     (next: string | null) => {
       write(key, next);

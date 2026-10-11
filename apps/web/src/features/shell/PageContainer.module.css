@@ -4,6 +4,12 @@
   align-content: start;
   gap: var(--ds-space-6);
   margin-inline: auto;
-  max-width: var(--ds-layout-document-max);
-  padding: var(--ds-space-8) var(--ds-space-4) var(--ds-space-14);
+  max-width: var(--ds-layout-page);
+  padding: var(--ds-space-8) var(--ds-space-6) var(--ds-space-14);
+}
+
+@media (max-width: 639px) {
+  .container {
+    padding-inline: var(--ds-space-4);
+  }
 }

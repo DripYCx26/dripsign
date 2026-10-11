@@ -1,17 +1,19 @@
 .form {
   display: grid;
-  max-width: var(--ds-layout-reading);
   gap: var(--ds-space-6);
+}
+
+.main,
+.side {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: var(--ds-space-4);
 }
 
 .section {
   display: grid;
   gap: var(--ds-space-4);
-}
-
-.heading {
-  font-size: var(--ds-text-lg);
-  line-height: var(--ds-leading-lg);
 }
 
 .file {
@@ -26,7 +28,20 @@
 }
 
 .actions {
-  display: flex;
+  display: grid;
+}
+
+/* The recipients and the submit button sit beside the terms, and stay in view while they scroll. */
+@media (min-width: 1024px) {
+  .form {
+    grid-template-columns: minmax(0, 1fr) 360px;
+    align-items: start;
+  }
+
+  .side {
+    position: sticky;
+    top: calc(var(--ds-layout-header) + var(--ds-space-6));
+  }
 }
 
 /* On a phone the action stays within reach while the form scrolls. */
@@ -38,9 +53,5 @@
     padding: var(--ds-space-3) var(--ds-space-4);
     border-top: var(--ds-hairline);
     background: var(--ds-surface);
-  }
-
-  .actions > button {
-    width: 100%;
   }
 }

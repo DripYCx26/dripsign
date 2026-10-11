@@ -8,8 +8,7 @@
 .bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--ds-space-4);
+  gap: var(--ds-space-3);
   border-bottom: var(--ds-hairline);
   background: var(--ds-surface);
   padding: 0 var(--ds-space-4);
@@ -28,7 +27,7 @@
 
 .column {
   display: grid;
-  width: min(var(--ds-layout-flow), 100%);
+  width: min(var(--ds-layout-sign), 100%);
   align-content: start;
   justify-self: center;
   gap: var(--ds-space-6);

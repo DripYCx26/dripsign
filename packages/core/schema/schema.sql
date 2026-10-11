@@ -71,7 +71,8 @@ CREATE TABLE dripsign.recipient (
   email dripsign.email NOT NULL,
   name text NOT NULL CHECK (length(name) BETWEEN 1 AND 200),
   is_signer boolean NOT NULL,
-  added_at timestamptz NOT NULL DEFAULT now(),
+  -- Orders the signature page (then id); clock time, so it follows the order rows were added.
+  added_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   last_invited_at timestamptz,
   revoked_at timestamptz,
   PRIMARY KEY (tenant_id, id),
@@ -229,10 +230,12 @@ CREATE TABLE dripsign.signature (
   -- No foreign key: sessions are swept while signatures are kept forever.
   session_id uuid NOT NULL,
   verified_at timestamptz NOT NULL,
-  signed_at timestamptz NOT NULL DEFAULT now(),
+  -- Clock time at insert, after the signer's lock waits, never the transaction start.
+  signed_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   ip_address text CHECK (length(ip_address) <= 64),
   user_agent text CHECK (length(user_agent) <= 500),
   PRIMARY KEY (tenant_id, round_id, recipient_id),
+  CONSTRAINT verified_before_signed CHECK (verified_at <= signed_at),
   FOREIGN KEY (tenant_id, agreement_id, round_id, recipient_id)
     REFERENCES dripsign.round_signer (tenant_id, agreement_id, round_id, recipient_id)
 );
@@ -525,6 +528,12 @@ BEGIN
      AND dripsign.round_missing_signatures(NEW.tenant_id, NEW.id) THEN
     RAISE EXCEPTION 'Every required signature is required';
   END IF;
+  IF NEW.status = 'finalizing' AND EXISTS (
+    SELECT 1 FROM dripsign.signature
+    WHERE tenant_id = NEW.tenant_id AND round_id = NEW.id AND signed_at > NEW.finalizing_at
+  ) THEN
+    RAISE EXCEPTION 'Every signature must precede finalizing';
+  END IF;
   IF NEW.status = 'completed' AND (
     SELECT count(*) FROM dripsign.artifact WHERE tenant_id = NEW.tenant_id AND round_id = NEW.id
   ) <> 2 THEN
@@ -538,7 +547,7 @@ CREATE TRIGGER signing_round_state_machine
   BEFORE UPDATE ON dripsign.signing_round
   FOR EACH ROW EXECUTE FUNCTION dripsign.guard_signing_round();
 
--- A signature binds the live round's frozen document hash and consent text.
+-- A signature binds the live round's frozen document hash and consent text, after it opened.
 CREATE FUNCTION dripsign.require_matching_round() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
@@ -552,6 +561,7 @@ BEGIN
       AND document_sha256 = NEW.document_sha256
       AND consent_version = NEW.consent_version
       AND consent_hash = NEW.consent_hash
+      AND created_at <= NEW.signed_at
   ) THEN
     RAISE EXCEPTION 'A signature must match an active round';
   END IF;

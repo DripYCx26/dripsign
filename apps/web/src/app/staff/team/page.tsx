@@ -14,7 +14,7 @@ export default async function TeamPage() {
   if (actor.role !== "admin") notFound();
   return (
     <PageContainer>
-      <PageHeader eyebrow="Staff workspace" title="Team" />
+      <PageHeader title="Team" />
       <TeamRoster members={await loadRoster(actor)} selfEmail={actor.email} />
     </PageContainer>
   );

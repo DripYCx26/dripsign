@@ -3,21 +3,23 @@ import { cache } from "react";
 import { headers } from "next/headers";
 import { notFound as renderNotFound, redirect } from "next/navigation";
 import {
-  readSession,
+  readRequestSession,
   resolveRecipient,
   resolveStaff,
-  type ResolvedSession,
+  type RequestSession,
 } from "@dripsign/core/auth/sessions";
+import { loadConfig } from "@dripsign/core/config";
 import { isDomainError, notFound } from "@dripsign/core/errors";
-import { uuidSchema } from "@dripsign/core/schema";
 import type {
   Actor,
   Capacity,
   RecipientActor,
+  RequestEvidence,
   SessionView,
   StaffActor,
 } from "@dripsign/core/types";
 import { readCookie } from "./cookies.ts";
+import { requestEvidence } from "./request.ts";
 import { PATH_HEADER, safeNextPath, signInPath } from "./navigation.ts";
 
 export interface StaffContext {
@@ -30,25 +32,13 @@ export interface RecipientContext {
   readonly session: SessionView;
 }
 
-export interface CurrentSession {
-  readonly token: string;
-  readonly cookie: "session" | "embed";
-  readonly resolved: ResolvedSession;
-}
-
 /**
- * The live session for this request: the first-party cookie, else the bridge cookie (the only one
- * a host frame sends). Deduplicated per render; roles are never read from it, only the email.
+ * The live session for this request; `readRequestSession` owns which cookie wins. Deduplicated
+ * per render; roles are never read from it, only the email.
  */
-export const currentSession = cache(async (): Promise<CurrentSession | null> => {
-  for (const cookie of ["session", "embed"] as const) {
-    const token = await readCookie(cookie);
-    if (token === null) continue;
-    const resolved = await readSession(token);
-    if (resolved !== null) return { token, cookie, resolved };
-  }
-  return null;
-});
+export const currentSession = cache(async (): Promise<RequestSession | null> =>
+  readRequestSession({ embed: await readCookie("embed"), session: await readCookie("session") }),
+);
 
 export async function getSession(): Promise<SessionView | null> {
   return (await currentSession())?.resolved.view ?? null;
@@ -58,7 +48,7 @@ export async function getSession(): Promise<SessionView | null> {
 export async function requireStaff(): Promise<StaffContext> {
   const current = await currentSession();
   if (current === null) return redirect(await signInRedirect());
-  const actor = await orNotFound(resolveStaff(current.resolved.session));
+  const actor = await orNotFound(staffActorIn(current));
   return { actor, session: current.resolved.view };
 }
 
@@ -69,32 +59,42 @@ export async function requireStaff(): Promise<StaffContext> {
 export async function requireRecipient(agreementId: string): Promise<RecipientContext> {
   const current = await currentSession();
   if (current === null) return redirect(await signInRedirect());
-  if (!uuidSchema.safeParse(agreementId).success) return renderNotFound();
-  const actor = await orNotFound(resolveRecipient(current.resolved.session, agreementId));
+  const actor = await orNotFound(recipientActorIn(current, agreementId));
   return { actor, session: current.resolved.view };
 }
 
 /** Server actions: a signed-out caller is sent to sign-in and back to the page it acted on. */
-export async function actionSession(): Promise<CurrentSession> {
+export async function actionSession(): Promise<RequestSession> {
   const current = await currentSession();
   if (current === null) return redirect(await signInRedirect());
   return current;
 }
 
-/** The actor for a capacity, resolved live; anything short of standing is `not_found`. */
+/**
+ * The actor for a capacity, resolved live and carrying this request's evidence (recorded on a
+ * signature); anything short of standing is `not_found`.
+ */
 export async function actorIn(
-  current: CurrentSession | null,
+  current: RequestSession | null,
   capacity: Capacity,
   agreementId: string,
 ): Promise<Actor> {
-  if (capacity === "staff") return staffActorIn(current);
-  if (current === null) throw notFound();
-  return resolveRecipient(current.resolved.session, agreementId);
+  return capacity === "staff" ? staffActorIn(current) : recipientActorIn(current, agreementId);
 }
 
-export async function staffActorIn(current: CurrentSession | null): Promise<StaffActor> {
+export async function staffActorIn(current: RequestSession | null): Promise<StaffActor> {
   if (current === null) throw notFound();
-  return resolveStaff(current.resolved.session);
+  const actor = await resolveStaff(current.resolved.session);
+  return { ...actor, request: await evidence() };
+}
+
+async function recipientActorIn(
+  current: RequestSession | null,
+  agreementId: string,
+): Promise<RecipientActor> {
+  if (current === null) throw notFound();
+  const actor = await resolveRecipient(current.resolved.session, agreementId);
+  return { ...actor, request: await evidence() };
 }
 
 export async function staffActor(): Promise<StaffActor> {
@@ -103,6 +103,10 @@ export async function staffActor(): Promise<StaffActor> {
 
 export async function actorFor(capacity: Capacity, agreementId: string): Promise<Actor> {
   return actorIn(await actionSession(), capacity, agreementId);
+}
+
+async function evidence(): Promise<RequestEvidence> {
+  return requestEvidence(await headers(), loadConfig().trustedProxyHops);
 }
 
 async function orNotFound<T>(resolution: Promise<T>): Promise<T> {

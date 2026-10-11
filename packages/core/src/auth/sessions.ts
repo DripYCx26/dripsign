@@ -108,6 +108,32 @@ export async function readSession(sessionToken: string): Promise<ResolvedSession
   return row === null ? null : resolved(row);
 }
 
+/** The two cookies a browser may hold: the first-party sign-in and the host bridge's. */
+export type SessionCookie = "session" | "embed";
+
+export interface RequestSession {
+  readonly cookie: SessionCookie;
+  readonly token: string;
+  readonly resolved: ResolvedSession;
+}
+
+/**
+ * The one session a request acts as. The two kinds are exclusive per browser: bridge entry ends
+ * the first-party session and a first-party sign-in ends the bridge one. An embed cookie, when
+ * present, decides alone and fails closed: CHIPS sends it to every same-site request, so a dead
+ * bridge session must never fall back to an ambient first-party one. Each cookie holds its kind.
+ */
+export async function readRequestSession(
+  tokens: Readonly<Record<SessionCookie, string | null>>,
+): Promise<RequestSession | null> {
+  const cookie: SessionCookie = tokens.embed === null ? "session" : "embed";
+  const token = tokens[cookie];
+  const resolved = token === null ? null : await readSession(token);
+  return resolved?.session.embed === (cookie === "embed") && token !== null
+    ? { cookie, token, resolved }
+    : null;
+}
+
 /** Live staff row for the selected tenant (auto-selected when exactly one), else not_found. */
 export async function resolveStaff(session: Session): Promise<StaffActor> {
   const row = await loadSession(getPool(), "id", session.id);

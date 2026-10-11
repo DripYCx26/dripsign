@@ -1,13 +1,13 @@
+/* One row: the search at 320 px and the status filters beside it; they wrap on a narrow screen. */
+
 .controls {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
+  align-items: center;
   gap: var(--ds-space-3) var(--ds-space-4);
 }
 
 .search {
   min-width: 0;
-  flex: 1 1 var(--ds-layout-entry);
-  max-width: var(--ds-layout-entry);
+  flex: 0 1 calc(var(--ds-space-10) * 8);
 }

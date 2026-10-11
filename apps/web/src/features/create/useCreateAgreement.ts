@@ -1,9 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { randomId } from "@/features/document/ids.ts";
-import { submitCreate, type CreateKeys, type CreatePhase } from "./submit.ts";
+import { submitCreate, type CreateKeys, type CreatePhase, type UploadIntent } from "./submit.ts";
 import { validateForm, type FormErrors, type FormValues } from "./validate.ts";
 
 const newKeys = (): CreateKeys => ({
@@ -11,10 +11,18 @@ const newKeys = (): CreateKeys => ({
   upload: `upload-${randomId()}`,
 });
 
+/** One user intent: the form it was made from, its keys, and the upload once first attempted. */
+interface Attempt {
+  readonly fingerprint: string;
+  readonly keys: CreateKeys;
+  upload: UploadIntent | null;
+}
+
 /**
  * Submitting the create form. One receipt key per intent: the same details retried reuse their
  * keys, so an uncertain failure never makes a second draft; changed details are a new intent with
- * new keys. Once the draft exists, a failed upload retries only the upload.
+ * new keys. Once the draft exists, a failed upload retries only the upload, with the same file,
+ * key and draft version.
  */
 export function useCreateAgreement() {
   const router = useRouter();
@@ -22,7 +30,8 @@ export function useCreateAgreement() {
   const [problem, setProblem] = useState<string | null>(null);
   const [errors, setErrors] = useState<FormErrors | null>(null);
   const [createdId, setCreatedId] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState<{ fingerprint: string; keys: CreateKeys } | null>(null);
+  // Read only inside submit, never rendered, so a ref: a retry must see the intent as left.
+  const attempt = useRef<Attempt | null>(null);
 
   async function submit(values: FormValues) {
     const checked = validateForm(values);
@@ -35,15 +44,21 @@ export function useCreateAgreement() {
     setProblem(null);
     const { file } = values;
     const fingerprint = JSON.stringify([checked.input, file?.name, file?.size]);
-    const keys = attempt?.fingerprint === fingerprint ? attempt.keys : newKeys();
-    setAttempt({ fingerprint, keys });
+    if (attempt.current?.fingerprint !== fingerprint) {
+      attempt.current = { fingerprint, keys: newKeys(), upload: null };
+    }
+    const current = attempt.current;
     const outcome = await submitCreate({
       input: checked.input,
       file: values.mode === "upload" ? file : null,
-      keys,
+      keys: current.keys,
       createdId,
+      upload: current.upload,
       onPhase: setPhase,
       onCreated: setCreatedId,
+      onUploadIntent: (intent) => {
+        current.upload = intent;
+      },
     });
     if (!outcome.ok) {
       setProblem(outcome.message);

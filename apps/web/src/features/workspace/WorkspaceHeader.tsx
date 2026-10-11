@@ -1,54 +1,89 @@
-import type { AgreementStatus, Capacity } from "@dripsign/core/types";
-import Link from "next/link";
-import type { ReactNode } from "react";
-import { Pill } from "@/ui";
+"use client";
+
+import type { AgreementView, Capacity } from "@dripsign/core/types";
+import { Pill, Segmented } from "@/ui";
+import { BackButton } from "./BackButton.tsx";
+import type { RunCommand } from "./commands.ts";
 import styles from "./WorkspaceHeader.module.css";
 import { pillStatus } from "./status.ts";
+import type { WorkspaceTab } from "./tabs.ts";
+import { WorkspaceMenu, WorkspacePrimary } from "./WorkspaceActions.tsx";
+import type { Panel } from "./WorkspacePanels.tsx";
 
 type WorkspaceHeaderProps = Readonly<{
-  title: string;
-  status: AgreementStatus;
+  view: AgreementView;
   capacity: Capacity;
-  /** The organisation the agreement comes from, shown to recipients. */
-  orgName: string;
-  /** The primary action and the overflow menu. */
-  actions: ReactNode;
+  run: RunCommand;
+  busy: boolean;
+  tab: WorkspaceTab;
+  onTab: (tab: WorkspaceTab) => void;
+  onPanel: (panel: Panel) => void;
+  onReveal: (href: string) => void;
 }>;
 
-const HOME = {
-  staff: { href: "/staff", label: "Agreements" },
-  recipient: { href: "/", label: "Your agreements" },
-} as const;
+const HOME = { staff: "/staff", recipient: "/" } as const;
+
+const TABS = [
+  { value: "chat", label: "Chat" },
+  { value: "document", label: "Document" },
+] as const;
 
 /**
- * The workspace head: breadcrumb back to the list, the title in the display face with its status,
- * and the actions. On a phone the actions leave the head and sit in a bottom bar, in CSS, so the
- * same controls (and their dialogs) are rendered once.
+ * The workspace head, one 56 px row: back, the title in the display face with its status, then
+ * the primary action and menu. Under 1024 px the Chat | Document switch and the primary action
+ * share a second row; each control is rendered once and placed by the grid.
  */
 export function WorkspaceHeader({
-  title,
-  status,
+  view,
   capacity,
-  orgName,
-  actions,
+  run,
+  busy,
+  tab,
+  onTab,
+  onPanel,
+  onReveal,
 }: WorkspaceHeaderProps) {
-  const home = HOME[capacity];
+  const { title, status } = view.agreement;
   return (
     <header className={styles.header}>
-      <nav aria-label="Breadcrumb">
-        <ol className={styles.crumbs}>
-          <li>
-            <Link href={home.href}>{home.label}</Link>
-          </li>
-        </ol>
-      </nav>
-      <div className={styles.line}>
-        <div className={styles.title}>
-          <h1>{title}</h1>
-          <Pill status={pillStatus(status)} />
-          {capacity === "recipient" && <p className={styles.from}>{`From ${orgName}`}</p>}
-        </div>
-        <div className={styles.actions}>{actions}</div>
+      <div className={styles.back}>
+        <BackButton label="Back to agreements" href={HOME[capacity]} />
+      </div>
+      <div className={styles.title}>
+        <h1>{title}</h1>
+        <Pill status={pillStatus(status)} />
+        {capacity === "recipient" && (
+          <p className={styles.from}>
+            <span className={styles.dot} aria-hidden="true">
+              ·{" "}
+            </span>
+            {`From ${view.orgName}`}
+          </p>
+        )}
+      </div>
+      <div className={styles.toggle}>
+        <Segmented
+          label="Show"
+          hideLabel
+          size="sm"
+          name="workspace-pane"
+          options={TABS}
+          value={tab}
+          onChange={onTab}
+        />
+      </div>
+      <div className={styles.primary}>
+        <WorkspacePrimary
+          view={view}
+          capacity={capacity}
+          run={run}
+          busy={busy}
+          onPanel={onPanel}
+          onReveal={onReveal}
+        />
+      </div>
+      <div className={styles.menu}>
+        <WorkspaceMenu view={view} capacity={capacity} onPanel={onPanel} />
       </div>
     </header>
   );

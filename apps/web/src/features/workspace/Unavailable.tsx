@@ -1,4 +1,5 @@
 import { UseAnotherEmail } from "@/features/shell/UseAnotherEmail.tsx";
+import { ButtonLink } from "@/ui";
 import styles from "./Unavailable.module.css";
 
 /**
@@ -8,9 +9,12 @@ import styles from "./Unavailable.module.css";
 export function Unavailable({ email }: Readonly<{ email: string }>) {
   return (
     <section className={styles.unavailable}>
-      <h1>{`This agreement isn’t available to ${email}.`}</h1>
-      <p>Check that you’re signed in with the address it was sent to.</p>
-      <div>
+      <h1>This agreement isn’t available.</h1>
+      <p>{`You’re signed in as ${email}.`}</p>
+      <div className={styles.actions}>
+        <ButtonLink variant="ink" href="/">
+          Back to agreements
+        </ButtonLink>
         <UseAnotherEmail />
       </div>
     </section>

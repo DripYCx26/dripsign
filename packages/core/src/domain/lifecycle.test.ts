@@ -1,14 +1,16 @@
 import { randomUUID } from "node:crypto";
+import { PDFDocument } from "pdf-lib";
 import { expect, it } from "vitest";
-import { storeBytes } from "../adapters/storage.ts";
 import { getPool } from "../db.ts";
-import { SIGNING_CONSENT } from "../schema.ts";
-import type { Command, DocumentSource, NewRecipient, SigningField } from "../schema.ts";
+import { createHandlers } from "../jobs/handlers.ts";
+import type { ClaimedJob, JobLease } from "../jobs/outbox.ts";
+import { LIMITS, SIGNING_CONSENT } from "../schema.ts";
+import type { Command, DocumentSource, JobPayload } from "../schema.ts";
+import type { NewAgreementInput, NewRecipient } from "../schema.ts";
 import type { Actor, AgreementView, RecipientActor, StaffActor } from "../types.ts";
-import { createAgreement, executeCommand } from "./commands.ts";
+import { createAgreement, executeCommand, storeUpload } from "./commands.ts";
 import { sha256Hex } from "./receipts.ts";
-import { applyPreparedDraft } from "./revisions.ts";
-import { completeArchive } from "./signing.ts";
+import { addStaff, revokeStaff } from "./staff.ts";
 import { loadAgreementView } from "./view.ts";
 
 function must<T>(value: T | null | undefined): T {
@@ -64,38 +66,58 @@ function run(actor: Actor, agreementId: string, command: Command): Promise<Agree
   return executeCommand(actor, agreementId, `key-${randomUUID()}`, command);
 }
 
-/** Stands in for the worker: stores a PDF and commits it against the draft's current fence. */
-async function prepare(staff: StaffActor, agreementId: string): Promise<AgreementView> {
-  const draft = must((await loadAgreementView(staff, agreementId)).draft);
-  const document = await storeBytes(
-    staff.tenantId,
-    new TextEncoder().encode(`%PDF-1.7 prepared ${randomUUID()}`),
-  );
-  const fields: SigningField[] = draft.signerIds.flatMap((recipientId, index) => {
-    const box = { recipientId, page: 2, x: 0.1, width: 0.4, height: 0.05 };
-    return [
-      { ...box, type: "signature", y: 0.1 + index * 0.2 },
-      { ...box, type: "date", y: 0.17 + index * 0.2 },
-    ];
-  });
-  const fence = {
-    inputSha256: must(draft.preparation.inputSha256),
-    signerSetHash: must(draft.preparation.signerSetHash),
-  };
-  const applied = await applyPreparedDraft(getPool(), {
-    tenantId: staff.tenantId,
-    agreementId,
-    fence,
-    document,
-    pageCount: 2,
-    fields,
-  });
-  expect(applied).toBe(true);
-  return loadAgreementView(staff, agreementId);
+async function colleague(admin: StaffActor): Promise<StaffActor> {
+  const email = `admin-${randomUUID()}@acme.test`;
+  await addStaff(admin, { email, role: "admin" });
+  return { ...admin, email, ...(await session(email)) };
 }
 
+function job(
+  payload: JobPayload,
+  staff: StaffActor,
+  agreementId: string,
+  lease: JobLease = { id: randomUUID(), leaseToken: randomUUID() },
+): ClaimedJob {
+  const now = new Date();
+  const scope = { tenantId: staff.tenantId, agreementId };
+  return { ...lease, ...scope, attempts: 1, leaseUntil: now, createdAt: now, payload };
+}
+
+/** Holds row locks in an open transaction; `queue(n)` returns once n other backends wait on it. */
+async function holdLocks(...statements: readonly (readonly [string, readonly unknown[]])[]) {
+  const client = await getPool().connect();
+  await client.query("BEGIN");
+  for (const [sql, params] of statements) await client.query(sql, [...params]);
+  const backend = await client.query<{ pid: number }>("SELECT pg_backend_pid() AS pid");
+  const { pid } = must(backend.rows[0]);
+  return {
+    async queue(waiting: number): Promise<void> {
+      for (const deadline = Date.now() + 4_000; Date.now() < deadline;) {
+        const found = await getPool().query<{ count: number }>(
+          "SELECT count(*)::int AS count FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))",
+          [pid],
+        );
+        if (must(found.rows[0]).count >= waiting) return;
+      }
+      throw new Error("Nothing queued behind the held locks");
+    },
+    async release(): Promise<void> {
+      await client.query("COMMIT");
+      client.release();
+    },
+  };
+}
+
+/** Runs the worker's own prepare handler against the draft's fence, then publishes the PDF. */
 async function publish(staff: StaffActor, agreementId: string): Promise<AgreementView> {
-  const prepared = await prepare(staff, agreementId);
+  const { preparation } = must((await loadAgreementView(staff, agreementId)).draft);
+  const fence = {
+    inputSha256: must(preparation.inputSha256),
+    signerSetHash: must(preparation.signerSetHash),
+  };
+  const prepare = job({ kind: "pdf_prepare", ...fence }, staff, agreementId);
+  await createHandlers().pdf_prepare.handler(prepare, new AbortController().signal);
+  const prepared = await loadAgreementView(staff, agreementId);
   return run(staff, agreementId, {
     kind: "publish",
     expectedVersion: prepared.agreement.version,
@@ -185,48 +207,56 @@ it("negotiates, publishes, collects every signature and archives the signed agre
     kind: "request_signatures",
     expectedVersion: view.agreement.version,
   });
-
   await run(jordanActor, id, signCommand(signing, "Jordan Lee"));
-  await run(morganActor, id, signCommand(signing, "Morgan Diaz"));
+
+  // Morgan re-verifies while the last signature waits on a lock; it must still follow, and archive.
+  const held = await holdLocks(["SELECT 1 FROM dripsign.agreement WHERE id = $1 FOR UPDATE", [id]]);
+  const { userAgent: limit } = LIMITS.requestEvidence;
+  const request = { ipAddress: "203.0.113.7", userAgent: "u".repeat(limit + 1) };
+  const signed = run({ ...morganActor, request }, id, signCommand(signing, "Morgan Diaz"));
+  await held.queue(1);
+  await getPool().query("UPDATE dripsign.auth_session SET verified_at = now() WHERE id = $1", [
+    morganActor.sessionId,
+  ]);
+  await held.release();
+  await signed;
+  const evidence = await getPool().query<{ ipAddress: string; userAgent: number }>(
+    `SELECT ip_address AS "ipAddress", length(user_agent) AS "userAgent" FROM dripsign.signature
+     WHERE agreement_id = $1 AND typed_name = 'Morgan Diaz'`,
+    [id],
+  );
+  expect(evidence.rows).toEqual([{ ipAddress: request.ipAddress, userAgent: limit }]);
   view = await loadAgreementView(staff, id);
   const round = must(view.activeRound);
   expect(round.status).toBe("finalizing");
   expect(await jobCount(id, "archive")).toBe(1);
   expect(await jobCount(id, "email", "sign_request")).toBe(2);
 
-  // The worker's claim, scoped to this agreement's job.
-  const leased = await getPool().query<{ id: string; leaseToken: string }>(
+  // The worker's claim, scoped to this agreement's job and hidden from parallel claimers, then
+  // its real render and commit.
+  const leased = await getPool().query<JobLease>(
     `UPDATE dripsign.outbox SET status = 'running', attempts = attempts + 1,
-       lease_token = gen_random_uuid(), lease_until = now() + interval '1 minute'
+       lease_token = gen_random_uuid(), lease_until = now() + interval '1 minute',
+       available_at = now() + interval '1 minute'
      WHERE agreement_id = $1 AND kind = 'archive'
      RETURNING id, lease_token AS "leaseToken"`,
     [id],
   );
-  const signedDocument = await storeBytes(staff.tenantId, new TextEncoder().encode("%PDF signed"));
-  const auditRecord = await storeBytes(staff.tenantId, new TextEncoder().encode("%PDF audit"));
-  const outcome = await completeArchive(getPool(), {
-    tenantId: staff.tenantId,
-    roundId: round.id,
-    leaseFence: must(leased.rows[0]),
-    signedDocument,
-    auditRecord,
-  });
-  expect(outcome).toBe("completed");
+  const archive = job({ kind: "archive", roundId: round.id }, staff, id, must(leased.rows[0]));
+  await createHandlers().archive.handler(archive, new AbortController().signal);
   view = await loadAgreementView(jordanActor, id);
+  // The completion gate admits "signed" only with both archived artifacts.
   expect(view.agreement.status).toBe("signed");
-  expect(view.artifacts.map((artifact) => artifact.sha256).sort()).toEqual(
-    [signedDocument.sha256, auditRecord.sha256].sort(),
-  );
 });
 
-it("lets only a required signer cancel signing by proposing, and voids on signer removal", async () => {
+it("cancels signing only by a signer's proposal, voids on removal, keeps one signer order", async () => {
+  const taylor = person("Taylor Kim", false);
   const jordan = person("Jordan Lee", true);
   const morgan = person("Morgan Diaz", true);
-  const taylor = person("Taylor Kim", false);
-  const { staff, id, view: published, actors } = await negotiating([jordan, morgan, taylor]);
-  const jordanActor = must(actors[0]);
-  const morganActor = must(actors[1]);
-  const taylorActor = must(actors[2]);
+  const { staff, id, view: published, actors } = await negotiating([taylor, jordan, morgan]);
+  const taylorActor = must(actors[0]);
+  const jordanActor = must(actors[1]);
+  const morganActor = must(actors[2]);
   let view = await run(staff, id, {
     kind: "request_signatures",
     expectedVersion: published.agreement.version,
@@ -266,11 +296,11 @@ it("lets only a required signer cancel signing by proposing, and voids on signer
     }),
   ).rejects.toMatchObject({ code: "conflict" });
 
-  const morganId = must(view.recipients.find((recipient) => recipient.email === morgan.email)).id;
+  const idOf = (email: string) => must(view.recipients.find((r) => r.email === email)).id;
   view = await run(staff, id, {
     kind: "remove_recipient",
     expectedVersion: view.agreement.version,
-    recipientId: morganId,
+    recipientId: idOf(morgan.email),
   });
   expect(view.activeRound).toBeNull();
   const removed = await getPool().query<{ status: string; endReason: string }>(
@@ -278,26 +308,50 @@ it("lets only a required signer cancel signing by proposing, and voids on signer
     [secondRound],
   );
   expect(removed.rows[0]).toEqual({ status: "void", endReason: "signer_removed" });
+
+  // Taylor, listed before Jordan, signs first once promoted: staging, the worker's signature
+  // page and publication all follow the one signer order.
+  view = await run(staff, id, {
+    kind: "set_signer",
+    expectedVersion: view.agreement.version,
+    recipientId: idOf(taylor.email),
+    isSigner: true,
+  });
+  view = await publish(staff, id);
+  const revision = must(view.revisions.at(-1));
+  const order = [idOf(taylor.email), idOf(jordan.email)];
+  expect(revision.signerIds).toEqual(order);
+  const signatureFields = revision.signingFields.filter((field) => field.type === "signature");
+  expect(signatureFields.map((field) => field.recipientId)).toEqual(order);
 });
 
-it("fences stale versions and replays a receipt without a second effect", async () => {
+it("keeps an upload on rename, fences, replays, and rechecks authority after lock waits", async () => {
   const jordan = person("Jordan Lee", true);
-  const { staff, id, view, actors } = await negotiating([jordan]);
+  const { staff, id, view: published, actors } = await negotiating([jordan]);
   const jordanActor = must(actors[0]);
-  await expect(
-    run(staff, id, {
-      kind: "save_draft",
-      expectedVersion: view.agreement.version - 1,
-      source: terms("Stale edit."),
-    }),
-  ).rejects.toMatchObject({ code: "conflict" });
-
-  const key = `key-${randomUUID()}`;
+  // A stale save is fenced; a title-only save keeps the upload, which takes no replacement wording.
+  const pdf = await PDFDocument.create();
+  pdf.addPage();
+  const uploaded = await storeUpload(staff, id, `key-${randomUUID()}`, {
+    expectedVersion: published.agreement.version,
+    bytes: await pdf.save(),
+  });
+  const rename = { kind: "save_draft", title: "Renamed agreement" } as const;
+  const stale = { ...rename, expectedVersion: published.agreement.version };
+  await expect(run(staff, id, stale)).rejects.toMatchObject({ code: "conflict" });
+  const renamed = await run(staff, id, { ...rename, expectedVersion: uploaded.agreement.version });
+  expect(renamed.draft?.upload).toEqual(must(uploaded.draft?.upload));
+  const view = await publish(staff, id);
   const proposal: Command = {
     kind: "propose",
     expectedVersion: view.agreement.version,
     text: "Shorter term.",
   };
+  await expect(
+    run(jordanActor, id, { ...proposal, replacementSource: terms("Six months.") }),
+  ).rejects.toMatchObject({ code: "invalid" });
+
+  const key = `key-${randomUUID()}`;
   await executeCommand(jordanActor, id, key, proposal);
   const replayed = await executeCommand(jordanActor, id, key, proposal);
   expect(replayed.proposals).toHaveLength(1);
@@ -305,4 +359,40 @@ it("fences stale versions and replays a receipt without a second effect", async 
     executeCommand(jordanActor, id, key, { ...proposal, text: "A different change." }),
   ).rejects.toMatchObject({ code: "conflict" });
   expect((await loadAgreementView(jordanActor, id)).proposals).toHaveLength(1);
+
+  // Revoked while a message waits on the agreement and a create replay on its receipt: both fail.
+  const second = await colleague(staff);
+  const draft: NewAgreementInput = {
+    title: "Second agreement",
+    document: { kind: "upload" },
+    recipients: [person("Casey Park", true)],
+  };
+  const createKey = `key-${randomUUID()}`;
+  await createAgreement(staff, createKey, draft);
+  const held = await holdLocks(
+    ["SELECT 1 FROM dripsign.agreement WHERE id = $1 FOR UPDATE", [id]],
+    ["SELECT 1 FROM dripsign.command_receipt WHERE key = $1 FOR UPDATE", [createKey]],
+  );
+  const queued = Promise.allSettled([
+    run(staff, id, { kind: "message", body: "Checking in." }),
+    createAgreement(staff, createKey, draft),
+  ]);
+  await held.queue(2);
+  await revokeStaff(second, staff.email);
+  await held.release();
+  for (const outcome of await queued) {
+    expect(outcome).toMatchObject({ status: "rejected", reason: { code: "not_found" } });
+  }
+  expect((await loadAgreementView(jordanActor, id)).messages).toHaveLength(0);
+
+  // The last admin cannot step down, and two admins revoking each other leave one.
+  await expect(addStaff(second, { email: second.email, role: "member" })).rejects.toMatchObject({
+    code: "invalid",
+  });
+  const third = await colleague(second);
+  const revoked = await Promise.allSettled([
+    revokeStaff(second, third.email),
+    revokeStaff(third, second.email),
+  ]);
+  expect(revoked.filter((outcome) => outcome.status === "fulfilled")).toHaveLength(1);
 });

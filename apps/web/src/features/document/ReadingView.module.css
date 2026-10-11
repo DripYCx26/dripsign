@@ -1,47 +1,60 @@
-.wrap {
-  display: grid;
-  gap: var(--ds-space-2);
-}
-
-.note {
-  color: var(--ds-text-secondary);
-  font-size: var(--ds-text-sm);
-  line-height: var(--ds-leading-sm);
-}
-
-/* The sheet is [data-paper]: white with light-theme text on a dark device too. */
+/* The sheet is [data-paper]: white with light-theme text on a dark device too, with the shadow
+   that gives it an edge there. */
 .sheet {
-  padding: var(--ds-space-10);
+  padding: clamp(var(--ds-space-5), 5vw, calc(var(--ds-space-14) + var(--ds-space-4)));
   border: var(--ds-hairline);
   border-radius: var(--ds-radius-card);
   background: var(--ds-paper);
+  box-shadow: var(--ds-shadow-press);
   color: var(--ds-text);
   font-family: var(--ds-font-display);
-  font-size: var(--ds-text-lg);
-  line-height: var(--ds-leading-lg);
-}
-
-@media (max-width: 640px) {
-  .sheet {
-    padding: var(--ds-space-5);
-  }
+  font-size: var(--ds-text-read);
+  line-height: var(--ds-leading-read);
 }
 
 .title {
   margin-bottom: var(--ds-space-6);
+  font-size: var(--ds-display-sm);
+  line-height: var(--ds-display-sm-leading);
 }
 
+/* The suggestion sits in a second column at the heading's line, so the text never runs under it. */
 .section {
   margin-bottom: var(--ds-space-6);
-  scroll-margin-top: var(--ds-space-14);
+  scroll-margin-top: calc(var(--ds-layout-doc-header) + var(--ds-space-4));
+}
+
+.section[data-suggestable] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--ds-space-3);
+}
+
+.section[data-suggestable] > * {
+  grid-column: 1;
+}
+
+.section[data-suggestable] > .suggest {
+  /* The sheet reads in the display face; its controls stay in the interface face. */
+  font-family: var(--ds-font);
+  grid-column: 2;
+  grid-row: 1;
+  align-self: start;
+}
+
+/* Quiet until the section is hovered or holds focus; with no hover (touch) it is always there. */
+@media (hover: hover) {
+  .section:not(:hover, :focus-within) > .suggest {
+    opacity: 0;
+  }
 }
 
 .heading {
   margin-bottom: var(--ds-space-2);
   font-family: var(--ds-font-display);
-  font-size: var(--ds-text-lg);
+  font-size: var(--ds-text-read);
   font-weight: var(--ds-weight-semibold);
-  line-height: var(--ds-leading-lg);
+  line-height: var(--ds-leading-read);
 }
 
 .paragraph {

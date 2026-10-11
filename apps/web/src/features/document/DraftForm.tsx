@@ -1,8 +1,8 @@
 "use client";
 
 import { LIMITS } from "@dripsign/core/schema";
-import { Button, Notice, TextField } from "@/ui";
-import styles from "./DraftEditor.module.css";
+import { Notice, TextField } from "@/ui";
+import styles from "./DraftForm.module.css";
 import { SectionEditor } from "./SectionEditor.tsx";
 import type { EditableSection } from "./sections.ts";
 
@@ -11,33 +11,15 @@ export type Edit = Readonly<{ title: string; sections: readonly EditableSection[
 type DraftFormProps = Readonly<{
   edit: Edit;
   onEdit: (next: Edit) => void;
-  dirty: boolean;
   pending: boolean;
-  /** The refusal or failure to show, if any. */
+  /** The refusal to show, if any. */
   message: string | null;
-  onSave: () => void;
-  onDiscard: () => void;
 }>;
 
-/** The draft's terms as a form with its Save draft and Discard changes actions. */
-export function DraftForm({
-  edit,
-  onEdit,
-  dirty,
-  pending,
-  message,
-  onSave,
-  onDiscard,
-}: DraftFormProps) {
+/** The draft's terms as a form. Save and Discard sit in the document header. */
+export function DraftForm({ edit, onEdit, pending, message }: DraftFormProps) {
   return (
-    <form
-      className={styles.editor}
-      onSubmit={(event) => {
-        event.preventDefault();
-        onSave();
-      }}
-    >
-      <p className={styles.note}>Only your team sees this draft until you publish it.</p>
+    <div className={styles.form}>
       <TextField
         label="Title"
         name="title"
@@ -60,14 +42,6 @@ export function DraftForm({
           {message}
         </Notice>
       )}
-      <div className={styles.actions}>
-        <Button variant="ink" type="submit" loading={pending} disabled={!dirty && !pending}>
-          Save draft
-        </Button>
-        <Button variant="quiet" disabled={pending} onClick={onDiscard}>
-          Discard changes
-        </Button>
-      </div>
-    </form>
+    </div>
   );
 }

@@ -14,15 +14,18 @@
   background: var(--ds-surface);
 }
 
-.legend {
-  padding: 0 var(--ds-space-1);
-  color: var(--ds-text-secondary);
-  font-size: var(--ds-text-sm);
-  font-weight: var(--ds-weight-medium);
+.top {
+  display: flex;
+  align-items: end;
+  gap: var(--ds-space-3);
+}
+
+.heading {
+  min-width: 0;
+  flex: 1;
 }
 
 .actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--ds-space-2);
+  gap: var(--ds-space-1);
 }

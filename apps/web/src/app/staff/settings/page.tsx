@@ -18,7 +18,7 @@ export default async function SettingsPage() {
   const settings = await readCompletionExportSettings(actor);
   return (
     <PageContainer>
-      <PageHeader eyebrow="Staff workspace" title="Settings" />
+      <PageHeader title="Settings" />
       <section className={styles.section} aria-labelledby="completion-export">
         <h2 id="completion-export">Completion export</h2>
         <p className={styles.intro}>

@@ -14,3 +14,11 @@
   width: var(--ds-size-control-sm);
   padding: 0;
 }
+
+/* The round send button of a composer: 32 px, a full 44 px target on a coarse pointer. */
+.iconButton[data-shape="round"] {
+  width: max(var(--ds-space-8), var(--ds-size-control-sm));
+  min-height: max(var(--ds-space-8), var(--ds-size-control-sm));
+  border-radius: var(--ds-radius-pill);
+  padding: 0;
+}

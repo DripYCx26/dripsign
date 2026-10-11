@@ -24,6 +24,7 @@ export const LIMITS = {
   search: 200,
   receiptKey: 200,
   jobPayloadBytes: 65_536,
+  requestEvidence: { ipAddress: 64, userAgent: 500 },
 } as const;
 
 export const SIGNING_CONSENT = {
@@ -229,7 +230,7 @@ export const commandSchema = z.discriminatedUnion("kind", [
     kind: z.literal("save_draft"),
     ...fenced,
     title: titleSchema.optional(),
-    source: documentSourceSchema,
+    source: documentSourceSchema.optional(),
   }),
   z.strictObject({ kind: z.literal("publish"), ...fenced, reviewedSha256: sha256Schema }),
   z.strictObject({ kind: z.literal("retry_preparation"), ...fenced }),

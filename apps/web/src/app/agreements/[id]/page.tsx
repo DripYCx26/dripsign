@@ -13,7 +13,7 @@ type Props = Readonly<{
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }>;
 
-/** The recipient workspace: the same shell as staff's, without the tracker, editor or recipients. */
+/** The recipient workspace: the same shell as staff's, without the editor or recipients. */
 export default async function RecipientAgreementPage({ params, searchParams }: Props) {
   const [{ id }, query] = await Promise.all([params, searchParams]);
   const { actor, session } = await requireRecipient(id);

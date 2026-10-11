@@ -20,6 +20,12 @@ export type AiSuggestionStatus = "queued" | "ready" | "failed" | "applied";
 export type ArtifactKind = "signed_document" | "audit_record";
 export type AgreementFileKind = "draft" | "current" | "revision" | "signed" | "audit";
 
+/** Derived by the web server from the HTTP request; a signature records it. Absent off-request. */
+export interface RequestEvidence {
+  readonly ipAddress: string | null;
+  readonly userAgent: string | null;
+}
+
 /** Resolved from the database on every request; never cached in the session. */
 export interface StaffActor {
   readonly capacity: "staff";
@@ -28,6 +34,7 @@ export interface StaffActor {
   readonly sessionId: string;
   readonly verifiedAt: string;
   readonly role: StaffRole;
+  readonly request?: RequestEvidence;
 }
 
 /** Recipient standing is per agreement; domain calls recheck the live grant. */
@@ -36,6 +43,7 @@ export interface RecipientActor {
   readonly email: string;
   readonly sessionId: string;
   readonly verifiedAt: string;
+  readonly request?: RequestEvidence;
 }
 
 export type Actor = StaffActor | RecipientActor;

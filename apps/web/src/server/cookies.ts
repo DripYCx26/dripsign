@@ -1,12 +1,13 @@
 import "server-only";
 import { cookies } from "next/headers";
+import type { SessionCookie } from "@dripsign/core/auth/sessions";
 import { loadConfig } from "@dripsign/core/config";
 
 /**
  * `session`: the first-party sign-in. `embed`: the host bridge session, sent only inside the host's
  * frame. `challenge`: binds an email code to the browser that asked for it.
  */
-export type CookieKind = "session" | "embed" | "challenge";
+export type CookieKind = SessionCookie | "challenge";
 
 const BASE_NAMES: Readonly<Record<CookieKind, string>> = {
   session: "dripsign_session",

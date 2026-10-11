@@ -5,12 +5,13 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
 import type { RunCommand } from "@/features/workspace/commands.ts";
 import { PENDING_PROPOSAL_ID } from "@/features/workspace/nextStep.ts";
 import { EmptyState } from "@/ui";
-import { Composer, type ComposerMode, type Sent } from "./Composer.tsx";
+import { Composer, type Sent } from "./Composer.tsx";
+import { cancelProposal } from "./intent.ts";
 import { MessageItem } from "./MessageItem.tsx";
-import { isOwn, pendingProposal, threadItems } from "./model.ts";
+import { isOwn, pendingProposal, threadItems, turnSentence, type ThreadItem } from "./model.ts";
 import { ProposalCard, type Decision } from "./ProposalCard.tsx";
+import { SystemRow } from "./SystemRow.tsx";
 import styles from "./ThreadPane.module.css";
-import { TurnBanner } from "./TurnBanner.tsx";
 
 const ANNOUNCEMENT: Readonly<Record<Sent, string>> = {
   message: "Message sent.",
@@ -25,28 +26,11 @@ type ThreadPaneProps = Readonly<{
   busy: boolean;
 }>;
 
-/**
- * After a send, focus moves to the new item and a polite live region says what happened. The item
- * arrives with the refreshed view, which may land before or after the command resolves, so the
- * focus waits for the list to grow past its length at the moment of sending.
- */
-function useSentFeedback(itemCount: number) {
-  const list = useRef<HTMLOListElement>(null);
-  const growPast = useRef<number | null>(null);
+/** What a send says to a screen reader, for a few seconds. Focus stays in the composer. */
+function useSentAnnouncement() {
   const timer = useRef<number | undefined>(undefined);
   const [announcement, setAnnouncement] = useState("");
 
-  const focusNewest = useCallback(() => {
-    const items = list.current?.children;
-    if (growPast.current === null || items === undefined || items.length <= growPast.current) {
-      return;
-    }
-    growPast.current = null;
-    const newest = items[items.length - 1];
-    if (newest instanceof HTMLElement) newest.focus();
-  }, []);
-
-  useEffect(focusNewest, [itemCount, focusNewest]);
   useEffect(
     () => () => {
       window.clearTimeout(timer.current);
@@ -54,22 +38,20 @@ function useSentFeedback(itemCount: number) {
     [],
   );
 
-  function sent(kind: Sent) {
-    growPast.current = itemCount;
-    window.requestAnimationFrame(focusNewest);
-    setAnnouncement(ANNOUNCEMENT[kind]);
+  const announce = useCallback((sent: Sent) => {
+    setAnnouncement(ANNOUNCEMENT[sent]);
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => {
       setAnnouncement("");
     }, ANNOUNCEMENT_MS);
-  }
+  }, []);
 
-  return { list, announcement, sent };
+  return { announcement, announce };
 }
 
 /**
- * Opens the thread at its newest end, where the turn and the composer are. An item taller than the
- * list (a long proposal) opens at its own top, so its title is never scrolled out of sight.
+ * Opens the thread at its newest end, where the composer is. An item taller than the list (a long
+ * proposal) opens at its own top, so its title is never scrolled out of sight.
  */
 function useOpenAtNewest(list: RefObject<HTMLOListElement | null>, itemCount: number) {
   useEffect(() => {
@@ -82,17 +64,53 @@ function useOpenAtNewest(list: RefObject<HTMLOListElement | null>, itemCount: nu
   }, [itemCount, list]);
 }
 
+type ThreadRowProps = Readonly<{
+  item: ThreadItem;
+  view: AgreementView;
+  capacity: Capacity;
+  busy: boolean;
+  onDecide: (decision: Decision, proposal: ProposalView) => Promise<void>;
+}>;
+
+function ThreadRow({ item, view, capacity, busy, onDecide }: ThreadRowProps) {
+  switch (item.kind) {
+    case "message":
+      return <MessageItem message={item.message} own={isOwn(item.message.author, view)} />;
+    case "activity":
+      return <SystemRow item={item.item} />;
+    case "proposal":
+      return (
+        <ProposalCard
+          view={view}
+          capacity={capacity}
+          proposal={item.proposal}
+          busy={busy}
+          onDecide={onDecide}
+        />
+      );
+  }
+}
+
 /**
- * The proposal thread: whose turn it is, the conversation oldest first as an ordered list, and the
- * composer. Staff and recipients see the same list; the view already filtered what each may see.
+ * The chat rail: the conversation oldest first as an ordered list (messages as bubbles, proposals
+ * as cards, milestones as small system rows) with the composer pinned under it. Staff and
+ * recipients see the same list; the view already filtered what each may see. Whose turn it is
+ * is announced, not displayed: the cards and the primary action already say it.
  */
 export function ThreadPane({ view, capacity, run, busy }: ThreadPaneProps) {
   const items = threadItems(view);
   const pendingId = pendingProposal(view)?.id;
-  const [mode, setMode] = useState<ComposerMode>("message");
-  const { list, announcement, sent } = useSentFeedback(items.length);
+  const list = useRef<HTMLOListElement>(null);
+  const { announcement, announce } = useSentAnnouncement();
 
   useOpenAtNewest(list, items.length);
+  // A proposal in progress belongs to this agreement's thread; leaving it drops the intent.
+  useEffect(
+    () => () => {
+      cancelProposal();
+    },
+    [view.agreement.id],
+  );
 
   async function decide(decision: Decision, proposal: ProposalView) {
     await run(
@@ -103,18 +121,12 @@ export function ThreadPane({ view, capacity, run, busy }: ThreadPaneProps) {
     );
   }
 
-  function counter() {
-    setMode("propose");
-    window.requestAnimationFrame(() => {
-      document.querySelector<HTMLElement>("#composer select, #composer textarea")?.focus();
-    });
-  }
-
   return (
     <div className={styles.pane}>
-      <TurnBanner view={view} capacity={capacity} />
       {items.length === 0 ? (
-        <EmptyState message="No messages or proposals yet." />
+        <div className={styles.list}>
+          <EmptyState message="No messages yet." />
+        </div>
       ) : (
         <ol className={styles.list} ref={list} aria-label="Thread">
           {items.map((item) => (
@@ -128,34 +140,22 @@ export function ThreadPane({ view, capacity, run, busy }: ThreadPaneProps) {
               }
               tabIndex={-1}
             >
-              {item.kind === "message" ? (
-                <MessageItem message={item.message} own={isOwn(item.message.author, view)} />
-              ) : (
-                <ProposalCard
-                  view={view}
-                  capacity={capacity}
-                  proposal={item.proposal}
-                  busy={busy}
-                  onDecide={decide}
-                  onCounter={counter}
-                />
-              )}
+              <ThreadRow
+                item={item}
+                view={view}
+                capacity={capacity}
+                busy={busy}
+                onDecide={decide}
+              />
             </li>
           ))}
         </ol>
       )}
-      <p className="ds-visually-hidden" role="status">
-        {announcement}
-      </p>
-      <Composer
-        view={view}
-        capacity={capacity}
-        run={run}
-        busy={busy}
-        mode={mode}
-        onModeChange={setMode}
-        onSent={sent}
-      />
+      <div className="ds-visually-hidden" role="status">
+        <p>{turnSentence(view, capacity)}</p>
+        <p>{announcement}</p>
+      </div>
+      <Composer view={view} capacity={capacity} run={run} busy={busy} onSent={announce} />
     </div>
   );
 }

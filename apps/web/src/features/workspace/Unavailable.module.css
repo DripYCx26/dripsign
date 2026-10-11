@@ -9,3 +9,9 @@
 .unavailable > p {
   color: var(--ds-text-secondary);
 }
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+}

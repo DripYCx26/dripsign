@@ -1,7 +1,7 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, createPrivateKey, randomUUID, sign } from "node:crypto";
 import { afterAll, expect, it, vi } from "vitest";
-import { readSession } from "../auth/sessions.ts";
-import { closePool, getPool } from "../db.ts";
+import { issueSession, readRequestSession, readSession, signOut } from "../auth/sessions.ts";
+import { closePool, getPool, tx } from "../db.ts";
 import { acceptBridgeAssertion, verifyBridgeToken } from "./entry.ts";
 import { executedEventBody, signExecutedEvent } from "./event.ts";
 
@@ -43,6 +43,18 @@ const ENTRY = {
 };
 const tenantId = randomUUID();
 
+/** The golden token with another lifetime, re-signed with Dreach's fixture key (seed [7; 32]). */
+function withLifetime(seconds: number): string {
+  const [header = "", claims = ""] = BRIDGE_TOKEN.split(".");
+  const decoded = JSON.parse(Buffer.from(claims, "base64url").toString("utf8")) as object;
+  const edited = { ...decoded, exp: ISSUED_AT + seconds };
+  const body = `${header}.${Buffer.from(JSON.stringify(edited)).toString("base64url")}`;
+  const x = Buffer.from(BRIDGE_PUBLIC_KEY_HEX, "hex").toString("base64url");
+  const d = Buffer.alloc(32, 7).toString("base64url");
+  const key = createPrivateKey({ key: { kty: "OKP", crv: "Ed25519", d, x }, format: "jwk" });
+  return `${body}.${sign(null, Buffer.from(body), key).toString("base64url")}`;
+}
+
 // loadConfig is lazy and memoized per test file, so the host must be set before first use.
 vi.stubEnv(
   "DRIPSIGN_HOST",
@@ -78,6 +90,8 @@ it("accepts Dreach's golden bridge token once and refuses forged, expired or mis
   expect(verifyBridgeToken(BRIDGE_TOKEN, ENTRY, ISSUED_AT + 60)).toBeNull();
   const elsewhere = { ...ENTRY, audience: "https://other.example.test" };
   expect(verifyBridgeToken(BRIDGE_TOKEN, elsewhere, ISSUED_AT + 1)).toBeNull();
+  expect(verifyBridgeToken(withLifetime(59), ENTRY, ISSUED_AT + 1)).not.toBeNull();
+  expect(verifyBridgeToken(withLifetime(61), ENTRY, ISSUED_AT + 1)).toBeNull();
 
   await getPool().query("INSERT INTO dripsign.tenant (id, name) VALUES ($1, $2)", [
     tenantId,
@@ -98,6 +112,19 @@ it("accepts Dreach's golden bridge token once and refuses forged, expired or mis
     hasRecipientGrants: false,
     embed: true,
   });
+  // A same-site host frame may also send the first-party cookie; the bridge session acts.
+  const native = await tx((db) => issueSession(db, { email: "staff@example.test", embed: false }));
+  const tokens = { session: native.sessionToken, embed: issued.sessionToken };
+  expect(await readRequestSession(tokens)).toMatchObject({
+    cookie: "embed",
+    token: issued.sessionToken,
+  });
+  const nativeOnly = await readRequestSession({ session: native.sessionToken, embed: null });
+  expect(nativeOnly?.cookie).toBe("session");
+  expect(await readRequestSession({ session: issued.sessionToken, embed: null })).toBeNull();
+  // A dead bridge session fails closed; it never falls back to the first-party one.
+  await signOut(issued.sessionToken);
+  expect(await readRequestSession(tokens)).toBeNull();
   vi.setSystemTime((ISSUED_AT + 2) * 1_000);
   await expect(acceptBridgeAssertion(form, HOST_ORIGIN)).rejects.toMatchObject({
     code: "not_found",

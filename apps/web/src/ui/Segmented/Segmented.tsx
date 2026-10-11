@@ -10,6 +10,8 @@ type SegmentedProps<V extends string> = Readonly<{
   defaultValue?: V | undefined;
   onChange?: ((value: V) => void) | undefined;
   disabled?: boolean | undefined;
+  /** `sm` is the 28 px control of a toolbar (a 44 px target on a coarse pointer). */
+  size?: "md" | "sm" | undefined;
 }>;
 
 /**
@@ -26,11 +28,12 @@ export function Segmented<V extends string>({
   defaultValue,
   onChange,
   disabled = false,
+  size = "md",
 }: SegmentedProps<V>) {
   return (
     <fieldset className={styles.group} role="radiogroup" disabled={disabled}>
       <legend className={hideLabel ? "ds-visually-hidden" : styles.legend}>{label}</legend>
-      <span className={styles.segmented}>
+      <span className={styles.segmented} data-size={size}>
         {options.map((option) => (
           <label key={option.value} className={styles.option}>
             <input

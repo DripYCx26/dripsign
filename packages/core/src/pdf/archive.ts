@@ -225,7 +225,8 @@ export async function renderAuditRecord(evidence: ArchiveEvidence): Promise<Uint
   for (const signature of sorted) {
     const signer = evidence.signers.find((item) => item.recipientId === signature.recipientId);
     if (!signer) throw new DomainError("invalid", "A frozen signer is missing.");
-    write(`${signer.name} <${signer.email}>`, 12);
+    const domain = signer.email.slice(signer.email.lastIndexOf("@") + 1);
+    write(`${signer.name} <${signer.email[0] ?? ""}***@${domain}>`, 12);
     write(
       `Typed name: ${signature.typedName}\nEmail verified: ${new Date(signature.verifiedAt).toISOString()}\nSigned: ${new Date(signature.signedAt).toISOString()}\nSession: ${signature.sessionId}\nIP address: ${auditText(signature.ipAddress, font)}\nUser agent: ${auditText(signature.userAgent, font)}`,
       9,

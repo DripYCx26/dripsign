@@ -4,7 +4,7 @@ import { useRef } from "react";
 import type { RecipientView, RevisionView } from "@dripsign/core/types";
 import { PdfView } from "@/features/document/PdfView.tsx";
 import { Button, Checkbox } from "@/ui";
-import { StepActions, StepFrame, StepLede } from "./StepFrame.tsx";
+import { StepActions, StepFrame } from "./StepFrame.tsx";
 import styles from "./ReviewStep.module.css";
 
 type ReviewStepProps = Readonly<{
@@ -45,17 +45,7 @@ export function ReviewStep({
   }
 
   return (
-    <StepFrame title="Review the document" autoFocus={autoFocus}>
-      <StepLede>
-        Read the whole document before you sign. Your signature field is highlighted.
-      </StepLede>
-      {own !== undefined && (
-        <div>
-          <Button variant="secondary" onClick={goToField}>
-            Go to your signature field
-          </Button>
-        </div>
-      )}
+    <StepFrame title="Review the document" autoFocus={autoFocus} wide>
       <div ref={frame} className={styles.document}>
         {own !== undefined && (
           // Pages share a size, so a page fraction of the frame lands near the field.
@@ -68,9 +58,17 @@ export function ReviewStep({
         )}
         <PdfView
           src={src}
+          sha256={revision.sha256}
           fields={revision.signingFields}
           viewerRecipientId={viewerRecipientId}
           people={recipients}
+          actions={
+            own !== undefined && (
+              <Button variant="quiet" size="sm" onClick={goToField}>
+                Go to your signature field
+              </Button>
+            )
+          }
         />
       </div>
       <Checkbox label="I’ve reviewed this document." checked={reviewed} onChange={onReviewed} />

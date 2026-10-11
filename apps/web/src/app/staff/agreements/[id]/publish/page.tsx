@@ -4,7 +4,7 @@ import { uuidSchema } from "@dripsign/core/schema";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { PublishReview } from "@/features/document/PublishReview.tsx";
-import { PageHeader, ButtonLink } from "@/ui";
+import { BackButton } from "@/features/workspace/BackButton.tsx";
 import { requireStaff } from "@/server/session.ts";
 import styles from "./page.module.css";
 
@@ -24,15 +24,11 @@ export default async function PublishPage({ params }: Props) {
   const current = view.agreement.currentRevisionNumber;
   return (
     <div className={styles.page}>
-      <PageHeader
-        eyebrow={view.agreement.title}
-        title={`Publish revision ${String((current ?? 0) + 1)}`}
-        actions={
-          <ButtonLink variant="quiet" href={`/staff/agreements/${id}`}>
-            Back to the agreement
-          </ButtonLink>
-        }
-      />
+      <header className={styles.head}>
+        <BackButton label="Back to agreement" href={`/staff/agreements/${id}`} />
+        <h1>{`Publish revision ${String((current ?? 0) + 1)}`}</h1>
+        <p className={styles.title}>{view.agreement.title}</p>
+      </header>
       <PublishReview view={view} />
     </div>
   );

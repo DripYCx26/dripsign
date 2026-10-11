@@ -161,7 +161,8 @@ const envSchema = z.object({
   DRIPSIGN_ANTHROPIC_API_KEY: text,
   DRIPSIGN_AI_MODEL: z.string().min(1).default("claude-sonnet-5-5"),
   DRIPSIGN_AI_DAILY_LIMIT_USD: z.coerce.number().positive().max(10_000).default(10),
-  DRIPSIGN_JOBS_CONCURRENCY: z.coerce.number().int().min(1).max(64).default(4),
+  // The ten-connection pool reserves one connection for LISTEN and one for lease renewal.
+  DRIPSIGN_JOBS_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(4),
   DRIPSIGN_HOST: text,
   DRIPSIGN_HOST_EVENT_URL: httpsEndpoint
     .refine((value) => new URL(value).pathname === HOST_EVENT_PATH, `Must end ${HOST_EVENT_PATH}`)

@@ -9,6 +9,8 @@ type IconButtonProps = Readonly<{
   icon: ReactNode;
   variant?: Exclude<ButtonVariant, "link"> | undefined;
   size?: Exclude<ButtonSize, "lg"> | undefined;
+  /** `round` is the composer's send button: a pill-shaped 32 px circle. */
+  shape?: "square" | "round" | undefined;
   type?: "button" | "submit" | undefined;
   disabled?: boolean | undefined;
   onClick?: ((event: MouseEvent<HTMLButtonElement>) => void) | undefined;
@@ -20,6 +22,7 @@ export function IconButton({
   icon,
   variant = "quiet",
   size = "md",
+  shape = "square",
   type = "button",
   disabled = false,
   onClick,
@@ -30,6 +33,7 @@ export function IconButton({
       className={styles.iconButton}
       data-variant={variant}
       data-size={size}
+      data-shape={shape === "round" ? "round" : undefined}
       data-tone={variant === "danger" ? "stop" : undefined}
       aria-label={label}
       disabled={disabled}

@@ -2,3 +2,9 @@
   display: grid;
   gap: var(--ds-space-4);
 }
+
+.note {
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-lg);
+  line-height: var(--ds-leading-lg);
+}

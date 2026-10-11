@@ -1,13 +1,18 @@
 "use client";
 
 import { LIMITS } from "@dripsign/core/schema";
-import { Dropzone } from "@/ui";
+import { Dropzone, Segmented } from "@/ui";
 import { SectionEditor } from "@/features/document/SectionEditor.tsx";
 import type { EditableSection } from "@/features/document/sections.ts";
 import styles from "./NewAgreementForm.module.css";
 import { TemplatePicker } from "./TemplatePicker.tsx";
 import type { TemplateId } from "./templates.ts";
 import type { Mode } from "./validate.ts";
+
+const MODES = [
+  { value: "write", label: "Write terms" },
+  { value: "upload", label: "Upload PDF" },
+] as const;
 
 const BYTES_PER_MB = 1024 * 1024;
 
@@ -18,6 +23,7 @@ function describeFile(file: File): string {
 
 type TermsSectionProps = Readonly<{
   mode: Mode;
+  onMode: (next: Mode) => void;
   template: TemplateId;
   onTemplate: (next: TemplateId) => void;
   sections: readonly EditableSection[];
@@ -27,9 +33,10 @@ type TermsSectionProps = Readonly<{
   disabled: boolean;
 }>;
 
-/** The terms: written sections (with starter texts) or the PDF to upload. */
+/** The terms: choose to write sections (with starter texts) or upload a PDF, then give them. */
 export function TermsSection({
   mode,
+  onMode,
   template,
   onTemplate,
   sections,
@@ -38,24 +45,28 @@ export function TermsSection({
   onFile,
   disabled,
 }: TermsSectionProps) {
-  if (mode === "write") {
-    return (
-      <section className={styles.section} aria-labelledby="terms-heading">
-        <h2 id="terms-heading" className={styles.heading}>
-          Terms
-        </h2>
-        <TemplatePicker value={template} onChange={onTemplate} disabled={disabled} />
-        <SectionEditor sections={sections} onChange={onSections} disabled={disabled} />
-      </section>
-    );
-  }
   return (
-    <section className={styles.section} aria-labelledby="pdf-heading">
-      <h2 id="pdf-heading" className={styles.heading}>
-        PDF
-      </h2>
-      <Dropzone maxMb={LIMITS.pdfBytes / BYTES_PER_MB} disabled={disabled} onFile={onFile} />
-      {file !== null && <p className={styles.file}>{describeFile(file)}</p>}
-    </section>
+    <div className={styles.section}>
+      <Segmented
+        label="Terms source"
+        hideLabel
+        name="mode"
+        options={MODES}
+        value={mode}
+        onChange={onMode}
+        disabled={disabled}
+      />
+      {mode === "write" ? (
+        <>
+          <TemplatePicker value={template} onChange={onTemplate} disabled={disabled} />
+          <SectionEditor sections={sections} onChange={onSections} disabled={disabled} />
+        </>
+      ) : (
+        <>
+          <Dropzone maxMb={LIMITS.pdfBytes / BYTES_PER_MB} disabled={disabled} onFile={onFile} />
+          {file !== null && <p className={styles.file}>{describeFile(file)}</p>}
+        </>
+      )}
+    </div>
   );
 }

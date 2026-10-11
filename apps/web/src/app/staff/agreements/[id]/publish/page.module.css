@@ -1,9 +1,30 @@
-/* Two columns need more than the 880 px document column: the diff beside the PDF. */
 .page {
   display: grid;
   width: 100%;
+  max-width: var(--ds-layout-page);
   gap: var(--ds-space-6);
   margin-inline: auto;
-  max-width: calc(var(--ds-layout-list) + var(--ds-layout-document-max));
-  padding: var(--ds-space-8) var(--ds-space-4) var(--ds-space-14);
+  padding: var(--ds-space-8) var(--ds-space-6) var(--ds-space-14);
+}
+
+.head {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-1) var(--ds-space-3);
+}
+
+.title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ds-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 639px) {
+  .page {
+    padding-inline: var(--ds-space-4);
+  }
 }

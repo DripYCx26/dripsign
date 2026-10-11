@@ -27,6 +27,11 @@
   line-height: var(--ds-leading-sm);
 }
 
+.segmented[data-size="sm"] .face {
+  min-height: calc(var(--ds-size-control-sm) - var(--ds-space-half) * 2);
+  padding: 0 var(--ds-space-2);
+}
+
 .option {
   position: relative;
   display: inline-grid;

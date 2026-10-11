@@ -11,8 +11,29 @@
 
 .form {
   display: grid;
-  max-width: var(--ds-layout-sheet-narrow);
   gap: var(--ds-space-4);
+}
+
+.outcome {
+  grid-column: 1 / -1;
+}
+
+.outcome:empty {
+  display: none;
+}
+
+.save {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 768px) {
+  .form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .wide {
+    grid-column: 1 / -1;
+  }
 }
 
 .list {

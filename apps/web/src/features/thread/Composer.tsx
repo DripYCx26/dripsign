@@ -2,15 +2,17 @@
 
 import { LIMITS } from "@dripsign/core/schema";
 import type { AgreementView, Capacity } from "@dripsign/core/types";
-import type { SubmitEvent } from "react";
+import { useEffect } from "react";
 import type { RunCommand } from "@/features/workspace/commands.ts";
-import { Button, Notice, Segmented, TextArea } from "@/ui";
+import { ArrowUp, Button, IconButton, Pencil } from "@/ui";
 import styles from "./Composer.module.css";
-import { counterTarget } from "./model.ts";
-import { ProposeForm } from "./ProposeForm.tsx";
-import { useStoredText } from "./useStoredText.ts";
+import { sendOnEnter } from "./enterToSend.ts";
+import { cancelProposal, startProposal, useProposalIntent, type ProposalIntent } from "./intent.ts";
+import { counterTarget, MESSAGE_FIELD_ID, otherSideLabel, textScope } from "./model.ts";
+import { ProposalComposer } from "./ProposalComposer.tsx";
+import { useAutosize } from "./useAutosize.ts";
+import { useStoredText, type TextScope } from "./useStoredText.ts";
 
-export type ComposerMode = "message" | "propose";
 export type Sent = "message" | "proposal";
 
 type ComposerProps = Readonly<{
@@ -18,107 +20,150 @@ type ComposerProps = Readonly<{
   capacity: Capacity;
   run: RunCommand;
   busy: boolean;
-  mode: ComposerMode;
-  onModeChange: (mode: ComposerMode) => void;
   onSent: (sent: Sent) => void;
 }>;
 
-function MessageForm({
-  agreementId,
-  run,
-  busy,
-  onSent,
-}: Readonly<{ agreementId: string; run: RunCommand; busy: boolean; onSent: () => void }>) {
-  const [stored, setStored] = useStoredText(agreementId, "message");
-  const text = stored ?? "";
+type MessageComposerProps = Readonly<{
+  view: AgreementView;
+  scope: TextScope;
+  run: RunCommand;
+  busy: boolean;
+  canPropose: boolean;
+  onSent: () => void;
+}>;
 
-  async function submit(event: SubmitEvent) {
-    event.preventDefault();
+function MessageComposer({ view, scope, run, busy, canPropose, onSent }: MessageComposerProps) {
+  const [stored, setStored] = useStoredText(scope, "message");
+  const text = stored ?? "";
+  const field = useAutosize(text);
+  const ready = text.trim() !== "" && !busy;
+
+  async function send() {
+    if (!ready) return;
     if (await run({ kind: "message", body: text }, "message")) {
       setStored(null);
       onSent();
+      field.current?.focus();
     }
   }
 
   return (
-    <form className={styles.form} onSubmit={(event) => void submit(event)}>
-      <TextArea
-        label="Message"
-        name="message"
+    <form
+      className={styles.box}
+      onSubmit={(event) => {
+        event.preventDefault();
+        void send();
+      }}
+    >
+      <textarea
+        id={MESSAGE_FIELD_ID}
+        ref={field}
+        className={styles.field}
+        rows={1}
+        aria-label="Message"
+        placeholder={`Message ${otherSideLabel(view, scope.capacity)}`}
         maxLength={LIMITS.messageText}
-        hint="Messages don't change the document."
         value={text}
-        onChange={setStored}
+        onChange={(event) => {
+          setStored(event.target.value);
+        }}
+        onKeyDown={(event) => {
+          sendOnEnter(event, () => void send());
+        }}
       />
-      <Button variant="ink" type="submit" disabled={text.trim() === "" || busy} loading={busy}>
-        Send message
-      </Button>
+      <div className={styles.foot}>
+        {canPropose ? (
+          <Button
+            variant="quiet"
+            size="sm"
+            onClick={() => {
+              startProposal({});
+            }}
+          >
+            <Pencil />
+            Propose a change
+          </Button>
+        ) : (
+          <span />
+        )}
+        <IconButton
+          variant="ink"
+          shape="round"
+          type="submit"
+          label="Send"
+          icon={<ArrowUp />}
+          disabled={!ready}
+        />
+      </div>
     </form>
   );
 }
 
-/** What stands where the composer would be when nothing can be sent. */
-function Closed({ view }: Readonly<{ view: AgreementView }>) {
-  const text =
-    view.agreement.status === "draft"
-      ? "The thread opens when you publish the first revision."
-      : "The thread is read-only.";
-  return <Notice tone="info">{text}</Notice>;
+/**
+ * Whether the intent still describes something the viewer may do: countering the other side's
+ * open proposal (a section edit from the document then counters it too), or a fresh proposal
+ * when none is open.
+ */
+function intentStands(
+  intent: ProposalIntent,
+  target: ReturnType<typeof counterTarget>,
+  canPropose: boolean,
+): boolean {
+  if (target !== null) return intent.counterOf === undefined || intent.counterOf === target.id;
+  return intent.counterOf === undefined && canPropose;
 }
 
 /**
- * The composer: "Message" or "Propose change", whichever the policy allows. The text of each lives
- * in session storage per agreement, so a refresh or a conflict reload never loses it; it is cleared
- * only once the command succeeded.
+ * The composer, pinned under the thread. A message by default; proposing replaces it while an
+ * intent (from "Propose a change", a document section or a Counter) stands. Text is kept in
+ * session storage and cleared only once the command succeeded.
  */
-export function Composer({ view, capacity, run, busy, mode, onModeChange, onSent }: ComposerProps) {
+export function Composer({ view, capacity, run, busy, onSent }: ComposerProps) {
+  const scope = textScope(view, capacity);
+  const intent = useProposalIntent();
   const target = counterTarget(view, capacity);
   const canMessage = view.allowedActions.includes("message");
-  const canPropose = view.allowedActions.includes("propose") || target !== null;
-  if (!canMessage && !canPropose) return <Closed view={view} />;
-  const active: ComposerMode =
-    canPropose && (mode === "propose" || !canMessage) ? "propose" : "message";
+  const canPropose = view.allowedActions.includes("propose");
+  const proposing = intent !== null && intentStands(intent, target, canPropose);
 
-  return (
-    <div className={styles.composer} id="composer">
-      {canMessage && canPropose && (
-        <Segmented
-          label="What to send"
-          hideLabel
-          name="composer-mode"
-          options={[
-            { value: "message", label: "Message" },
-            { value: "propose", label: "Propose change" },
-          ]}
-          value={active}
-          onChange={onModeChange}
-        />
-      )}
-      {active === "message" ? (
-        <MessageForm
-          agreementId={view.agreement.id}
+  // An intent the policy no longer allows (the other side proposed meanwhile) is dropped, not kept.
+  useEffect(() => {
+    if (intent !== null && !proposing) cancelProposal();
+  }, [intent, proposing]);
+
+  if (proposing) {
+    return (
+      <div className={styles.composer} id="composer">
+        <ProposalComposer
+          view={view}
+          scope={scope}
+          intent={intent}
+          target={target}
           run={run}
           busy={busy}
           onSent={() => {
-            onSent("message");
+            onSent("proposal");
           }}
         />
-      ) : (
-        <>
-          {target !== null && (
-            <p className={styles.note}>{`Answering ${target.author.label}'s open proposal.`}</p>
-          )}
-          <ProposeForm
-            view={view}
-            run={run}
-            busy={busy}
-            target={target}
-            onSent={() => {
-              onSent("proposal");
-            }}
-          />
-        </>
-      )}
+      </div>
+    );
+  }
+  if (!canMessage && !canPropose) {
+    if (view.agreement.status !== "draft") return null;
+    return <p className={styles.closed}>Chat opens after you publish.</p>;
+  }
+  return (
+    <div className={styles.composer} id="composer">
+      <MessageComposer
+        view={view}
+        scope={scope}
+        run={run}
+        busy={busy}
+        canPropose={canPropose}
+        onSent={() => {
+          onSent("message");
+        }}
+      />
     </div>
   );
 }

@@ -159,7 +159,7 @@ export function inboxStanding(item: InboxItem): Standing<InboxGroup> {
       }
       return item.pendingProposalBy === "recipient"
         ? { group: "waiting", phrase: `Waiting for ${item.orgName} to respond` }
-        : { group: "waiting", phrase: "No open proposal" };
+        : { group: "waiting", phrase: `Waiting on ${item.orgName}` };
   }
 }
 

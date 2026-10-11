@@ -1,12 +1,12 @@
-/* A proposal card: a hairline card, an attention edge while it waits on someone. */
+/* A proposal card: raised, hairline, an attention edge while it waits on someone. */
 
 .card {
   display: grid;
   gap: var(--ds-space-3);
   padding: var(--ds-space-4);
   border: var(--ds-hairline);
-  border-radius: var(--ds-radius-card);
-  background: var(--ds-surface);
+  border-radius: var(--ds-radius-panel);
+  background: var(--ds-surface-raised);
 }
 
 .card[data-state="pending"],
@@ -14,20 +14,16 @@
   border-inline-start: var(--ds-space-1) solid var(--ds-attention);
 }
 
-.card[data-state="stale"] {
-  background: var(--ds-surface-subtle);
-}
-
 .head {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: center;
   gap: var(--ds-space-2);
 }
 
 .title {
   min-width: 0;
+  flex: 1 1 12ch;
   font-weight: var(--ds-weight-semibold);
   overflow-wrap: anywhere;
 }
@@ -49,41 +45,39 @@
   margin-block-end: var(--ds-space-3);
 }
 
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+}
+
 .time {
   color: var(--ds-text-tertiary);
   font-size: var(--ds-text-xs);
   line-height: var(--ds-leading-xs);
 }
 
-.decisions {
-  display: grid;
-  gap: var(--ds-space-2);
-}
-
 .buttons {
   display: flex;
   flex-wrap: wrap;
   gap: var(--ds-space-2);
+  margin-inline-start: auto;
 }
 
-.note {
-  color: var(--ds-text-secondary);
-  font-size: var(--ds-text-sm);
-  line-height: var(--ds-leading-sm);
-}
-
+/* A countered proposal folds into one indented row that opens to the card it was. */
 .superseded {
   display: grid;
   gap: var(--ds-space-2);
-  padding: var(--ds-space-2) var(--ds-space-3);
-  border-radius: var(--ds-radius-control);
-  background: var(--ds-surface-subtle);
+  margin-inline-start: var(--ds-space-4);
 }
 
 .summary {
   display: flex;
-  justify-content: space-between;
-  gap: var(--ds-space-3);
+  min-height: var(--ds-size-control-sm);
+  align-items: center;
+  gap: var(--ds-space-2);
 }
 
 .show {

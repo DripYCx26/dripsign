@@ -3,7 +3,7 @@ import { expect, it } from "vitest";
 import { getPool } from "../db.ts";
 import { SIGNING_CONSENT } from "../schema.ts";
 
-it("refuses to edit a signature, sign without artifacts, or skip finalizing", async () => {
+it("refuses edited or out-of-order signatures, skipped finalizing, or signing without artifacts", async () => {
   const db = getPool();
   const [tenant, agreement, revision, recipient, round] = [1, 2, 3, 4, 5].map(() => randomUUID());
   const sha256 = "a".repeat(64);
@@ -52,14 +52,17 @@ it("refuses to edit a signature, sign without artifacts, or skip finalizing", as
      VALUES ($1, $2, $3, $4, 'Signer', 'signer@evidence.test')`,
     [tenant, agreement, round, recipient],
   );
-  await db.query(
-    `INSERT INTO dripsign.signature (tenant_id, agreement_id, round_id, recipient_id, typed_name,
-       consent_version, consent_text, consent_hash, document_sha256, session_id, verified_at)
-     SELECT tenant_id, agreement_id, id, $3, 'Signer', consent_version, consent_text,
-       consent_hash, document_sha256, gen_random_uuid(), now()
-     FROM dripsign.signing_round WHERE tenant_id = $1 AND id = $2`,
-    [tenant, round, recipient],
-  );
+  const sign = (verifiedAfterNow: string) =>
+    db.query(
+      `INSERT INTO dripsign.signature (tenant_id, agreement_id, round_id, recipient_id, typed_name,
+         consent_version, consent_text, consent_hash, document_sha256, session_id, verified_at)
+       SELECT tenant_id, agreement_id, id, $3, 'Signer', consent_version, consent_text,
+         consent_hash, document_sha256, gen_random_uuid(), now() + $4::interval
+       FROM dripsign.signing_round WHERE tenant_id = $1 AND id = $2`,
+      [tenant, round, recipient, verifiedAfterNow],
+    );
+  await expect(sign("1 minute")).rejects.toThrow(/verified_before_signed/u);
+  await sign("0 seconds");
 
   await expect(
     db.query(
@@ -75,6 +78,14 @@ it("refuses to edit a signature, sign without artifacts, or skip finalizing", as
       [tenant, round],
     ),
   ).rejects.toThrow(/Immutable evidence cannot be changed: signature/u);
+  await expect(
+    db.query(
+      `UPDATE dripsign.signing_round
+       SET status = 'finalizing', finalizing_at = now() - interval '1 minute'
+       WHERE tenant_id = $1 AND id = $2`,
+      [tenant, round],
+    ),
+  ).rejects.toThrow(/Every signature must precede finalizing/u);
   await db.query(
     `UPDATE dripsign.signing_round SET status = 'finalizing', finalizing_at = now()
      WHERE tenant_id = $1 AND id = $2`,

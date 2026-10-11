@@ -1,8 +1,7 @@
 .hash {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: var(--ds-space-2) var(--ds-space-3);
+  gap: var(--ds-space-1) var(--ds-space-2);
   font-size: var(--ds-text-sm);
 }
 

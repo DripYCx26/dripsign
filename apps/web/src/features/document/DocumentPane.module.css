@@ -1,10 +1,16 @@
 .pane {
   display: grid;
-  gap: var(--ds-space-4);
+  align-content: start;
+  gap: var(--ds-space-3);
   min-width: 0;
 }
 
-.stack {
+/* The sheet and the PDF fill the pane up to the width a reader can still follow. */
+.body {
   display: grid;
   gap: var(--ds-space-4);
+  width: 100%;
+  max-width: var(--ds-layout-sheet-read);
+  min-width: 0;
+  margin-inline: auto;
 }

@@ -46,6 +46,7 @@ export function ListControls({ q, status }: ListState) {
       <div className={styles.search}>
         <TextField
           label="Search"
+          hideLabel
           name="q"
           type="search"
           autoComplete="off"

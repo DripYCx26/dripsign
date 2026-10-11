@@ -13,6 +13,45 @@
   height: 100%;
 }
 
+/* pdf.js lays the text runs out in CSS pixels from --total-scale-factor (set by PdfPage) and sizes
+   this box itself. The runs are transparent: they exist to select, search and read aloud. The
+   rules are pdf.js's own text layer, kept to the ones its output needs. */
+.text {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: clip;
+  color-scheme: only light;
+  forced-color-adjust: none;
+  line-height: 1;
+  text-align: initial;
+  transform-origin: 0 0;
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+
+.text > :is(span, br) {
+  --font-height: 0;
+  --scale-x: 1;
+  --rotate: 0deg;
+  position: absolute;
+  color: transparent;
+  cursor: text;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+  transform-origin: 0 0;
+  user-select: text;
+  white-space: pre;
+}
+
+.text ::selection {
+  background: color-mix(in srgb, var(--ds-accent), transparent 50%);
+  color: transparent;
+}
+
 .failed {
   position: absolute;
   inset: auto var(--ds-space-3) var(--ds-space-3);

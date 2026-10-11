@@ -1,5 +1,5 @@
 import type { DocumentSource } from "@dripsign/core/schema";
-import { Pencil, Pill, Plus, Trash2 } from "@/ui";
+import { ArrowUpDown, Pencil, Pill, Plus, Trash2 } from "@/ui";
 import { diffSources, type SectionChange, type SectionDiffItem, type WordOp } from "./diff.ts";
 import styles from "./SectionDiff.module.css";
 
@@ -35,15 +35,25 @@ function Ops({ ops }: Readonly<{ ops: readonly WordOp[] }>) {
   });
 }
 
+/** Unchanged text in its old place: nothing to show, so it folds into the disclosure. */
+const isQuiet = (item: SectionDiffItem) => item.change === "unchanged" && !item.moved;
+
 function ChangedSection({ item }: Readonly<{ item: SectionDiffItem }>) {
-  if (item.change === "unchanged") return null;
-  const { word, tone, icon } = CHANGE[item.change];
+  if (isQuiet(item)) return null;
+  const kind = item.change === "unchanged" ? null : CHANGE[item.change];
   return (
     <li className={styles.section}>
       <div className={styles.head}>
-        <Pill tone={tone} icon={ICONS[icon]}>
-          {word}
-        </Pill>
+        {kind !== null && (
+          <Pill tone={kind.tone} icon={ICONS[kind.icon]}>
+            {kind.word}
+          </Pill>
+        )}
+        {item.moved && (
+          <Pill tone="info" icon={<ArrowUpDown />}>
+            Moved
+          </Pill>
+        )}
         <h3 className={styles.heading}>
           <Ops ops={item.heading} />
         </h3>
@@ -60,7 +70,8 @@ function ChangedSection({ item }: Readonly<{ item: SectionDiffItem }>) {
 
 /**
  * What changed between two versions of the terms: sections by id, then the words inside a changed
- * section. Unchanged sections fold into one disclosure. A null `before` is a first revision.
+ * section. Sections that neither changed nor moved fold into one disclosure. A null `before` is a
+ * first revision.
  */
 export function SectionDiff({
   before,
@@ -68,7 +79,7 @@ export function SectionDiff({
 }: Readonly<{ before: DocumentSource | null; after: DocumentSource | null }>) {
   if (after === null) return <p className={styles.empty}>There are no written terms to compare.</p>;
   const diff = diffSources(before, after);
-  const unchanged = diff.sections.filter((item) => item.change === "unchanged");
+  const unchanged = diff.sections.filter(isQuiet);
   const changed = diff.sections.length - unchanged.length;
   if (changed === 0 && diff.title === null) {
     return <p className={styles.empty}>No changes to the terms.</p>;

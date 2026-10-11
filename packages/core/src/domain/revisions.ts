@@ -17,7 +17,7 @@ import type {
 } from "../schema.ts";
 import { liveRecipients, markInvited, notify } from "./notify.ts";
 import { canonicalSha256 } from "./receipts.ts";
-import { AGREEMENT_COLUMNS, conflict, withinTx } from "./state.ts";
+import { AGREEMENT_COLUMNS, conflict, liveSigners, withinTx } from "./state.ts";
 import type { AgreementRow, CommandContext, LiveSigner } from "./state.ts";
 
 /** What a `pdf_prepare` commit must still match: the job payload carries the same pair. */
@@ -50,11 +50,21 @@ export interface FailedPreparation {
 const PDF_MAGIC = "%PDF-";
 const PREPARATION_ERROR_LENGTH = 500;
 
+/** A draft with no terms, PDF or signers yet. */
+export const EMPTY_DRAFT: Draft = {
+  source: null,
+  upload: null,
+  document: null,
+  signingFields: [],
+  signerIds: [],
+  preparation: { status: "empty", error: null, inputSha256: null, signerSetHash: null },
+};
+
 export function signerSetHash(signers: readonly LiveSigner[]): string {
   return canonicalSha256(signers.map(({ id, name, email }) => ({ id, name, email })));
 }
 
-export interface DraftInput {
+interface DraftInput {
   /** The renderer prints the agreement title, so it is part of the prepared input. */
   readonly title: string;
   readonly content: DraftContent;
@@ -65,7 +75,7 @@ export interface DraftInput {
  * The draft after a title, content or signer change, and the fence to enqueue (null when nothing
  * needs preparing). An unchanged fence that is ready or preparing keeps the prepared document.
  */
-export function nextDraft(
+function nextDraft(
   current: Draft | null,
   input: DraftInput,
 ): { readonly draft: Draft; readonly fence: PreparationFence | null } {
@@ -75,18 +85,7 @@ export function nextDraft(
     content.source === null && content.upload === null
       ? null
       : canonicalSha256({ title, source: content.source, upload: content.upload?.sha256 ?? null });
-  if (inputSha256 === null) {
-    const preparation = {
-      status: "empty",
-      error: null,
-      inputSha256: null,
-      signerSetHash: null,
-    } as const;
-    return {
-      draft: { ...content, document: null, signingFields: [], signerIds, preparation },
-      fence: null,
-    };
-  }
+  if (inputSha256 === null) return { draft: { ...EMPTY_DRAFT, signerIds }, fence: null };
   const fence = { inputSha256, signerSetHash: signerSetHash(signers) };
   const prior = current?.preparation;
   const live: readonly PreparationStatus[] = ["ready", "preparing"];
@@ -99,13 +98,10 @@ export function nextDraft(
     return { draft: { ...current, ...content }, fence: null };
   }
   const preparation = { status: "preparing", error: null, ...fence } as const;
-  return {
-    draft: { ...content, document: null, signingFields: [], signerIds, preparation },
-    fence,
-  };
+  return { draft: { ...EMPTY_DRAFT, ...content, signerIds, preparation }, fence };
 }
 
-export async function enqueuePreparation(
+async function enqueuePreparation(
   db: Db,
   agreement: { readonly tenantId: string; readonly id: string },
   fence: PreparationFence,
@@ -153,21 +149,25 @@ export async function stageDraft(
   if (fence !== null) await enqueuePreparation(db, agreement, fence);
 }
 
-/** Required signers are part of the prepared PDF: a signer change re-prepares and needs publishing. */
-export function restageForSigners(
-  db: Db,
-  agreement: AgreementRow,
-  signers: readonly LiveSigner[],
-): Promise<void> {
+/**
+ * Required signers are part of the prepared PDF: after a signer change in this transaction, the
+ * draft re-prepares for the live signers and needs publishing.
+ */
+export async function restageForSigners(db: Db, agreement: AgreementRow): Promise<void> {
   const { source, upload } = agreement.draft;
-  return stageDraft(db, agreement, { content: { source, upload }, signers, dirty: true });
+  const signers = await liveSigners(db, agreement.tenantId, agreement.id);
+  await stageDraft(db, agreement, { content: { source, upload }, signers, dirty: true });
 }
 
+/** New terms replace the draft's content; a title-only save keeps its terms or uploaded PDF. */
 export async function saveDraft(
   ctx: CommandContext,
   command: CommandOf<"save_draft">,
 ): Promise<void> {
   const { db, agreement } = ctx;
+  const { source, upload } = agreement.draft;
+  const content =
+    command.source === undefined ? { source, upload } : { source: command.source, upload: null };
   const title = command.title ?? agreement.title;
   if (title !== agreement.title) {
     await db.query("UPDATE dripsign.agreement SET title = $3 WHERE tenant_id = $1 AND id = $2", [
@@ -176,12 +176,7 @@ export async function saveDraft(
       title,
     ]);
   }
-  await stageDraft(db, agreement, {
-    title,
-    content: { source: command.source, upload: null },
-    signers: ctx.state.signers,
-    dirty: true,
-  });
+  await stageDraft(db, agreement, { title, content, signers: ctx.state.signers, dirty: true });
 }
 
 export function retryPreparation(ctx: CommandContext): Promise<void> {
@@ -212,14 +207,13 @@ export function stageUpload(ctx: CommandContext, upload: StoredObject): Promise<
 /** Creates the immutable revision the staff member reviewed, freezing the live required signers. */
 export async function publish(ctx: CommandContext, command: CommandOf<"publish">): Promise<void> {
   const { db, agreement, state, actor } = ctx;
-  const { document, signerIds } = agreement.draft;
+  const { document, source, upload, signingFields, preparation } = agreement.draft;
   if (document?.sha256 !== command.reviewedSha256) {
     throw conflict("The draft changed after you reviewed it. Review it again before publishing.");
   }
-  const liveIds = state.signers.map((signer) => signer.id);
-  if (liveIds.join() !== signerIds.join()) throw conflict();
+  // The reviewed PDF was prepared for exactly the live signers, in the one signer order.
+  if (signerSetHash(state.signers) !== preparation.signerSetHash) throw conflict();
   const revisionId = randomUUID();
-  const { source, upload, signingFields } = agreement.draft;
   await db.query(
     `INSERT INTO dripsign.revision (
        tenant_id, agreement_id, id, number, document_sha256, document_bytes, page_count,
@@ -237,7 +231,7 @@ export async function publish(ctx: CommandContext, command: CommandOf<"publish">
       upload?.sha256 ?? null,
       source === null ? null : JSON.stringify(source),
       JSON.stringify(signingFields),
-      liveIds,
+      state.signers.map((signer) => signer.id),
       actor.email,
     ],
   );

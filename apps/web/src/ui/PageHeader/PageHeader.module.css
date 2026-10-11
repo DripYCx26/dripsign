@@ -1,24 +1,12 @@
-/* The page head: the eyebrow and title at the start, the actions at the end, wrapping under the
+/* The page head: the title at the start, the actions at the end, wrapping under the
    title on a narrow screen. The h1 takes the global display heading style. */
 
 .header {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: var(--ds-space-3) var(--ds-space-4);
-}
-
-.text {
-  display: grid;
-  min-width: 0;
-  gap: var(--ds-space-1);
-}
-
-.eyebrow {
-  color: var(--ds-text-secondary);
-  font-size: var(--ds-text-sm);
-  line-height: var(--ds-leading-sm);
 }
 
 .actions {

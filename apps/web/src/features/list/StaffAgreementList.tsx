@@ -64,7 +64,7 @@ export function StaffAgreementList({ initial, q, status }: Props) {
       <EmptyState message="Nothing matches these filters." />
     ) : (
       <EmptyState
-        message="No agreements yet. Create one to start a thread with your recipients."
+        message="No agreements yet."
         action={
           <ButtonLink variant="ink" href="/staff/new">
             New agreement

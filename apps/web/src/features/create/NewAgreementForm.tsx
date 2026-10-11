@@ -4,7 +4,7 @@ import { LIMITS } from "@dripsign/core/schema";
 import { useEffect, useId, useRef, useState } from "react";
 import { emptySection, type EditableSection } from "@/features/document/sections.ts";
 import { useUnloadGuard } from "@/features/document/useUnloadGuard.ts";
-import { Segmented, TextField } from "@/ui";
+import { TextField } from "@/ui";
 import styles from "./NewAgreementForm.module.css";
 import { emptyRow, type RecipientRow, type RowErrors } from "./recipients.ts";
 import { RecipientRows } from "./RecipientRows.tsx";
@@ -14,11 +14,6 @@ import { TermsSection } from "./TermsSection.tsx";
 import { useCreateAgreement } from "./useCreateAgreement.ts";
 import { hasContent, type FormValues, type Mode } from "./validate.ts";
 
-const MODES = [
-  { value: "write", label: "Write terms" },
-  { value: "upload", label: "Upload PDF" },
-] as const;
-
 // Ids come from useId: random ones differ between the server render and hydration.
 const startSections = (id: string): readonly EditableSection[] => [emptySection(`section-${id}`)];
 const startRows = (id: string): readonly RecipientRow[] => [emptyRow(`row-${id}`)];
@@ -26,7 +21,8 @@ const startRows = (id: string): readonly RecipientRow[] => [emptyRow(`row-${id}`
 const NO_ROW_ERRORS: ReadonlyMap<string, RowErrors> = new Map();
 
 /**
- * The create form: a title, the terms written here or as a PDF, and the recipients. Submitting is
+ * The create form: the terms (title, written sections or a PDF) beside the recipients and the
+ * submit button. Submitting is
  * `useCreateAgreement`'s; once the draft exists the form locks so a retry cannot send different
  * details under the same receipt key.
  */
@@ -61,50 +57,46 @@ export function NewAgreementForm() {
         void submit(values);
       }}
     >
-      <TextField
-        label="Title"
-        name="title"
-        value={title}
-        maxLength={LIMITS.title}
-        disabled={locked}
-        error={errors?.title}
-        onChange={setTitle}
-      />
-      <Segmented
-        label="Terms source"
-        hideLabel
-        name="mode"
-        options={MODES}
-        value={mode}
-        onChange={setMode}
-        disabled={locked}
-      />
-      <TermsSection
-        mode={mode}
-        template={template}
-        onTemplate={(next) => {
-          setTemplate(next);
-          setSections(templateSections(next));
-          if (title.trim() === "") setTitle(templateTitle(next));
-        }}
-        sections={sections}
-        onSections={setSections}
-        file={file}
-        onFile={setFile}
-        disabled={locked}
-      />
-      {errors?.terms !== undefined && (
-        <p className={styles.error} role="alert">
-          {errors.terms}
-        </p>
-      )}
-      <RecipientRows
-        rows={rows}
-        onChange={setRows}
-        errors={errors?.rows ?? NO_ROW_ERRORS}
-        disabled={locked}
-      />
-      <SubmitBar phase={phase} problem={problem} createdId={createdId} />
+      <div className={styles.main}>
+        <TextField
+          label="Title"
+          name="title"
+          value={title}
+          maxLength={LIMITS.title}
+          disabled={locked}
+          error={errors?.title}
+          onChange={setTitle}
+        />
+        <TermsSection
+          mode={mode}
+          onMode={setMode}
+          template={template}
+          onTemplate={(next) => {
+            setTemplate(next);
+            setSections(templateSections(next));
+            if (title.trim() === "") setTitle(templateTitle(next));
+          }}
+          sections={sections}
+          onSections={setSections}
+          file={file}
+          onFile={setFile}
+          disabled={locked}
+        />
+        {errors?.terms !== undefined && (
+          <p className={styles.error} role="alert">
+            {errors.terms}
+          </p>
+        )}
+      </div>
+      <div className={styles.side}>
+        <RecipientRows
+          rows={rows}
+          onChange={setRows}
+          errors={errors?.rows ?? NO_ROW_ERRORS}
+          disabled={locked}
+        />
+        <SubmitBar phase={phase} problem={problem} createdId={createdId} />
+      </div>
     </form>
   );
 }

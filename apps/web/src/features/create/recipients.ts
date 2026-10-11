@@ -1,5 +1,4 @@
 import { emailSchema, personNameSchema } from "@dripsign/core/schema";
-import { randomId } from "../document/ids.ts";
 
 export interface RecipientRow {
   readonly key: string;
@@ -15,8 +14,8 @@ export interface RowErrors {
 
 export const DUPLICATE_EMAIL = "Each recipient needs a different email address.";
 
-/** A blank recipient row; `key` lets server-rendered initial state be deterministic. */
-export function emptyRow(key: string = randomId()): RecipientRow {
+/** A blank recipient row. The key is the caller's: never a random one while rendering, which would differ on hydration. */
+export function emptyRow(key: string): RecipientRow {
   return { key, name: "", email: "", isSigner: true };
 }
 

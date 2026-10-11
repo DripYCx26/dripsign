@@ -11,6 +11,8 @@ import type { AiSuggestionResult, DocumentSource } from "../schema.ts";
 
 const RESPONSE_LIMIT = 2 * 1024 * 1024;
 const MAX_OUTPUT_TOKENS = 8_000;
+// Uncached, non-batch rates in microdollars per token. An unpriced model must never call out.
+const MODEL_PRICES = new Map([["claude-sonnet-5-5", { input: 2, output: 10 }]]);
 const responseSchema = z.object({
   stop_reason: z.enum(["tool_use", "end_turn"]),
   usage: z.object({
@@ -42,6 +44,8 @@ export async function suggestEdits(
 ): Promise<AiSuggestionResult & { costMicros: number }> {
   const config = loadConfig().ai;
   if (!config) throw new DomainError("unavailable", "The assistant is disabled.");
+  const price = MODEL_PRICES.get(config.model);
+  if (!price) throw new DomainError("unavailable", "The assistant model has no configured price.");
   const source = documentSourceSchema.parse(input.source);
   const instruction = aiInstructionSchema.parse(input.instruction);
   const proposalText =
@@ -94,8 +98,8 @@ export async function suggestEdits(
     block.type === "tool_use"
       ? block.input
       : aiSuggestionResultSchema.parse(JSON.parse(block.text) as unknown);
-  // Preserve the existing Sonnet 5.5 uncached rates. No cache or batch is requested.
-  const costMicros = parsed.usage.input_tokens * 2 + parsed.usage.output_tokens * 10;
+  const costMicros =
+    parsed.usage.input_tokens * price.input + parsed.usage.output_tokens * price.output;
   if (!Number.isSafeInteger(costMicros)) throw new Error("AI usage is invalid");
   return { ...result, costMicros };
 }

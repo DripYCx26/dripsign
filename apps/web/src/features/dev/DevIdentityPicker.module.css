@@ -5,6 +5,7 @@
 
 .cards {
   display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr));
   gap: var(--ds-space-3);
   margin: 0;
   padding: 0;

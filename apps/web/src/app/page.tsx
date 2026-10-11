@@ -7,7 +7,7 @@ import { AppShell } from "@/features/shell/AppShell.tsx";
 import { PageContainer } from "@/features/shell/PageContainer.tsx";
 import { PageHeader, SkeletonRows } from "@/ui";
 
-export const metadata: Metadata = { title: "Your agreements" };
+export const metadata: Metadata = { title: "Agreements" };
 
 export default async function InboxPage() {
   const { session, actor } = await requireInbox();
@@ -16,7 +16,7 @@ export default async function InboxPage() {
   return (
     <AppShell session={session} home="recipient">
       <PageContainer>
-        <PageHeader title="Your agreements" />
+        <PageHeader title="Agreements" />
         <Suspense fallback={<SkeletonRows />}>
           <InboxList actor={actor} />
         </Suspense>

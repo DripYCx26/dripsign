@@ -23,6 +23,8 @@
   --ds-leading-md: 20px;
   --ds-text-lg: 16px;
   --ds-leading-lg: 24px;
+  --ds-text-read: 17px;
+  --ds-leading-read: 26px;
   --ds-text-xl: 20px;
   --ds-leading-xl: 28px;
 
@@ -83,17 +85,18 @@
 
   /* Layout: the rail, the list pane, the reading width, the header and the narrow-screen drawer;
      the document column, the focused signing flow, and the development banner. */
-  --ds-layout-rail: 216px;
-  --ds-layout-rail-collapsed: 56px;
-  --ds-layout-list: 400px;
+  /* The workspace thread rail: wide enough for a real chat, never wider than a third. */
+  --ds-layout-rail: clamp(400px, 33vw, 560px);
+  --ds-layout-page: 1280px;
+  --ds-layout-doc-header: 44px;
+  --ds-layout-sign: 960px;
+  --ds-layout-sheet-read: 1200px;
   --ds-layout-sheet-max: 760px;
   --ds-layout-sheet-narrow: 440px;
   --ds-layout-reading: 720px;
   --ds-layout-entry: 400px;
   --ds-layout-header: 56px;
   --ds-layout-drawer: 640px;
-  --ds-layout-document-max: 880px;
-  --ds-layout-flow: 640px;
   --ds-layout-dev-bar: 32px;
 
   /* Motion that explains: a press, a control changing, a panel arriving, work in progress. */

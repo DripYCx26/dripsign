@@ -2,7 +2,7 @@
 
 import { LIMITS } from "@dripsign/core/schema";
 import { useEffect, useRef, useState } from "react";
-import { Button, Plus, TextArea, TextField } from "@/ui";
+import { ArrowUp, Button, ChevronDown, IconButton, Plus, TextArea, TextField, X } from "@/ui";
 import { emptySection, type EditableSection } from "./sections.ts";
 import styles from "./SectionEditor.module.css";
 
@@ -37,7 +37,7 @@ type SectionFieldsProps = Readonly<{
   onRemove: () => void;
 }>;
 
-/** One section: its heading and text, and the buttons that move or remove it. */
+/** One section: its heading and text, and the icon buttons that move or remove it. */
 function SectionFields({
   section,
   index,
@@ -49,52 +49,60 @@ function SectionFields({
   onRemove,
 }: SectionFieldsProps) {
   return (
-    <fieldset className={styles.section} data-section={section.id} disabled={disabled}>
-      <legend className={styles.legend}>{`Section ${String(index + 1)}`}</legend>
-      <TextField
-        label="Heading"
-        name={`heading-${section.id}`}
-        value={section.heading}
-        maxLength={LIMITS.heading}
-        onChange={(heading) => {
-          onEdit({ heading });
-        }}
-      />
+    <fieldset
+      className={styles.section}
+      aria-label={`Section ${String(index + 1)}`}
+      data-section={section.id}
+      disabled={disabled}
+    >
+      <div className={styles.top}>
+        <div className={styles.heading}>
+          <TextField
+            label="Heading"
+            name={`heading-${section.id}`}
+            placeholder="Heading"
+            value={section.heading}
+            maxLength={LIMITS.heading}
+            onChange={(heading) => {
+              onEdit({ heading });
+            }}
+          />
+        </div>
+        <div className={styles.actions}>
+          <IconButton
+            label="Move section up"
+            icon={<ArrowUp aria-hidden="true" />}
+            disabled={index === 0}
+            onClick={() => {
+              onMove(-1);
+            }}
+          />
+          <IconButton
+            label="Move section down"
+            icon={<ChevronDown aria-hidden="true" />}
+            disabled={last}
+            onClick={() => {
+              onMove(1);
+            }}
+          />
+          <IconButton
+            label="Remove section"
+            icon={<X aria-hidden="true" />}
+            disabled={only}
+            onClick={onRemove}
+          />
+        </div>
+      </div>
       <TextArea
         label="Text"
         name={`body-${section.id}`}
-        hint="Leave a blank line between paragraphs."
+        placeholder="Text. Blank line between paragraphs."
         maxLength={LIMITS.sourceBytes}
         value={section.body}
         onChange={(body) => {
           onEdit({ body });
         }}
       />
-      <div className={styles.actions}>
-        <Button
-          variant="quiet"
-          size="sm"
-          disabled={index === 0}
-          onClick={() => {
-            onMove(-1);
-          }}
-        >
-          Move up
-        </Button>
-        <Button
-          variant="quiet"
-          size="sm"
-          disabled={last}
-          onClick={() => {
-            onMove(1);
-          }}
-        >
-          Move down
-        </Button>
-        <Button variant="quiet" size="sm" disabled={only} onClick={onRemove}>
-          Remove
-        </Button>
-      </div>
     </fieldset>
   );
 }

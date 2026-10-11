@@ -1,58 +1,49 @@
 // Agreement creation and voiding.
 import { randomUUID } from "node:crypto";
 import type { Db } from "../db.ts";
-import { draftSchema } from "../schema.ts";
 import type { CommandOf, NewAgreementInput } from "../schema.ts";
 import type { StaffActor } from "../types.ts";
 import { liveRecipients, notify } from "./notify.ts";
-import { enqueuePreparation, nextDraft } from "./revisions.ts";
+import { EMPTY_DRAFT, stageDraft } from "./revisions.ts";
 import { voidRound } from "./signing.ts";
-import type { CommandContext, LiveSigner } from "./state.ts";
+import { AGREEMENT_COLUMNS, liveSigners } from "./state.ts";
+import type { AgreementRow, CommandContext } from "./state.ts";
 
-/** Inserts the draft and its recipients; written terms start preparing at once. */
+/** Inserts the agreement and its recipients, then stages the draft for the live signers. */
 export async function insertAgreement(
   db: Db,
   actor: StaffActor,
   input: NewAgreementInput,
 ): Promise<string> {
-  const agreement = { tenantId: actor.tenantId, id: randomUUID() };
-  const recipients = input.recipients.map((recipient) => ({ ...recipient, id: randomUUID() }));
-  const signers: LiveSigner[] = recipients
-    .filter((recipient) => recipient.isSigner)
-    .map(({ id, name, email }) => ({ id, name, email }));
-  const source = input.document.kind === "source" ? input.document.source : null;
-  const { draft, fence } = nextDraft(null, {
-    title: input.title,
-    content: { source, upload: null },
-    signers,
-  });
-  await db.query(
+  const inserted = await db.query<AgreementRow>(
     `INSERT INTO dripsign.agreement (tenant_id, id, title, draft, created_by)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [
-      agreement.tenantId,
-      agreement.id,
-      input.title,
-      JSON.stringify(draftSchema.parse(draft)),
-      actor.email,
-    ],
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING ${AGREEMENT_COLUMNS}`,
+    [actor.tenantId, randomUUID(), input.title, JSON.stringify(EMPTY_DRAFT), actor.email],
   );
-  // added_at orders the signature page, so insert in the order the staff member listed them.
-  for (const recipient of recipients) {
+  const agreement = inserted.rows[0];
+  if (agreement === undefined) throw new Error("Agreement insert returned no row");
+  // In the order the staff member listed them: added_at orders the signature page.
+  for (const recipient of input.recipients) {
     await db.query(
-      `INSERT INTO dripsign.recipient (tenant_id, agreement_id, id, email, name, is_signer, added_at)
-       VALUES ($1, $2, $3, $4, $5, $6, clock_timestamp())`,
+      `INSERT INTO dripsign.recipient (tenant_id, agreement_id, id, email, name, is_signer)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
       [
         agreement.tenantId,
         agreement.id,
-        recipient.id,
+        randomUUID(),
         recipient.email,
         recipient.name,
         recipient.isSigner,
       ],
     );
   }
-  if (fence !== null) await enqueuePreparation(db, agreement, fence);
+  const source = input.document.kind === "source" ? input.document.source : null;
+  await stageDraft(db, agreement, {
+    content: { source, upload: null },
+    signers: await liveSigners(db, agreement.tenantId, agreement.id),
+    dirty: true,
+  });
   return agreement.id;
 }
 

@@ -4,6 +4,8 @@
 export {
   ArrowLeft,
   ArrowRight,
+  ArrowUp,
+  ArrowUpDown,
   BadgeCheck,
   Ban,
   Bell,

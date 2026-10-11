@@ -5,9 +5,9 @@ import { SIGNING_VERIFICATION_MAX_AGE_MS } from "../auth/sessions.ts";
 import type { Db } from "../db.ts";
 import { DomainError } from "../errors.ts";
 import { enqueue } from "../jobs/outbox.ts";
-import { SIGNING_CONSENT } from "../schema.ts";
+import { LIMITS, SIGNING_CONSENT } from "../schema.ts";
 import type { CommandOf } from "../schema.ts";
-import type { Actor, RoundEndReason } from "../types.ts";
+import type { RoundEndReason } from "../types.ts";
 import { markInvited, notify } from "./notify.ts";
 import type { Addressee } from "./notify.ts";
 import { conflict } from "./state.ts";
@@ -131,28 +131,48 @@ async function setStatus(
   ]);
 }
 
-/** Binds the frozen round, revision and hash, a fresh verification and the verbatim consent. */
+/**
+ * Binds the frozen round, revision and hash, a fresh verification, the verbatim consent and the
+ * request evidence (cut to its stored bounds, never refused). Times are clock_timestamp(), read
+ * after every lock wait, never the transaction start: a verification refreshed while this command
+ * queued still precedes its signature, and every signature precedes finalizing (the triggers
+ * refuse anything else).
+ */
 export async function sign(ctx: CommandContext, command: CommandOf<"sign">): Promise<void> {
-  const { db, agreement } = ctx;
+  const { db, agreement, actor } = ctx;
   const round = assertSigningFence(ctx, command);
-  const verifiedAt = await freshVerification(db, ctx.actor);
-  await db.query(
+  const bounds = LIMITS.requestEvidence;
+  // signed_at defaults to clock_timestamp(), after the session row this statement reads.
+  const signed = await db.query(
     `INSERT INTO dripsign.signature (
        tenant_id, agreement_id, round_id, recipient_id, typed_name, consent_version,
-       consent_text, consent_hash, document_sha256, session_id, verified_at
+       consent_text, consent_hash, document_sha256, session_id, verified_at, ip_address, user_agent
      )
-     SELECT tenant_id, agreement_id, id, $3, $4, consent_version, consent_text, consent_hash,
-       document_sha256, $5, $6
-     FROM dripsign.signing_round WHERE tenant_id = $1 AND id = $2`,
+     SELECT g.tenant_id, g.agreement_id, g.id, $3, $4, g.consent_version, g.consent_text,
+       g.consent_hash, g.document_sha256, s.id, s.verified_at, left($7, $10), left($8, $11)
+     FROM dripsign.signing_round g
+     JOIN dripsign.auth_session s
+       ON s.id = $5 AND s.email = $6 AND s.revoked_at IS NULL AND s.expires_at > clock_timestamp()
+      AND s.verified_at > clock_timestamp() - $9::float8 * interval '1 millisecond'
+     WHERE g.tenant_id = $1 AND g.id = $2`,
     [
       agreement.tenantId,
       round.id,
       ctx.state.viewer.recipientId,
       command.typedName,
-      ctx.actor.sessionId,
-      verifiedAt,
+      actor.sessionId,
+      actor.email,
+      actor.request?.ipAddress ?? null,
+      actor.request?.userAgent ?? null,
+      SIGNING_VERIFICATION_MAX_AGE_MS,
+      bounds.ipAddress,
+      bounds.userAgent,
     ],
   );
+  // The session row, not the cached actor, proves a verification within the signing window.
+  if (signed.rowCount !== 1) {
+    throw new DomainError("verification_required", "Confirm it’s you before signing.");
+  }
   const complete = await db.query<{ complete: boolean }>(
     "SELECT NOT dripsign.round_missing_signatures($1, $2) AS complete",
     [agreement.tenantId, round.id],
@@ -160,7 +180,7 @@ export async function sign(ctx: CommandContext, command: CommandOf<"sign">): Pro
   if (complete.rows[0]?.complete === true) {
     // The last signature and the archive job commit together, so a signed round always archives.
     await db.query(
-      `UPDATE dripsign.signing_round SET status = 'finalizing', finalizing_at = now()
+      `UPDATE dripsign.signing_round SET status = 'finalizing', finalizing_at = clock_timestamp()
        WHERE tenant_id = $1 AND id = $2`,
       [agreement.tenantId, round.id],
     );
@@ -189,19 +209,4 @@ function assertSigningFence(ctx: CommandContext, command: CommandOf<"sign">): Li
     throw conflict("The signing terms changed. Review them again before signing.");
   }
   return round;
-}
-
-/** The session row, not the cached actor, proves a verification within the signing window. */
-async function freshVerification(db: Db, actor: Actor): Promise<Date> {
-  const fresh = await db.query<{ verifiedAt: Date }>(
-    `SELECT verified_at AS "verifiedAt" FROM dripsign.auth_session
-     WHERE id = $1 AND email = $2 AND revoked_at IS NULL AND expires_at > now()
-       AND verified_at > now() - $3::float8 * interval '1 millisecond'`,
-    [actor.sessionId, actor.email, SIGNING_VERIFICATION_MAX_AGE_MS],
-  );
-  const row = fresh.rows[0];
-  if (row === undefined) {
-    throw new DomainError("verification_required", "Confirm it’s you before signing.");
-  }
-  return row.verifiedAt;
 }

@@ -1,97 +1,60 @@
+/* The strip and the signers read as one box above the document. */
 .panel {
-  display: grid;
-  gap: var(--ds-space-4);
-}
-
-.cards,
-.signers {
-  display: grid;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.cards {
-  gap: var(--ds-space-3);
-}
-
-@media (min-width: 640px) {
-  .cards {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-.card {
-  display: flex;
-  min-height: var(--ds-size-control-lg);
-  align-items: center;
-  gap: var(--ds-space-3);
+  margin-block: var(--ds-space-4);
+  overflow: hidden;
   border: var(--ds-hairline);
   border-radius: var(--ds-radius-card);
   background: var(--ds-surface);
-  padding: var(--ds-space-4);
-  color: var(--ds-text);
-  text-decoration: none;
-  transition: border-color var(--ds-motion-quick) var(--ds-ease-enter);
 }
 
-.card:hover {
-  border-color: var(--ds-border-strong);
-  color: var(--ds-text);
+.panel > :last-child {
+  border-bottom: 0;
 }
 
-.card > svg {
-  flex: none;
-  width: var(--ds-size-icon);
-  height: var(--ds-size-icon);
-  color: var(--ds-text-secondary);
-  stroke-width: var(--ds-icon-stroke);
+.files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-1) var(--ds-space-3);
 }
 
-.icon {
+.file {
   display: inline-flex;
-  color: var(--ds-accent);
-}
-
-.icon > svg {
-  width: var(--ds-size-icon-tile);
-  height: var(--ds-size-icon-tile);
-  stroke-width: var(--ds-icon-stroke);
-}
-
-.text {
-  display: grid;
-  min-width: 0;
-  flex: 1;
-}
-
-.label {
-  font-size: var(--ds-text-md);
+  min-height: var(--ds-size-control-sm);
+  align-items: center;
+  gap: var(--ds-space-1);
+  color: var(--ds-text);
   font-weight: var(--ds-weight-medium);
-  line-height: var(--ds-leading-md);
 }
 
-.meta {
-  color: var(--ds-text-secondary);
-  font-size: var(--ds-text-sm);
-  line-height: var(--ds-leading-sm);
-}
-
-.hash {
-  font-family: var(--ds-mono);
+.file > svg {
+  width: var(--ds-size-icon-inline);
+  height: var(--ds-size-icon-inline);
+  stroke-width: var(--ds-icon-stroke);
 }
 
 .signers {
-  gap: var(--ds-space-2);
+  display: grid;
+  margin: 0;
+  padding: 0 var(--ds-space-4);
+  list-style: none;
 }
 
 .signer {
   display: flex;
+  min-height: var(--ds-size-row-compact);
   flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
   gap: var(--ds-space-2);
-  border-bottom: var(--ds-hairline);
-  padding-bottom: var(--ds-space-2);
   font-size: var(--ds-text-md);
   line-height: var(--ds-leading-md);
+}
+
+.signer + .signer {
+  border-top: var(--ds-hairline);
+}
+
+.signer time {
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
 }

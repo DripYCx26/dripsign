@@ -9,6 +9,17 @@ export interface CreateKeys {
   readonly upload: string;
 }
 
+/**
+ * The upload as one intent: the file, its receipt key and the draft version it was first sent
+ * against. A retry resends exactly this, so the server replays the stored result; a re-read
+ * version under the old key would be a different request.
+ */
+export interface UploadIntent {
+  readonly file: File;
+  readonly key: string;
+  readonly version: number;
+}
+
 export type SubmitOutcome =
   Readonly<{ ok: true; id: string }> | Readonly<{ ok: false; message: string }>;
 
@@ -19,8 +30,11 @@ type SubmitArgs = Readonly<{
   keys: CreateKeys;
   /** Set once the draft exists, so a retry after a failed upload does not create it again. */
   createdId: string | null;
+  /** Set once the upload was first attempted; a retry resends it unchanged. */
+  upload: UploadIntent | null;
   onPhase: (phase: CreatePhase) => void;
   onCreated: (id: string) => void;
+  onUploadIntent: (intent: UploadIntent) => void;
 }>;
 
 /** A thrown server action means the network failed before we heard the outcome. */
@@ -34,8 +48,8 @@ async function attempt<T>(call: () => Promise<T>): Promise<T | null> {
 
 /**
  * Creates the draft, and on the PDF path sends the file to the draft just created. Both steps
- * carry their own receipt key, so repeating this call with the same keys never creates two drafts
- * or stores the file twice.
+ * carry their own receipt key, so repeating this call with the same keys and upload intent never
+ * creates two drafts or stores the file twice.
  */
 export async function submitCreate(args: SubmitArgs): Promise<SubmitOutcome> {
   let id = args.createdId;
@@ -54,10 +68,15 @@ export async function submitCreate(args: SubmitArgs): Promise<SubmitOutcome> {
 
   args.onPhase("uploading");
   const draftId = id;
-  const fresh = await attempt(() => refreshView({ agreementId: draftId, capacity: "staff" }));
-  if (fresh === null) return { ok: false, message: UNCERTAIN };
-  if (!fresh.ok) return { ok: false, message: fresh.message };
-  const uploaded = await uploadPdf(draftId, file, args.keys.upload, fresh.value.agreement.version);
+  let intent = args.upload;
+  if (intent === null) {
+    const fresh = await attempt(() => refreshView({ agreementId: draftId, capacity: "staff" }));
+    if (fresh === null) return { ok: false, message: UNCERTAIN };
+    if (!fresh.ok) return { ok: false, message: fresh.message };
+    intent = { file, key: args.keys.upload, version: fresh.value.agreement.version };
+    args.onUploadIntent(intent);
+  }
+  const uploaded = await uploadPdf(draftId, intent.file, intent.key, intent.version);
   if (!uploaded.ok) return { ok: false, message: uploaded.message };
   args.onPhase("preparing");
   return { ok: true, id };

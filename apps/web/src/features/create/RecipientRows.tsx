@@ -1,6 +1,7 @@
 "use client";
 
 import { LIMITS } from "@dripsign/core/schema";
+import { randomId } from "@/features/document/ids.ts";
 import { Button, Checkbox, IconButton, Plus, TextField, Trash2 } from "@/ui";
 import {
   duplicateKeys,
@@ -44,8 +45,11 @@ function RecipientFields({
   onRemove,
 }: RecipientFieldsProps) {
   return (
-    <fieldset className={styles.row} disabled={disabled}>
-      <legend className={styles.legend}>{`Recipient ${String(index + 1)}`}</legend>
+    <fieldset
+      className={styles.row}
+      aria-label={`Recipient ${String(index + 1)}`}
+      disabled={disabled}
+    >
       <TextField
         label="Name"
         name={`recipient-name-${row.key}`}
@@ -80,7 +84,7 @@ function RecipientFields({
         />
         <IconButton
           label={`Remove recipient ${String(index + 1)}`}
-          icon={<Trash2 />}
+          icon={<Trash2 aria-hidden="true" />}
           disabled={onlyRow}
           onClick={onRemove}
         />
@@ -103,10 +107,6 @@ export function RecipientRows({ rows, onChange, errors, disabled = false }: Reci
       <h2 id="recipients-heading" className={styles.heading}>
         Recipients
       </h2>
-      <p className={styles.help}>
-        Required signers must sign before the agreement is complete. Others can read and join the
-        thread.
-      </p>
       {rows.map((row, index) => (
         <RecipientFields
           key={row.key}
@@ -130,7 +130,7 @@ export function RecipientRows({ rows, onChange, errors, disabled = false }: Reci
           variant="secondary"
           disabled={disabled || rows.length >= LIMITS.recipients}
           onClick={() => {
-            onChange([...rows, emptyRow()]);
+            onChange([...rows, emptyRow(randomId())]);
           }}
         >
           <Plus aria-hidden="true" />

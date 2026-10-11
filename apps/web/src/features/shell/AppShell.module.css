@@ -1,4 +1,18 @@
-/* The frame around every signed-in page: the bar, then the main that takes the rest of the height. */
+/* The frame around every signed-in page: the bar, then the main that takes the rest of the height.
+   A page that holds a workspace ([data-workspace]) fixes the body to the viewport, so whatever
+   sits above the shell (the development strip, whatever height it wraps to) is subtracted
+   exactly and the workspace's two panes scroll alone instead of the page. */
+
+:global(body):has([data-workspace]) {
+  display: flex;
+  height: 100dvh;
+  flex-direction: column;
+}
+
+.shell:has([data-workspace]) {
+  min-height: 0;
+  flex: 1 1 0;
+}
 
 .shell {
   display: flex;
@@ -9,6 +23,7 @@
 .main {
   display: flex;
   min-width: 0;
+  min-height: 0;
   flex: 1 1 auto;
   flex-direction: column;
 }

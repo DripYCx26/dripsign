@@ -8,18 +8,20 @@ type StepFrameProps = Readonly<{
   title: string;
   /** Move focus to the title once, when the step appears after an action (not on first load). */
   autoFocus: boolean;
+  /** The step needs the full column (the document); the others sit in a narrower one. */
+  wide?: boolean;
   children: ReactNode;
 }>;
 
 /** One step of the flow: the title that takes focus on arrival, then the step's content. */
-export function StepFrame({ title, autoFocus, children }: StepFrameProps) {
+export function StepFrame({ title, autoFocus, wide = false, children }: StepFrameProps) {
   const heading = useRef<HTMLHeadingElement>(null);
   const focusOnMount = useRef(autoFocus);
   useEffect(() => {
     if (focusOnMount.current) heading.current?.focus();
   }, []);
   return (
-    <section className={styles.step}>
+    <section className={styles.step} data-wide={wide || undefined}>
       <h1 ref={heading} tabIndex={-1} className={styles.title}>
         {title}
       </h1>
@@ -31,9 +33,4 @@ export function StepFrame({ title, autoFocus, children }: StepFrameProps) {
 /** The step's actions; below 640 px they stick to the bottom of the screen. */
 export function StepActions({ children }: Readonly<{ children: ReactNode }>) {
   return <div className={styles.actions}>{children}</div>;
-}
-
-/** The step's explanatory line under its title. */
-export function StepLede({ children }: Readonly<{ children: ReactNode }>) {
-  return <p className={styles.lede}>{children}</p>;
 }

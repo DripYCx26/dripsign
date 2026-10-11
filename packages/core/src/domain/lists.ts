@@ -39,8 +39,9 @@ const ROUND_PROGRESS = `LEFT JOIN LATERAL (
     ORDER BY g.created_at DESC LIMIT 1
   ) g ON true`;
 
-// Mirrors the staff actions policy.ts offers outside signing: answer a recipient proposal,
-// publish draft changes, retry a failed preparation, or request signatures.
+// SQL twin of the staff next steps in policy.ts (addStaffActions), which links back here: retry a
+// failed preparation, answer a recipient proposal, publish draft changes, or request signatures.
+// Change both together.
 const NEEDS_YOU = `(a.status IN ('draft', 'negotiating') AND a.draft->'preparation'->>'status' = 'failed')
     OR (a.status = 'negotiating' AND (p.by IS DISTINCT FROM 'staff' OR a.draft_dirty))`;
 

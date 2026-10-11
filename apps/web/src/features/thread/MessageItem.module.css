@@ -1,37 +1,38 @@
-/* A message on the surface, a hairline card; one's own words sit on the subtle well. */
+/* A chat bubble: the other side's left on the surface, one's own right on the subtle well. */
 
 .message {
   display: grid;
-  gap: var(--ds-space-1);
-  padding: var(--ds-space-3) var(--ds-space-4);
-  border: var(--ds-hairline);
-  border-radius: var(--ds-radius-card);
-  background: var(--ds-surface);
+  justify-items: start;
+  gap: var(--ds-space-half);
 }
 
 .message[data-own] {
-  background: var(--ds-surface-subtle);
-}
-
-.meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--ds-space-1) var(--ds-space-3);
-  color: var(--ds-text-tertiary);
-  font-size: var(--ds-text-xs);
-  line-height: var(--ds-leading-xs);
+  justify-items: end;
 }
 
 .author {
   color: var(--ds-text);
-  font-size: var(--ds-text-sm);
+  font-size: var(--ds-text-xs);
   font-weight: var(--ds-weight-semibold);
-  line-height: var(--ds-leading-sm);
+  line-height: var(--ds-leading-xs);
 }
 
-.body {
+.bubble {
+  max-width: 88%;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: var(--ds-hairline);
+  border-radius: var(--ds-radius-panel);
+  background: var(--ds-surface);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+
+.message[data-own] .bubble {
+  background: var(--ds-surface-subtle);
+}
+
+.time {
+  color: var(--ds-text-tertiary);
+  font-size: var(--ds-text-xs);
+  line-height: var(--ds-leading-xs);
 }

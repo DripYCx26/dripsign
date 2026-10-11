@@ -62,7 +62,7 @@ export interface CommandContext {
   readonly db: Db;
   readonly actor: Actor;
   readonly access: Access;
-  /** Locked for the transaction; reflects the row before this command's own writes. */
+  /** Locked for the transaction, as the lock (and any version fence) returned it. */
   readonly agreement: AgreementRow;
   readonly state: AgreementState;
 }
@@ -71,6 +71,27 @@ export const AGREEMENT_COLUMNS = `tenant_id AS "tenantId", id, title, status, ve
   current_revision_id AS "currentRevisionId", draft, draft_dirty AS "draftDirty",
   created_at AS "createdAt", updated_at AS "updatedAt", voided_at AS "voidedAt",
   void_reason AS "voidReason"`;
+
+/**
+ * The one signer order ($1 tenant, $2 agreement): the signature page, the staged draft, its fence
+ * hash and the publish check all read it, so none can disagree with another.
+ */
+const LIVE_SIGNERS = `SELECT coalesce(jsonb_agg(jsonb_build_object('id', id, 'name', name,
+    'email', email) ORDER BY added_at, id), '[]'::jsonb)
+  FROM dripsign.recipient
+  WHERE tenant_id = $1 AND agreement_id = $2 AND is_signer AND revoked_at IS NULL`;
+
+export async function liveSigners(
+  db: Db,
+  tenantId: string,
+  agreementId: string,
+): Promise<LiveSigner[]> {
+  const found = await db.query<{ signers: LiveSigner[] }>(`SELECT (${LIVE_SIGNERS}) AS signers`, [
+    tenantId,
+    agreementId,
+  ]);
+  return found.rows[0]?.signers ?? [];
+}
 
 const STALE_MESSAGE = "This agreement changed. Reload to see the latest.";
 
@@ -111,8 +132,35 @@ export async function resolveAccess(db: Db, actor: Actor, agreementId: string): 
 }
 
 /**
- * Locks the agreement row. With an expected version this is the document fence: the version moves
- * on, and a stale version is a conflict.
+ * Rechecks the actor's grant after a command's lock waits and holds the row FOR SHARE until
+ * commit: a revocation that committed while the command queued is seen here, and one that starts
+ * later waits for this commit. Lock order: receipt, agreement row, grant row, job rows.
+ */
+export async function lockGrant(
+  db: Db,
+  actor: Actor,
+  scope: { readonly tenantId: string; readonly agreementId: string | null },
+): Promise<void> {
+  const found =
+    actor.capacity === "staff"
+      ? await db.query(
+          `SELECT 1 FROM dripsign.staff
+           WHERE tenant_id = $1 AND email = $2 AND revoked_at IS NULL
+           FOR SHARE`,
+          [scope.tenantId, actor.email],
+        )
+      : await db.query(
+          `SELECT 1 FROM dripsign.recipient
+           WHERE tenant_id = $1 AND agreement_id = $2 AND email = $3 AND revoked_at IS NULL
+           FOR SHARE`,
+          [scope.tenantId, scope.agreementId, actor.email],
+        );
+  if (found.rowCount !== 1) throw notFound();
+}
+
+/**
+ * Locks the agreement row. With an expected version the lock is the document fence: the update
+ * moves the version on, and a stale version is a conflict.
  */
 export async function lockAgreement(
   db: Db,
@@ -187,10 +235,7 @@ export async function loadState(
        (SELECT jsonb_build_object('id', id, 'status', status, 'revisionId', revision_id,
           'documentSha256', document_sha256, 'consentVersion', consent_version,
           'consentHash', consent_hash) FROM live_round) AS round,
-       (SELECT coalesce(jsonb_agg(jsonb_build_object('id', id, 'name', name, 'email', email)
-          ORDER BY added_at, id), '[]'::jsonb)
-        FROM dripsign.recipient
-        WHERE tenant_id = $1 AND agreement_id = $2 AND is_signer AND revoked_at IS NULL) AS signers,
+       (${LIVE_SIGNERS}) AS signers,
        (SELECT count(*)::int FROM dripsign.ai_suggestion
         WHERE tenant_id = $1 AND agreement_id = $2 AND status = 'ready') AS "readyAi",
        (SELECT id FROM viewer) AS "viewerId",
@@ -233,13 +278,12 @@ export function actionsFor(state: AgreementState, capacity: Capacity): Agreement
   return allowedActions(state.snapshot, capacity, state.viewer);
 }
 
-/** The in-transaction policy recheck. Staff-only actions are invisible to recipients. */
+/** The policy recheck after `lockGrant`. Staff-only actions are invisible to recipients. */
 export function requireAction(
   state: AgreementState,
   capacity: Capacity,
   action: AgreementAction,
 ): void {
-  if (capacity === "recipient" && state.viewer.recipientId === null) throw notFound();
   if (actionsFor(state, capacity).includes(action)) return;
   if (capacity === "recipient" && STAFF_ONLY_ACTIONS.includes(action)) throw notFound();
   throw conflict("This action isn’t available now. Reload to see the latest.");

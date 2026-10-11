@@ -1,16 +1,26 @@
 .pages {
   display: grid;
   gap: var(--ds-space-4);
+  min-width: 0;
 }
 
 .bar {
   display: flex;
+  min-height: var(--ds-size-row);
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--ds-space-2) var(--ds-space-4);
   color: var(--ds-text-secondary);
   font-size: var(--ds-text-sm);
+}
+
+.facts {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
 }
 
 .open {

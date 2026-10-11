@@ -15,6 +15,7 @@ const SECURITY_HEADERS = [
 // only restate it and add an experiments banner to every build.
 const config: NextConfig = {
   poweredByHeader: false,
+  devIndicators: false,
   reactStrictMode: true,
   // Core ships TypeScript source with `.ts` import specifiers; Next compiles it in place.
   transpilePackages: ["@dripsign/core"],

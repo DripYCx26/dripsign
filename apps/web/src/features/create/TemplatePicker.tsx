@@ -16,15 +16,14 @@ export function TemplatePicker({ value, onChange, disabled = false }: TemplatePi
     <div className={styles.picker}>
       <Segmented
         label="Start from"
+        hideLabel
         name="template"
         options={TEMPLATE_OPTIONS}
         value={value}
         onChange={onChange}
         disabled={disabled}
       />
-      <p className={styles.note}>
-        {value === "blank" ? "Choosing a starter text replaces the sections below." : TEMPLATE_NOTE}
-      </p>
+      {value !== "blank" && <p className={styles.note}>{TEMPLATE_NOTE}</p>}
     </div>
   );
 }

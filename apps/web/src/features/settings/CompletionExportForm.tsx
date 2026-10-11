@@ -15,13 +15,18 @@ const STALE = "These settings changed. Reload to see the latest.";
 type FieldName = keyof CompletionExportConfig;
 
 /** The pins in the order the host hands them over; counts are whole numbers. */
-const FIELDS: readonly Readonly<{ name: FieldName; label: string; count?: true }>[] = [
+const FIELDS: readonly Readonly<{
+  name: FieldName;
+  label: string;
+  count?: true;
+  wide?: true;
+}>[] = [
   { name: "hostTenantId", label: "Host tenant ID" },
   { name: "senderBindingId", label: "Sender binding ID" },
   { name: "senderBindingRevision", label: "Sender binding revision", count: true },
   { name: "senderGrantId", label: "Sender grant ID" },
-  { name: "issuer", label: "Issuer" },
-  { name: "audience", label: "Audience" },
+  { name: "issuer", label: "Issuer", wide: true },
+  { name: "audience", label: "Audience", wide: true },
   { name: "keyId", label: "Key ID" },
   { name: "keyVersion", label: "Key version", count: true },
   { name: "freshnessSeconds", label: "Freshness (seconds)", count: true },
@@ -98,7 +103,7 @@ export function CompletionExportForm({ settings }: Props) {
 
   return (
     <form className={styles.form} onSubmit={(event) => void submit(event)}>
-      <div ref={outcome} tabIndex={-1}>
+      <div ref={outcome} className={styles.outcome} tabIndex={-1}>
         {problem !== null && (
           <Notice tone="stop" live="alert">
             {problem}
@@ -110,20 +115,23 @@ export function CompletionExportForm({ settings }: Props) {
           </Notice>
         )}
       </div>
-      {FIELDS.map(({ name, label }) => (
-        <TextField
-          key={name}
-          label={label}
-          name={name}
-          hint={hint[name]}
-          defaultValue={initial[name]}
-          autoComplete="off"
-          required
-        />
+      {FIELDS.map(({ name, label, wide }) => (
+        <div key={name} className={wide === true ? styles.wide : undefined}>
+          <TextField
+            label={label}
+            name={name}
+            hint={hint[name]}
+            defaultValue={initial[name]}
+            autoComplete="off"
+            required
+          />
+        </div>
       ))}
-      <Button type="submit" variant="ink" loading={pending}>
-        Save revision
-      </Button>
+      <div className={styles.save}>
+        <Button type="submit" variant="ink" loading={pending}>
+          Save
+        </Button>
+      </div>
     </form>
   );
 }

@@ -43,8 +43,7 @@ export function AddStaffForm() {
   }
 
   return (
-    <form className={styles.add} onSubmit={(event) => void add(event)}>
-      <h2>Add a person</h2>
+    <form className={styles.add} aria-label="Add a person" onSubmit={(event) => void add(event)}>
       {problem !== null && (
         <Notice tone="stop" live="alert">
           {problem}

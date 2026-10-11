@@ -16,8 +16,9 @@ type PublishActionProps = Readonly<{
 }>;
 
 /**
- * The review checkbox and the publish button. The command carries the SHA the page showed, so a
- * draft that changed since is refused by the server instead of published unseen.
+ * The review checkbox and the publish button, pinned to the foot of the screen under the long
+ * PDF. The command carries the SHA the page showed, so a draft that changed since is refused by
+ * the server instead of published unseen.
  */
 export function PublishAction({
   view: initial,
@@ -49,12 +50,17 @@ export function PublishAction({
         if (reviewed) void publish();
       }}
     >
-      <Checkbox
-        label="I reviewed the full PDF and its signature fields."
-        checked={reviewed}
-        disabled={pending}
-        onChange={setReviewed}
-      />
+      <div className={styles.row}>
+        <Checkbox
+          label="I reviewed the full PDF and its signature fields."
+          checked={reviewed}
+          disabled={pending}
+          onChange={setReviewed}
+        />
+        <Button variant="ink" size="lg" type="submit" loading={pending} disabled={!reviewed}>
+          {isFirst ? "Publish and invite recipients" : `Publish revision ${String(number)}`}
+        </Button>
+      </div>
       {error !== null && (
         <Notice tone="stop" live="alert">
           <p>{error.message}</p>
@@ -73,9 +79,6 @@ export function PublishAction({
           )}
         </Notice>
       )}
-      <Button variant="ink" size="lg" type="submit" loading={pending} disabled={!reviewed}>
-        {isFirst ? "Publish and invite recipients" : `Publish revision ${String(number)}`}
-      </Button>
     </form>
   );
 }

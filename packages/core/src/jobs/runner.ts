@@ -1,5 +1,6 @@
 import type pg from "pg";
-import { getPool, tx } from "../db.ts";
+import { getPool, pgErrorCode, tx } from "../db.ts";
+import { DomainError } from "../errors.ts";
 import { createHandlers } from "./handlers.ts";
 import type { HandlerDefinition } from "./handlers.ts";
 import type { ClaimedJob } from "./outbox.ts";
@@ -7,6 +8,7 @@ import {
   claimJobs,
   failJob,
   finishJob,
+  JOB_MAX_ATTEMPTS,
   lockLease,
   OUTBOX_CHANNEL,
   renewLease,
@@ -27,8 +29,18 @@ interface RunnerState {
   connecting: Promise<void> | null;
 }
 
-function logFailure(): void {
-  console.error("dripsign: worker database unavailable");
+function failureCode(error: unknown): string {
+  for (let depth = 0; depth < 4 && error instanceof Error; depth++) {
+    const code = pgErrorCode(error);
+    if (code && /^[0-9A-Z]{5}$/u.test(code)) return code;
+    if (error instanceof DomainError) return error.code;
+    error = error.cause;
+  }
+  return "handler_failed";
+}
+
+function logFailure(error?: unknown): void {
+  console.error("dripsign: worker failure", { code: failureCode(error) });
 }
 
 export async function executeJob(
@@ -37,21 +49,25 @@ export async function executeJob(
   signal: AbortSignal,
 ): Promise<void> {
   const definition = handlers[job.payload.kind];
-  if (definition.maxAttempts !== null && job.attempts > definition.maxAttempts) {
+  const maxAttempts = JOB_MAX_ATTEMPTS[job.payload.kind];
+  if (maxAttempts !== null && job.attempts > maxAttempts) {
     await finalFailure(job, definition, "attempts_exhausted");
     return;
   }
+  const controller = new AbortController();
+  const stopHeartbeat = keepLease(job, controller);
   try {
     // Each handler checks cancellation before its effect; AI also records whether it called out.
-    await definition.handler(job, signal);
+    await definition.handler(job, AbortSignal.any([signal, controller.signal]));
     await finishJob(getPool(), job);
   } catch (error: unknown) {
-    if (
-      definition.maxAttempts === null ||
-      (definition.retryable(error) && job.attempts < definition.maxAttempts)
-    ) {
-      await retryJob(getPool(), job, "handler_failed");
-    } else await finalFailure(job, definition, "handler_failed", error);
+    const code = failureCode(error);
+    console.error("dripsign: job failed", { id: job.id, code });
+    if (maxAttempts === null || (definition.retryable(error) && job.attempts < maxAttempts)) {
+      await retryJob(getPool(), job, code);
+    } else await finalFailure(job, definition, code, error);
+  } finally {
+    stopHeartbeat();
   }
 }
 
@@ -69,28 +85,57 @@ async function finalFailure(
   });
 }
 
-function launch(state: RunnerState, job: ClaimedJob): void {
-  const controller = new AbortController();
+function keepLease(job: ClaimedJob, controller: AbortController): () => void {
   let renewing = false;
+  let stopped = false;
+  let leaseUntil = job.leaseUntil.getTime();
+  let expiry = setTimeout(
+    () => {
+      controller.abort();
+    },
+    Math.max(0, leaseUntil - Date.now()),
+  );
   const heartbeat = setInterval(() => {
     if (renewing) return;
     renewing = true;
-    void renewLease(state.pool, job, LEASE_MS)
+    const startedAt = Date.now();
+    void renewLease(getPool(), job, LEASE_MS)
       .then((owned) => {
+        if (stopped) return;
         if (!owned) controller.abort();
+        else {
+          leaseUntil = startedAt + LEASE_MS;
+          clearTimeout(expiry);
+          expiry = setTimeout(
+            () => {
+              controller.abort();
+            },
+            Math.max(0, leaseUntil - Date.now()),
+          );
+        }
       })
-      .catch(() => {
-        controller.abort();
-        logFailure();
+      .catch((error: unknown) => {
+        if (stopped) return;
+        // A failed renewal is not proof of a lost lease. Retry within the last confirmed window.
+        if (Date.now() >= leaseUntil) controller.abort();
+        console.error("dripsign: lease renewal failed", { id: job.id, code: failureCode(error) });
       })
       .finally(() => {
         renewing = false;
       });
   }, HEARTBEAT_MS);
+  return () => {
+    stopped = true;
+    clearInterval(heartbeat);
+    clearTimeout(expiry);
+  };
+}
+
+function launch(state: RunnerState, job: ClaimedJob): void {
+  const controller = new AbortController();
   const promise = executeJob(job, state.handlers, controller.signal)
     .catch(logFailure)
     .finally(() => {
-      clearInterval(heartbeat);
       state.active.delete(job.id);
       wake(state);
     });
@@ -189,10 +234,15 @@ export async function startRunner(options: {
   concurrency: number;
   handlers?: ReturnType<typeof createHandlers>;
 }): Promise<{ stop(): Promise<boolean> }> {
-  if (!Number.isInteger(options.concurrency) || options.concurrency < 1)
+  const pool = getPool();
+  if (
+    !Number.isInteger(options.concurrency) ||
+    options.concurrency < 1 ||
+    options.concurrency > pool.options.max - 2
+  )
     throw new Error("Invalid worker concurrency");
   const state: RunnerState = {
-    pool: getPool(),
+    pool,
     concurrency: options.concurrency,
     handlers: options.handlers ?? createHandlers(),
     active: new Map(),

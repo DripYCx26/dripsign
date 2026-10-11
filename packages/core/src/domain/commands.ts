@@ -1,8 +1,7 @@
-// Every mutation runs here: lock receipt, resolve live access, lock (and fence) the agreement,
-// recheck the policy, apply, enqueue effects; all in one transaction.
+// Every mutation runs here in one transaction: resolve access, take the receipt, lock (and fence)
+// the agreement, recheck the grant and the policy, apply, enqueue effects.
 import { storeBytes } from "../adapters/storage.ts";
 import { tx } from "../db.ts";
-import { notFound } from "../errors.ts";
 import { assertRenderableName } from "../pdf/font.ts";
 import { commandSchema, expectedVersionSchema, newAgreementInputSchema } from "../schema.ts";
 import type { Command, CommandKind, CommandOf, NewAgreementInput } from "../schema.ts";
@@ -22,6 +21,7 @@ import {
 import { cancelSignatures, requestSignatures, sign } from "./signing.ts";
 import {
   lockAgreement,
+  lockGrant,
   loadState,
   parseOrInvalid,
   requireAction,
@@ -83,6 +83,10 @@ interface LockedRun {
   readonly action: AgreementAction;
 }
 
+/**
+ * The transaction of every agreement command. A replay changes nothing, and both callers answer
+ * with a fresh view load that resolves access again, so only a new command needs `lockGrant`.
+ */
 async function runLocked(run: LockedRun, apply: (ctx: CommandContext) => Promise<void>) {
   const { actor, agreementId } = run;
   await tx(async (db) => {
@@ -105,6 +109,7 @@ async function runLocked(run: LockedRun, apply: (ctx: CommandContext) => Promise
           agreementId,
           run.expectedVersion,
         );
+        await lockGrant(db, actor, { tenantId: access.tenantId, agreementId });
         const state = await loadState(db, agreement, actor);
         requireAction(state, actor.capacity, run.action);
         await apply({ db, actor, access, agreement, state });
@@ -115,8 +120,8 @@ async function runLocked(run: LockedRun, apply: (ctx: CommandContext) => Promise
 }
 
 /**
- * Runs one command under its receipt: lock receipt, lock agreement, recheck allowedActions,
- * fence, apply, enqueue effects. Capacity is `actor.capacity`.
+ * Runs one command under its receipt: take the receipt, lock and fence the agreement, recheck the
+ * grant and allowedActions, apply, enqueue effects. Capacity is `actor.capacity`.
  */
 export async function executeCommand(
   actor: Actor,
@@ -149,13 +154,8 @@ export async function createAgreement(
   input: NewAgreementInput,
 ): Promise<string> {
   const parsed = parseOrInvalid(newAgreementInputSchema, input);
+  const scope = { tenantId: actor.tenantId, agreementId: null };
   return tx(async (db) => {
-    const staff = await db.query(
-      `SELECT 1 FROM dripsign.staff
-       WHERE tenant_id = $1 AND email = $2 AND revoked_at IS NULL`,
-      [actor.tenantId, actor.email],
-    );
-    if (staff.rowCount !== 1) throw notFound();
     const created = await withReceipt(
       db,
       {
@@ -167,8 +167,13 @@ export async function createAgreement(
         resourceId: null,
         payload: parsed,
       },
-      () => insertAgreement(db, actor, parsed),
+      async () => {
+        await lockGrant(db, actor, scope);
+        return insertAgreement(db, actor, parsed);
+      },
     );
+    // The stored id is the whole answer, so a replay rechecks the grant after its receipt wait.
+    if (created.replayed) await lockGrant(db, actor, scope);
     return created.value;
   });
 }

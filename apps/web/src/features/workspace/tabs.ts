@@ -1,11 +1,9 @@
-/** `thread` and `activity` fill the left pane; `document` is the phone's way to the right pane. */
-export type WorkspaceTab = "thread" | "activity" | "document";
+/** `chat` is the thread rail and `document` the pane beside it; on a phone it is the one shown. */
+export type WorkspaceTab = "chat" | "document";
 
-const TABS: readonly WorkspaceTab[] = ["thread", "activity", "document"];
-
-/** A `?tab=` value from the URL, or the thread when it is missing or unknown. */
+/** A `?tab=` value from the URL, or the chat when it is missing or unknown. */
 export function parseTab(value: string | string[] | undefined): WorkspaceTab {
-  return TABS.find((tab) => tab === value) ?? "thread";
+  return value === "document" ? "document" : "chat";
 }
 
 /** A `?rev=` value: a positive whole number, else nothing. */

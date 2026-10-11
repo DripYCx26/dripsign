@@ -1,17 +1,17 @@
 .step {
   display: grid;
+  width: min(var(--ds-layout-reading), 100%);
+  justify-self: center;
   gap: var(--ds-space-5);
+}
+
+.step[data-wide] {
+  width: 100%;
 }
 
 /* The h1 is a focus target, not a control: base.css draws it. */
 .title:focus {
   outline: none;
-}
-
-.lede {
-  color: var(--ds-text-secondary);
-  font-size: var(--ds-text-lg);
-  line-height: var(--ds-leading-lg);
 }
 
 .actions {
