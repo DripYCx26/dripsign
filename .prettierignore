@@ -6,3 +6,4 @@ apps/web/next-env.d.ts
 packages/core/schema/*.sql
 playwright-report
 test-results
+infra/aws/stack.yaml

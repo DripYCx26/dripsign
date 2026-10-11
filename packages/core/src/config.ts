@@ -3,6 +3,14 @@ import { existsSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { z } from "zod";
 
+/** The app's user-assigned identity and the local token endpoint Container Apps provides. */
+export interface AzureIdentity {
+  readonly clientId: string;
+  readonly endpoint: string;
+  /** Sent only to the identity endpoint. */
+  readonly header: string;
+}
+
 export type StorageConfig =
   | { readonly kind: "file"; readonly dir: string }
   | {
@@ -10,11 +18,32 @@ export type StorageConfig =
       readonly bucket: string;
       readonly region: string;
       readonly kmsKeyId: string | null;
+    }
+  | {
+      readonly kind: "azure";
+      /** The account blob endpoint, `https://<account>.blob.core.windows.net`. */
+      readonly endpoint: string;
+      readonly container: string;
+      readonly identity: AzureIdentity;
     };
 
 export type EmailConfig =
   | { readonly transport: "smtp"; readonly from: string; readonly smtpUrl: string }
-  | { readonly transport: "ses"; readonly from: string; readonly region: string };
+  | { readonly transport: "ses"; readonly from: string; readonly region: string }
+  | {
+      readonly transport: "azure";
+      /** The bare sender address: Communication Services takes no display name. */
+      readonly from: string;
+      /** The Communication Services endpoint, `https://<resource>.communication.azure.com`. */
+      readonly endpoint: string;
+      readonly identity: AzureIdentity;
+    };
+
+export interface CompletionExportDelivery {
+  /** The host's fixed https `/v1/webhooks/dripsign` URL. */
+  readonly url: string;
+  readonly keys: readonly CompletionKey[];
+}
 
 export interface AiConfig {
   readonly apiKey: string;
@@ -36,25 +65,14 @@ export interface Config {
   /** Null when no API key is set: the assistant is hidden. */
   readonly ai: AiConfig | null;
   readonly jobsConcurrency: number;
-  /** Null when no host is configured: bridge entry and executed events are off. */
+  /** Null when no host is configured: the bridge entry is off. */
   readonly host: HostConfig | null;
-  readonly hostEventSeed: string | null;
+  /** Null when the URL and keys are unset: no executed event is frozen or delivered. */
+  readonly completionExport: CompletionExportDelivery | null;
 }
 
 const base64url32 = z.string().regex(/^[A-Za-z0-9_-]{43}$/u, "Expected 32 bytes, base64url");
 const hostText = z.string().regex(/^[\x21-\x7e]{1,100}$/u);
-
-const hostEventSchema = z.strictObject({
-  url: z.url({ protocol: /^https?$/u }),
-  issuer: hostText,
-  audience: hostText,
-  keyId: hostText,
-  keyVersion: z.number().int().positive(),
-  senderBindingId: z.uuid(),
-  senderBindingRevision: z.number().int().positive(),
-  senderGrantId: z.uuid(),
-  hostTenantId: z.uuid(),
-});
 
 const hostSchema = z.strictObject({
   origin: z.url({ protocol: /^https?$/u }),
@@ -66,18 +84,46 @@ const hostSchema = z.strictObject({
       .min(1)
       .max(5),
   }),
-  tenants: z
-    .array(
-      z.strictObject({
-        firm: z.uuid(),
-        tenantId: z.uuid(),
-        event: hostEventSchema.nullable(),
-      }),
-    )
-    .min(1),
+  tenants: z.array(z.strictObject({ firm: z.uuid(), tenantId: z.uuid() })).min(1),
 });
 
 export type HostConfig = z.infer<typeof hostSchema>;
+/** A private Ed25519 seed; a retired key stays while a frozen event still names it. */
+export type CompletionKey = Readonly<z.infer<typeof completionKeysSchema>[number]>;
+
+/** The executed event's path, fixed by Dreach's receiver. */
+export const HOST_EVENT_PATH = "/v1/webhooks/dripsign";
+
+const completionKeysSchema = z
+  .array(
+    z.strictObject({
+      keyId: hostText,
+      keyVersion: z.number().int().min(1).max(4_294_967_295),
+      seed: z.string().regex(/^[a-f0-9]{64}$/u, "Expected 32 bytes, lowercase hex"),
+    }),
+  )
+  .min(1)
+  .max(8)
+  .refine(
+    (keys) =>
+      new Set(keys.map((key) => `${key.keyId}:${String(key.keyVersion)}`)).size === keys.length,
+    "Each keyId and keyVersion appears once",
+  );
+
+/** Credentials, a query or a fragment in a configured endpoint are refused. */
+const bareUrl = (value: string): boolean => {
+  const url = new URL(value);
+  return !url.username && !url.password && !url.search && !url.hash;
+};
+const httpsEndpoint = z.url({ protocol: /^https$/u }).refine(bareUrl, "Use a bare https URL");
+// Container Apps serves the identity endpoint over plain http on this host's loopback.
+const identityEndpoint = z
+  .url({ protocol: /^https?$/u })
+  .refine(bareUrl, "Use a bare URL")
+  .refine((value) => {
+    const url = new URL(value);
+    return url.protocol === "https:" || isLoopbackHostname(url.hostname);
+  }, "Plain http only on loopback");
 
 const text = z.string().min(1).optional();
 
@@ -92,20 +138,35 @@ const envSchema = z.object({
     .refine((value) => Buffer.byteLength(value) >= 32, "Must be at least 32 bytes"),
   DRIPSIGN_TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(0),
   DRIPSIGN_DEV_LOGIN: z.enum(["0", "1"]).default("0"),
-  DRIPSIGN_STORAGE: z.enum(["file", "s3"]).default("file"),
+  DRIPSIGN_STORAGE: z.enum(["file", "s3", "azure"]).default("file"),
   DRIPSIGN_STORAGE_DIR: text,
   DRIPSIGN_S3_BUCKET: text,
   AWS_REGION: text,
   DRIPSIGN_S3_KMS_KEY_ID: text,
-  DRIPSIGN_EMAIL_TRANSPORT: z.enum(["smtp", "ses"]).default("smtp"),
+  DRIPSIGN_AZURE_BLOB_ENDPOINT: httpsEndpoint.optional(),
+  DRIPSIGN_AZURE_BLOB_CONTAINER: z
+    .string()
+    .regex(/^[a-z0-9](?!.*--)[a-z0-9-]{1,61}[a-z0-9]$/u, "Expected an Azure container name")
+    .optional(),
+  DRIPSIGN_EMAIL_TRANSPORT: z.enum(["smtp", "ses", "azure"]).default("smtp"),
   DRIPSIGN_EMAIL_FROM: text,
   DRIPSIGN_SMTP_URL: z.url({ protocol: /^smtps?$/u }).optional(),
+  DRIPSIGN_AZURE_EMAIL_ENDPOINT: httpsEndpoint.optional(),
+  AZURE_CLIENT_ID: z
+    .string()
+    .regex(/^[A-Za-z0-9-]{1,128}$/u, "Expected a client id")
+    .optional(),
+  IDENTITY_ENDPOINT: identityEndpoint.optional(),
+  IDENTITY_HEADER: text,
   DRIPSIGN_ANTHROPIC_API_KEY: text,
   DRIPSIGN_AI_MODEL: z.string().min(1).default("claude-sonnet-5-5"),
   DRIPSIGN_AI_DAILY_LIMIT_USD: z.coerce.number().positive().max(10_000).default(10),
   DRIPSIGN_JOBS_CONCURRENCY: z.coerce.number().int().min(1).max(64).default(4),
   DRIPSIGN_HOST: text,
-  DRIPSIGN_HOST_EVENT_SEED: base64url32.optional(),
+  DRIPSIGN_HOST_EVENT_URL: httpsEndpoint
+    .refine((value) => new URL(value).pathname === HOST_EVENT_PATH, `Must end ${HOST_EVENT_PATH}`)
+    .optional(),
+  DRIPSIGN_COMPLETION_KEYS: text,
 });
 
 type Env = z.infer<typeof envSchema>;
@@ -128,10 +189,17 @@ export function parseConfig(raw: Readonly<Record<string, string | undefined>>): 
     fail(parsed.error.issues.map((issue) => [String(issue.path[0] ?? "env"), issue.message]));
   }
   const env = parsed.data;
-  const host = parseHost(env.DRIPSIGN_HOST);
-  const issues = [...host.issues, ...crossFieldIssues(env, host.value)];
+  const host = parseJson("DRIPSIGN_HOST", env.DRIPSIGN_HOST, hostSchema);
+  const keys = parseJson(
+    "DRIPSIGN_COMPLETION_KEYS",
+    env.DRIPSIGN_COMPLETION_KEYS,
+    completionKeysSchema,
+  );
+  const issues: Issue[] = [...host.issues, ...keys.issues];
+  const config = build(env, host.value, keys.value, requirer(env, issues));
+  issues.push(...crossFieldIssues(env, config));
   if (issues.length > 0) fail(issues);
-  return build(env, host.value);
+  return config;
 }
 
 let memo: Config | undefined;
@@ -141,102 +209,95 @@ export function loadConfig(): Config {
   return memo;
 }
 
-function parseHost(value: string | undefined): {
-  value: HostConfig | null;
-  issues: readonly Issue[];
-} {
+function parseJson<T>(
+  key: string,
+  value: string | undefined,
+  schema: z.ZodType<T>,
+): { value: T | null; issues: readonly Issue[] } {
   if (value === undefined) return { value: null, issues: [] };
   let json: unknown;
   try {
     json = JSON.parse(value);
   } catch {
-    return { value: null, issues: [["DRIPSIGN_HOST", "Must be JSON"]] };
+    return { value: null, issues: [[key, "Must be JSON"]] };
   }
-  const parsed = hostSchema.safeParse(json);
+  const parsed = schema.safeParse(json);
   if (parsed.success) return { value: parsed.data, issues: [] };
   return {
     value: null,
-    issues: parsed.error.issues.map((issue) => [
-      "DRIPSIGN_HOST",
-      `${issue.path.join(".")}: ${issue.message}`,
-    ]),
+    issues: parsed.error.issues.map((issue) => [key, `${issue.path.join(".")}: ${issue.message}`]),
   };
 }
 
-function crossFieldIssues(env: Env, host: HostConfig | null): Issue[] {
+/** Reads a key the chosen provider needs; a missing one is reported once and parsing fails. */
+type Need = (key: keyof Env, use: string) => string;
+
+function requirer(env: Env, issues: Issue[]): Need {
+  return (key, use) => {
+    const value = env[key];
+    if (typeof value === "string") return value;
+    if (!issues.some(([reported]) => reported === key)) issues.push([key, `Required for ${use}`]);
+    return "";
+  };
+}
+
+function crossFieldIssues(env: Env, config: Config): Issue[] {
   const issues: Issue[] = [];
-  const production = env.NODE_ENV === "production";
-  const origin = new URL(env.DRIPSIGN_PUBLIC_ORIGIN);
-  if (env.DRIPSIGN_DEV_LOGIN === "1" && (production || !isLoopbackHostname(origin.hostname))) {
+  const { production } = config;
+  const origin = new URL(config.publicOrigin);
+  if (config.devLogin && (production || !isLoopbackHostname(origin.hostname))) {
     issues.push(["DRIPSIGN_DEV_LOGIN", "Only allowed outside production with a loopback origin"]);
   }
   if (production && origin.protocol !== "https:") {
     issues.push(["DRIPSIGN_PUBLIC_ORIGIN", "Production requires https"]);
   }
-  issues.push(
-    ...storageIssues(env, production),
-    ...emailIssues(env, production),
-    ...hostIssues(env, host, production),
-  );
-  return issues;
-}
-
-function storageIssues(env: Env, production: boolean): Issue[] {
-  const issues: Issue[] = [];
-  if (env.DRIPSIGN_STORAGE === "file") {
-    if (production) issues.push(["DRIPSIGN_STORAGE", "Production requires s3"]);
-    if (!env.DRIPSIGN_STORAGE_DIR)
-      issues.push(["DRIPSIGN_STORAGE_DIR", "Required for file storage"]);
-    return issues;
+  if (production && config.storage.kind === "file") {
+    issues.push(["DRIPSIGN_STORAGE", "Production requires s3 or azure"]);
   }
-  if (!env.DRIPSIGN_S3_BUCKET) issues.push(["DRIPSIGN_S3_BUCKET", "Required for s3 storage"]);
-  if (!env.AWS_REGION) issues.push(["AWS_REGION", "Required for s3 storage"]);
-  return issues;
-}
-
-function emailIssues(env: Env, production: boolean): Issue[] {
-  const issues: Issue[] = [];
-  if (env.DRIPSIGN_EMAIL_TRANSPORT === "smtp" && production) {
-    issues.push(["DRIPSIGN_EMAIL_TRANSPORT", "Production requires ses"]);
-  }
-  // s3 storage already reports a missing AWS_REGION once.
-  if (env.DRIPSIGN_EMAIL_TRANSPORT === "ses" && !env.AWS_REGION && env.DRIPSIGN_STORAGE !== "s3") {
-    issues.push(["AWS_REGION", "Required for ses email"]);
+  if (production && config.email.transport === "smtp") {
+    issues.push(["DRIPSIGN_EMAIL_TRANSPORT", "Production requires ses or azure"]);
   }
   if (production && !env.DRIPSIGN_EMAIL_FROM) {
     issues.push(["DRIPSIGN_EMAIL_FROM", "Required in production"]);
+  } else if (config.email.transport === "azure" && config.email.from === "") {
+    issues.push(["DRIPSIGN_EMAIL_FROM", "Azure email needs an address on a connected domain"]);
   }
-  return issues;
+  return [...issues, ...integrationIssues(env, config)];
 }
 
-function hostIssues(env: Env, host: HostConfig | null, production: boolean): Issue[] {
-  if (host === null) return [];
+function integrationIssues(env: Env, config: Config): Issue[] {
   const issues: Issue[] = [];
-  const urls = [host.origin, ...host.tenants.flatMap((tenant) => tenant.event?.url ?? [])];
-  if (production && urls.some((url) => !url.startsWith("https://"))) {
-    issues.push(["DRIPSIGN_HOST", "Production requires https host URLs"]);
+  if (config.production && config.host && !config.host.origin.startsWith("https://")) {
+    issues.push(["DRIPSIGN_HOST", "Production requires an https host origin"]);
   }
-  if (host.tenants.some((tenant) => tenant.event !== null) && !env.DRIPSIGN_HOST_EVENT_SEED) {
-    issues.push(["DRIPSIGN_HOST_EVENT_SEED", "Required when a host tenant receives events"]);
-  }
-  if (new Set(host.tenants.map((tenant) => tenant.firm)).size !== host.tenants.length) {
+  const firms = new Set(config.host?.tenants.map((tenant) => tenant.firm));
+  if (config.host && firms.size !== config.host.tenants.length) {
     issues.push(["DRIPSIGN_HOST", "Each firm maps to one tenant"]);
   }
+  const urlMissing = env.DRIPSIGN_HOST_EVENT_URL === undefined;
+  if (urlMissing !== (env.DRIPSIGN_COMPLETION_KEYS === undefined)) {
+    const missing = urlMissing ? "DRIPSIGN_HOST_EVENT_URL" : "DRIPSIGN_COMPLETION_KEYS";
+    issues.push([missing, "Set the event URL and the completion keys together"]);
+  }
   return issues;
 }
 
-function build(env: Env, host: HostConfig | null): Config {
-  const production = env.NODE_ENV === "production";
+function build(
+  env: Env,
+  host: HostConfig | null,
+  completionKeys: readonly CompletionKey[] | null,
+  need: Need,
+): Config {
   return {
     nodeEnv: env.NODE_ENV,
-    production,
+    production: env.NODE_ENV === "production",
     databaseUrl: env.DRIPSIGN_DATABASE_URL,
     publicOrigin: new URL(env.DRIPSIGN_PUBLIC_ORIGIN).origin,
     authSecret: env.DRIPSIGN_AUTH_SECRET,
     trustedProxyHops: env.DRIPSIGN_TRUSTED_PROXY_HOPS,
     devLogin: env.DRIPSIGN_DEV_LOGIN === "1",
-    storage: buildStorage(env),
-    email: buildEmail(env),
+    storage: buildStorage(env, need),
+    email: buildEmail(env, need),
     ai: env.DRIPSIGN_ANTHROPIC_API_KEY
       ? {
           apiKey: env.DRIPSIGN_ANTHROPIC_API_KEY,
@@ -246,29 +307,64 @@ function build(env: Env, host: HostConfig | null): Config {
       : null,
     jobsConcurrency: env.DRIPSIGN_JOBS_CONCURRENCY,
     host,
-    hostEventSeed: env.DRIPSIGN_HOST_EVENT_SEED ?? null,
+    completionExport:
+      env.DRIPSIGN_HOST_EVENT_URL && completionKeys
+        ? { url: env.DRIPSIGN_HOST_EVENT_URL, keys: completionKeys }
+        : null,
   };
 }
 
-// crossFieldIssues has already refused missing values, so the `?? ''` fallbacks never apply.
-function buildStorage(env: Env): StorageConfig {
-  if (env.DRIPSIGN_STORAGE === "file") {
-    return { kind: "file", dir: workspacePath(env.DRIPSIGN_STORAGE_DIR ?? "") };
-  }
+function azureIdentity(need: Need): AzureIdentity {
+  const use = "an azure provider";
   return {
-    kind: "s3",
-    bucket: env.DRIPSIGN_S3_BUCKET ?? "",
-    region: env.AWS_REGION ?? "",
-    kmsKeyId: env.DRIPSIGN_S3_KMS_KEY_ID ?? null,
+    clientId: need("AZURE_CLIENT_ID", use),
+    endpoint: need("IDENTITY_ENDPOINT", use),
+    header: need("IDENTITY_HEADER", use),
   };
 }
 
-function buildEmail(env: Env): EmailConfig {
-  const from = env.DRIPSIGN_EMAIL_FROM ?? DEV_EMAIL_FROM;
-  if (env.DRIPSIGN_EMAIL_TRANSPORT === "ses") {
-    return { transport: "ses", from, region: env.AWS_REGION ?? "" };
+function buildStorage(env: Env, need: Need): StorageConfig {
+  switch (env.DRIPSIGN_STORAGE) {
+    case "file":
+      return { kind: "file", dir: workspacePath(need("DRIPSIGN_STORAGE_DIR", "file storage")) };
+    case "s3":
+      return {
+        kind: "s3",
+        bucket: need("DRIPSIGN_S3_BUCKET", "s3 storage"),
+        region: need("AWS_REGION", "s3 storage"),
+        kmsKeyId: env.DRIPSIGN_S3_KMS_KEY_ID ?? null,
+      };
+    case "azure":
+      return {
+        kind: "azure",
+        endpoint: need("DRIPSIGN_AZURE_BLOB_ENDPOINT", "azure storage"),
+        container: need("DRIPSIGN_AZURE_BLOB_CONTAINER", "azure storage"),
+        identity: azureIdentity(need),
+      };
   }
-  return { transport: "smtp", from, smtpUrl: env.DRIPSIGN_SMTP_URL ?? DEV_SMTP_URL };
+}
+
+function buildEmail(env: Env, need: Need): EmailConfig {
+  const from = env.DRIPSIGN_EMAIL_FROM ?? DEV_EMAIL_FROM;
+  switch (env.DRIPSIGN_EMAIL_TRANSPORT) {
+    case "smtp":
+      return { transport: "smtp", from, smtpUrl: env.DRIPSIGN_SMTP_URL ?? DEV_SMTP_URL };
+    case "ses":
+      return { transport: "ses", from, region: need("AWS_REGION", "ses email") };
+    case "azure":
+      return {
+        transport: "azure",
+        from: senderAddress(from),
+        endpoint: need("DRIPSIGN_AZURE_EMAIL_ENDPOINT", "azure email"),
+        identity: azureIdentity(need),
+      };
+  }
+}
+
+/** The address of `Name <address>` or of a bare address; empty when neither parses. */
+function senderAddress(from: string): string {
+  const address = /<([^<>]+)>$/u.exec(from.trim())?.[1] ?? from.trim();
+  return z.email().safeParse(address).success ? address : "";
 }
 
 /** Web runs in apps/web and the worker in packages/core: relative paths resolve from the workspace root. */

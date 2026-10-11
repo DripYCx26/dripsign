@@ -1,8 +1,8 @@
 "use client";
 
 import { LIMITS } from "@dripsign/core/schema";
-import { useEffect, useRef, useState } from "react";
-import type { EditableSection } from "@/features/document/sections.ts";
+import { useEffect, useId, useRef, useState } from "react";
+import { emptySection, type EditableSection } from "@/features/document/sections.ts";
 import { useUnloadGuard } from "@/features/document/useUnloadGuard.ts";
 import { Segmented, TextField } from "@/ui";
 import styles from "./NewAgreementForm.module.css";
@@ -19,6 +19,10 @@ const MODES = [
   { value: "upload", label: "Upload PDF" },
 ] as const;
 
+// Ids come from useId: random ones differ between the server render and hydration.
+const startSections = (id: string): readonly EditableSection[] => [emptySection(`section-${id}`)];
+const startRows = (id: string): readonly RecipientRow[] => [emptyRow(`row-${id}`)];
+
 const NO_ROW_ERRORS: ReadonlyMap<string, RowErrors> = new Map();
 
 /**
@@ -28,14 +32,13 @@ const NO_ROW_ERRORS: ReadonlyMap<string, RowErrors> = new Map();
  */
 export function NewAgreementForm() {
   const form = useRef<HTMLFormElement>(null);
+  const startId = useId();
   const [title, setTitle] = useState("");
   const [mode, setMode] = useState<Mode>("write");
   const [template, setTemplate] = useState<TemplateId>("blank");
-  const [sections, setSections] = useState<readonly EditableSection[]>(() =>
-    templateSections("blank"),
-  );
+  const [sections, setSections] = useState(() => startSections(startId));
   const [file, setFile] = useState<File | null>(null);
-  const [rows, setRows] = useState<readonly RecipientRow[]>(() => [emptyRow()]);
+  const [rows, setRows] = useState(() => startRows(startId));
   const { phase, busy, problem, errors, createdId, submit } = useCreateAgreement();
 
   const locked = busy || createdId !== null;
@@ -68,7 +71,8 @@ export function NewAgreementForm() {
         onChange={setTitle}
       />
       <Segmented
-        label="Terms"
+        label="Terms source"
+        hideLabel
         name="mode"
         options={MODES}
         value={mode}

@@ -317,6 +317,43 @@ export const EMAIL_TEMPLATES = [
   "voided",
 ] as const;
 
+const hostUuid = (field: string) =>
+  z
+    .string()
+    .trim()
+    .toLowerCase()
+    .pipe(z.uuid(`Enter the ${field} as a UUID.`));
+const hostIdentifier = (field: string) =>
+  z
+    .string()
+    .trim()
+    .regex(/^[\x21-\x7e]{1,100}$/u, `Enter the ${field} as 1 to 100 visible ASCII characters.`);
+const positiveCount = (field: string, max: number) =>
+  z
+    .number(`Enter the ${field} as a whole number.`)
+    .int(`Enter the ${field} as a whole number.`)
+    .min(1, `The ${field} is at least 1.`)
+    .max(max, `The ${field} is at most ${String(max)}.`);
+
+/** The public pins Dreach issued for this tenant's executed event; no secret, no URL. */
+export const completionExportConfigSchema = z.strictObject({
+  hostTenantId: hostUuid("host tenant id"),
+  senderBindingId: hostUuid("sender binding id"),
+  senderBindingRevision: positiveCount("sender binding revision", Number.MAX_SAFE_INTEGER),
+  senderGrantId: hostUuid("sender grant id"),
+  issuer: hostIdentifier("issuer"),
+  audience: hostIdentifier("audience"),
+  keyId: hostIdentifier("key id"),
+  keyVersion: positiveCount("key version", 4_294_967_295),
+  freshnessSeconds: positiveCount("freshness", 300),
+});
+
+/** A save names the revision it replaces (0 for the first), so a stale form cannot win. */
+export const completionExportSaveSchema = z.strictObject({
+  expectedRevision: z.number().int().min(0),
+  config: completionExportConfigSchema,
+});
+
 /** Tenant and agreement ids live on the outbox row, not in the payload. */
 export const jobPayloadSchema = z
   .discriminatedUnion("kind", [
@@ -356,4 +393,6 @@ export type StaffListFilter = (typeof STAFF_LIST_FILTERS)[number];
 export type StaffListQuery = z.infer<typeof staffListQuerySchema>;
 export type EmailTemplate = (typeof EMAIL_TEMPLATES)[number];
 export type JobPayload = z.infer<typeof jobPayloadSchema>;
+export type CompletionExportConfig = z.infer<typeof completionExportConfigSchema>;
+export type CompletionExportSave = z.input<typeof completionExportSaveSchema>;
 export type JobKind = JobPayload["kind"];

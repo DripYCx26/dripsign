@@ -8,10 +8,12 @@ import { suggestEdits } from "../adapters/anthropic.ts";
 import { RetryableDeliveryError, retryableDelivery, sendEmail } from "../adapters/email.ts";
 import { getStorage, objectKey, readBytes, storeBytes } from "../adapters/storage.ts";
 import type { StorageDriver } from "../adapters/storage.ts";
+import { readBoundedJson } from "../adapters/http.ts";
 import { loadSuggestionInput, completeSuggestion, failSuggestion } from "../domain/ai.ts";
+import { loadCompletionExport, recordCompletionDelivery } from "../domain/completionExport.ts";
 import { applyPreparedDraft, failPreparation } from "../domain/revisions.ts";
 import { loadArchiveEvidence, completeArchive } from "../domain/signing.ts";
-import { buildExecutedEvent } from "../host/event.ts";
+import { parseExecutedReceipt, prepareExecutedEvent } from "../host/event.ts";
 import { prepareDraftPdf } from "../pdf/prepare.ts";
 import type { DraftSigner } from "../pdf/prepare.ts";
 import { renderAuditRecord, renderSignedPdf } from "../pdf/archive.ts";
@@ -141,11 +143,16 @@ async function ai(job: JobOf<"ai_suggest">, signal: AbortSignal): Promise<void> 
   }
 }
 
+/** Dreach's receipt is four short fields. */
+const RECEIPT_BYTES = 1024;
+
+/** Delivered only once the host returns its receipt for exactly this body. */
 async function hostEvent(job: JobOf<"host_event">, signal: AbortSignal): Promise<void> {
-  const event = await buildExecutedEvent(getPool(), {
-    tenantId: tenant(job),
-    roundId: job.payload.roundId,
-  });
+  const tenantId = tenant(job);
+  const roundId = job.payload.roundId;
+  const frozen = await loadCompletionExport(getPool(), { tenantId, roundId });
+  if (frozen === null) throw new Error("Round has no completion export");
+  const event = prepareExecutedEvent(frozen);
   const response = await fetch(event.url, {
     method: "POST",
     headers: event.headers,
@@ -155,10 +162,18 @@ async function hostEvent(job: JobOf<"host_event">, signal: AbortSignal): Promise
   }).catch((error: unknown) => {
     throw new RetryableDeliveryError({ cause: error });
   });
-  await response.body?.cancel();
-  if (response.status === 408 || response.status === 429 || response.status >= 500)
-    throw new RetryableDeliveryError();
-  if (!response.ok) throw new Error("Host refused executed event");
+  if (!response.ok) {
+    await response.body?.cancel();
+    if (response.status === 408 || response.status === 429 || response.status >= 500)
+      throw new RetryableDeliveryError();
+    throw new Error("Host refused executed event");
+  }
+  const answer = await readBoundedJson(response, RECEIPT_BYTES).catch((error: unknown) => {
+    throw new RetryableDeliveryError({ cause: error });
+  });
+  const receipt = parseExecutedReceipt(answer, event.body);
+  if (receipt === null) throw new RetryableDeliveryError();
+  await recordCompletionDelivery(getPool(), { tenantId, roundId, receipt });
 }
 
 export function createHandlers(storage = getStorage()): Record<JobKind, HandlerDefinition> {

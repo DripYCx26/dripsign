@@ -47,3 +47,47 @@ it("parses a minimal dev env and refuses unsafe combinations", () => {
     /^Invalid DripSign configuration:\n- DRIPSIGN_S3_BUCKET: [^\n]+$/u,
   );
 });
+
+it("parses azure providers and the completion export pair, refusing half of either", () => {
+  const azure = {
+    ...production,
+    DRIPSIGN_STORAGE: "azure",
+    DRIPSIGN_AZURE_BLOB_ENDPOINT: "https://dripsign.blob.core.windows.net",
+    DRIPSIGN_AZURE_BLOB_CONTAINER: "documents",
+    DRIPSIGN_EMAIL_TRANSPORT: "azure",
+    DRIPSIGN_AZURE_EMAIL_ENDPOINT: "https://dripsign.communication.azure.com",
+    AZURE_CLIENT_ID: "00000000-0000-4000-8000-000000000001",
+    IDENTITY_ENDPOINT: "http://localhost:42356/msi/token",
+    IDENTITY_HEADER: "synthetic-identity-header",
+  };
+  const config = parseConfig(azure);
+  expect(config.storage).toMatchObject({ kind: "azure", container: "documents" });
+  expect(config.email).toMatchObject({ transport: "azure", from: "no-reply@example.test" });
+  expect(config.completionExport).toBeNull();
+  expect(() => parseConfig({ ...azure, IDENTITY_HEADER: "" })).toThrow(
+    /^Invalid DripSign configuration:\n- IDENTITY_HEADER: [^\n]+$/u,
+  );
+  expect(() => parseConfig({ ...production, DRIPSIGN_STORAGE: "file" })).toThrow(
+    /DRIPSIGN_STORAGE: Production requires s3 or azure/u,
+  );
+
+  const keys = [{ keyId: "dripsign-1", keyVersion: 1, seed: "09".repeat(32) }];
+  const exporting = {
+    ...dev,
+    DRIPSIGN_HOST_EVENT_URL: "https://app.example.test/v1/webhooks/dripsign",
+    DRIPSIGN_COMPLETION_KEYS: JSON.stringify(keys),
+  };
+  expect(parseConfig(exporting).completionExport).toEqual({
+    url: exporting.DRIPSIGN_HOST_EVENT_URL,
+    keys,
+  });
+  expect(() => parseConfig({ ...exporting, DRIPSIGN_COMPLETION_KEYS: "" })).toThrow(
+    /^Invalid DripSign configuration:\n- DRIPSIGN_COMPLETION_KEYS: [^\n]+$/u,
+  );
+  expect(() =>
+    parseConfig({ ...exporting, DRIPSIGN_HOST_EVENT_URL: "https://app.example.test/hook" }),
+  ).toThrow(/DRIPSIGN_HOST_EVENT_URL/u);
+  expect(() =>
+    parseConfig({ ...exporting, DRIPSIGN_COMPLETION_KEYS: JSON.stringify([...keys, ...keys]) }),
+  ).toThrow(/DRIPSIGN_COMPLETION_KEYS/u);
+});

@@ -1,21 +1,42 @@
 // The agreement-executed event in the exact shape Dreach's receiver verifies: a closed 18-field
-// canonical JSON body and an Ed25519 signature over a binary delivery frame
-// (dreach crates/dr-authority/src/external_signing.rs). It reports evidence; it grants nothing.
+// canonical JSON body, frozen when the round completes, and an Ed25519 signature over a binary
+// delivery frame stamped per attempt (dreach crates/dr-authority/src/external_signing.rs). It
+// reports evidence; it grants nothing.
 import { createHash, createPrivateKey, sign } from "node:crypto";
-import { loadConfig } from "../config.ts";
-import type { HostConfig } from "../config.ts";
-import type { Db } from "../db.ts";
-import { canonicalJson } from "../schema.ts";
+import { z } from "zod";
+import { HOST_EVENT_PATH, loadConfig } from "../config.ts";
+import type { CompletionKey } from "../config.ts";
+import {
+  canonicalJson,
+  completionExportConfigSchema,
+  sha256Schema,
+  uuidSchema,
+} from "../schema.ts";
+import type { CompletionExportConfig } from "../schema.ts";
 
-export const EVENT_PATH = "/v1/webhooks/dripsign";
 const FRAME_LABEL = "dreach.dripsign.executed\0";
 const FRAME_VERSION = 1;
-/** Dreach's freshness ceiling: expiry is at most this long after issue. */
-const DELIVERY_LIFETIME_MICROS = 300_000_000n;
 /** PKCS#8 wrapping for a raw RFC 8032 seed, so node:crypto can load it. */
 const ED25519_PKCS8_PREFIX = Buffer.from("302e020100300506032b657004220420", "hex");
 
-export type HostEventConfig = NonNullable<HostConfig["tenants"][number]["event"]>;
+/** Dreach's closed 18-field `agreement_executed` body: the pins, then the round's facts. */
+const executedEventSchema = completionExportConfigSchema
+  .omit({ hostTenantId: true, freshnessSeconds: true })
+  .extend({
+    schemaVersion: z.literal(1),
+    kind: z.literal("agreement_executed"),
+    tenantId: uuidSchema,
+    sourceTenantId: uuidSchema,
+    eventId: uuidSchema,
+    agreementId: uuidSchema,
+    revisionId: uuidSchema,
+    roundId: uuidSchema,
+    completedAtMicros: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+    signedDocumentSha256: sha256Schema,
+    auditRecordSha256: sha256Schema,
+  });
+
+type ExecutedEvent = z.infer<typeof executedEventSchema>;
 
 /** The completed round's facts; `tenantId` is DripSign's tenant (the body's `sourceTenantId`). */
 export interface ExecutedFacts {
@@ -35,49 +56,36 @@ export interface SignedEvent {
   readonly headers: Readonly<Record<string, string>>;
 }
 
-export interface HostEventRequest {
+export interface HostEventRequest extends SignedEvent {
   readonly url: string;
-  readonly headers: Readonly<Record<string, string>>;
+}
+
+/** A round's frozen export as stored, with the database clock at load time. */
+export interface FrozenExport {
   readonly body: string;
+  readonly freshnessSeconds: number;
+  readonly nowMicros: bigint;
 }
 
-/**
- * Builds a freshly stamped delivery for a completed round. Call it per attempt: the signature
- * expires after five minutes. Throws when the tenant no longer has a host event configured.
- */
-export async function buildExecutedEvent(
-  db: Db,
-  input: { readonly tenantId: string; readonly roundId: string },
-): Promise<HostEventRequest> {
-  const config = loadConfig();
-  const event = config.host?.tenants.find((tenant) => tenant.tenantId === input.tenantId)?.event;
-  if (!event || config.hostEventSeed === null) {
-    throw new Error("No host event is configured for this tenant");
-  }
-  const { facts, nowMicros } = await loadRound(db, input.tenantId, input.roundId);
-  const seed = Buffer.from(config.hostEventSeed, "base64url");
-  const signed = signExecutedEvent(event, facts, seed, nowMicros);
-  return { url: new URL(EVENT_PATH, event.url).href, headers: signed.headers, body: signed.body };
+/** The host's acknowledgement of one event. */
+export interface ExecutedReceipt {
+  readonly evidenceId: string;
+  readonly recordedAtMicros: number;
 }
 
-/** Pure: the canonical body, its delivery frame and the headers carrying the signature. */
-export function signExecutedEvent(
-  event: HostEventConfig,
-  facts: ExecutedFacts,
-  seed: Buffer,
-  issuedMicros: bigint,
-): SignedEvent {
-  const body = canonicalJson({
+/** Pure: the canonical body frozen at completion. Its pins never change on retry. */
+export function executedEventBody(pins: CompletionExportConfig, facts: ExecutedFacts): string {
+  const event: ExecutedEvent = {
     schemaVersion: 1,
     kind: "agreement_executed",
-    issuer: event.issuer,
-    audience: event.audience,
-    keyId: event.keyId,
-    keyVersion: event.keyVersion,
-    senderBindingId: event.senderBindingId,
-    senderBindingRevision: event.senderBindingRevision,
-    senderGrantId: event.senderGrantId,
-    tenantId: event.hostTenantId,
+    issuer: pins.issuer,
+    audience: pins.audience,
+    keyId: pins.keyId,
+    keyVersion: pins.keyVersion,
+    senderBindingId: pins.senderBindingId,
+    senderBindingRevision: pins.senderBindingRevision,
+    senderGrantId: pins.senderGrantId,
+    tenantId: pins.hostTenantId,
     sourceTenantId: facts.tenantId,
     eventId: facts.eventId,
     agreementId: facts.agreementId,
@@ -86,11 +94,36 @@ export function signExecutedEvent(
     completedAtMicros: facts.completedAtMicros,
     signedDocumentSha256: facts.signedDocumentSha256,
     auditRecordSha256: facts.auditRecordSha256,
-  });
-  const expiresMicros = issuedMicros + DELIVERY_LIFETIME_MICROS;
+  };
+  return canonicalJson(executedEventSchema.parse(event));
+}
+
+/** The frozen body's fields; throws if the stored bytes are not exactly a canonical body. */
+export function parseExecutedEvent(body: string): ExecutedEvent {
+  const event = executedEventSchema.parse(JSON.parse(body));
+  if (canonicalJson(event) !== body) throw new Error("Executed event body is not canonical");
+  return event;
+}
+
+/**
+ * Pure: signs a frozen body with the key its own keyId and keyVersion name, valid from
+ * `issuedMicros` for `freshnessSeconds`. Throws when no configured key matches.
+ */
+export function signExecutedEvent(
+  body: string,
+  keys: readonly CompletionKey[],
+  issuedMicros: bigint,
+  freshnessSeconds: number,
+): SignedEvent {
+  const event = parseExecutedEvent(body);
+  const key = keys.find(
+    (candidate) => candidate.keyId === event.keyId && candidate.keyVersion === event.keyVersion,
+  );
+  if (!key) throw new Error("No configured completion key matches the event");
+  const expiresMicros = issuedMicros + BigInt(freshnessSeconds) * 1_000_000n;
   const frame = deliveryFrame(event, issuedMicros, expiresMicros, body);
-  const key = createPrivateKey({
-    key: Buffer.concat([ED25519_PKCS8_PREFIX, seed]),
+  const privateKey = createPrivateKey({
+    key: Buffer.concat([ED25519_PKCS8_PREFIX, Buffer.from(key.seed, "hex")]),
     format: "der",
     type: "pkcs8",
   });
@@ -101,21 +134,66 @@ export function signExecutedEvent(
       "content-type": "application/json",
       "x-dripsign-issued-at-micros": issuedMicros.toString(),
       "x-dripsign-expires-at-micros": expiresMicros.toString(),
-      "x-dripsign-signature": sign(null, frame, key).toString("base64url"),
+      "x-dripsign-signature": sign(null, frame, privateKey).toString("base64url"),
     },
   };
 }
 
+/**
+ * A freshly stamped delivery of a frozen event. Call it per attempt: the signature expires after
+ * the frozen freshness. Throws when delivery is off or the frozen pins do not belong to this
+ * deployment and its destination.
+ */
+export function prepareExecutedEvent(frozen: FrozenExport): HostEventRequest {
+  const config = loadConfig();
+  const delivery = config.completionExport;
+  if (delivery === null) throw new Error("Completion export delivery is off");
+  const event = parseExecutedEvent(frozen.body);
+  if (event.issuer !== config.publicOrigin || event.audience !== new URL(delivery.url).origin) {
+    throw new Error("The frozen event names another sender or destination");
+  }
+  const signed = signExecutedEvent(
+    frozen.body,
+    delivery.keys,
+    frozen.nowMicros,
+    frozen.freshnessSeconds,
+  );
+  return { ...signed, url: delivery.url };
+}
+
+/** The receipt Dreach returns for exactly this body, or null when the answer is anything else. */
+export function parseExecutedReceipt(answer: unknown, body: string): ExecutedReceipt | null {
+  if (typeof answer !== "object" || answer === null || Array.isArray(answer)) return null;
+  const fields = answer as Record<string, unknown>;
+  const event = parseExecutedEvent(body);
+  const { evidenceId, recordedAtMicros } = fields;
+  if (
+    Object.keys(fields).sort().join(",") !== "bodySha256,eventId,evidenceId,recordedAtMicros" ||
+    fields.eventId !== event.eventId ||
+    fields.bodySha256 !== createHash("sha256").update(body, "utf8").digest("hex") ||
+    typeof evidenceId !== "string" ||
+    !uuidSchema.safeParse(evidenceId).success ||
+    typeof recordedAtMicros !== "number" ||
+    !Number.isSafeInteger(recordedAtMicros) ||
+    recordedAtMicros < event.completedAtMicros
+  ) {
+    return null;
+  }
+  return { evidenceId, recordedAtMicros };
+}
+
 function deliveryFrame(
-  event: HostEventConfig,
+  event: ExecutedEvent,
   issuedMicros: bigint,
   expiresMicros: bigint,
   body: string,
 ): Buffer {
-  const fields = ["POST", EVENT_PATH, event.issuer, event.audience, event.keyId].map((field) => {
-    const bytes = Buffer.from(field, "ascii");
-    return Buffer.concat([uint32(bytes.length), bytes]);
-  });
+  const fields = ["POST", HOST_EVENT_PATH, event.issuer, event.audience, event.keyId].map(
+    (field) => {
+      const bytes = Buffer.from(field, "ascii");
+      return Buffer.concat([uint32(bytes.length), bytes]);
+    },
+  );
   const times = Buffer.alloc(16);
   times.writeBigInt64BE(issuedMicros, 0);
   times.writeBigInt64BE(expiresMicros, 8);
@@ -133,50 +211,4 @@ function uint32(value: number): Buffer {
   const bytes = Buffer.alloc(4);
   bytes.writeUInt32BE(value);
   return bytes;
-}
-
-interface RoundRow {
-  agreement_id: string;
-  revision_id: string;
-  completed_micros: string;
-  now_micros: string;
-  signed_sha256: string | null;
-  audit_sha256: string | null;
-}
-
-// Times come from the database clock in whole microseconds, so completion never follows issue.
-async function loadRound(
-  db: Db,
-  tenantId: string,
-  roundId: string,
-): Promise<{ facts: ExecutedFacts; nowMicros: bigint }> {
-  const found = await db.query<RoundRow>(
-    `SELECT g.agreement_id, g.revision_id,
-       (extract(epoch FROM g.ended_at) * 1000000)::bigint::text AS completed_micros,
-       (extract(epoch FROM clock_timestamp()) * 1000000)::bigint::text AS now_micros,
-       max(f.sha256) FILTER (WHERE f.kind = 'signed_document') AS signed_sha256,
-       max(f.sha256) FILTER (WHERE f.kind = 'audit_record') AS audit_sha256
-     FROM dripsign.signing_round g
-     JOIN dripsign.artifact f ON f.tenant_id = g.tenant_id AND f.round_id = g.id
-     WHERE g.tenant_id = $1 AND g.id = $2 AND g.status = 'completed'
-     GROUP BY g.agreement_id, g.revision_id, g.ended_at`,
-    [tenantId, roundId],
-  );
-  const row = found.rows[0];
-  if (!row?.signed_sha256 || !row.audit_sha256) {
-    throw new Error(`Round ${roundId} has no completed evidence`);
-  }
-  return {
-    facts: {
-      eventId: roundId,
-      tenantId,
-      agreementId: row.agreement_id,
-      revisionId: row.revision_id,
-      roundId,
-      completedAtMicros: Number(row.completed_micros),
-      signedDocumentSha256: row.signed_sha256,
-      auditRecordSha256: row.audit_sha256,
-    },
-    nowMicros: BigInt(row.now_micros),
-  };
 }

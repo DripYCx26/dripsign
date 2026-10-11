@@ -5,8 +5,14 @@ import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3
 import { loadConfig } from "../config.ts";
 import type { StorageConfig } from "../config.ts";
 import { LIMITS, sha256Schema, uuidSchema } from "../schema.ts";
+import { azureToken } from "./azure.ts";
+import { readBoundedBody } from "./http.ts";
 
 const MAX_OBJECT_BYTES = LIMITS.pdfBytes * 2;
+const OPERATION_TIMEOUT_MS = 60_000;
+/** Pinned: the newest Blob service version deployed in every public region on 2026-09-23. */
+export const BLOB_SERVICE_VERSION = "2026-04-06";
+const STORAGE_RESOURCE = "https://storage.azure.com/";
 
 export interface StoredObject {
   readonly key: string;
@@ -35,7 +41,17 @@ function validateKey(key: string): void {
 }
 
 export function createStorage(config: StorageConfig): StorageDriver {
-  if (config.kind === "file") return fileStorage(config.dir);
+  switch (config.kind) {
+    case "file":
+      return fileStorage(config.dir);
+    case "s3":
+      return s3Storage(config);
+    case "azure":
+      return azureBlobStorage(config);
+  }
+}
+
+function s3Storage(config: Extract<StorageConfig, { kind: "s3" }>): StorageDriver {
   const client = new S3Client({ region: config.region });
   return {
     async put(key, bytes) {
@@ -52,7 +68,7 @@ export function createStorage(config: StorageConfig): StorageDriver {
               ? { ServerSideEncryption: "aws:kms", SSEKMSKeyId: config.kmsKeyId }
               : {}),
           }),
-          { abortSignal: AbortSignal.timeout(60_000) },
+          { abortSignal: AbortSignal.timeout(OPERATION_TIMEOUT_MS) },
         );
       } catch (error: unknown) {
         if (!(
@@ -66,10 +82,81 @@ export function createStorage(config: StorageConfig): StorageDriver {
     async get(key) {
       validateKey(key);
       const result = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }), {
-        abortSignal: AbortSignal.timeout(60_000),
+        abortSignal: AbortSignal.timeout(OPERATION_TIMEOUT_MS),
       });
       if (!result.Body) throw new Error("Storage object has no body");
-      return boundedStorageRead(result.Body.transformToWebStream());
+      return readBoundedBody(new Response(result.Body.transformToWebStream()), MAX_OBJECT_BYTES);
+    },
+  };
+}
+
+/**
+ * Block blobs under the app's managed identity, written once with `If-None-Match: *`. The
+ * template grants create and read, never overwrite or delete.
+ */
+function azureBlobStorage(config: Extract<StorageConfig, { kind: "azure" }>): StorageDriver {
+  const base = new URL(`${config.endpoint.replace(/\/$/u, "")}/${config.container}/`);
+  const token = azureToken(config.identity, STORAGE_RESOURCE);
+
+  /** One request, sent again once with a fresh token only when the service refused the token. */
+  async function send(
+    method: "GET" | "PUT",
+    key: string,
+    headers: Readonly<Record<string, string>>,
+    body?: Uint8Array,
+  ): Promise<Response> {
+    const signal = AbortSignal.timeout(OPERATION_TIMEOUT_MS);
+    const url = new URL(key, base);
+    for (let refreshed = false; ; refreshed = true) {
+      const bearer = await token.bearer(signal);
+      const response = await fetch(url, {
+        method,
+        redirect: "error",
+        signal,
+        ...(body ? { body: new Uint8Array(body) } : {}),
+        headers: {
+          ...headers,
+          Authorization: `Bearer ${bearer}`,
+          "x-ms-version": BLOB_SERVICE_VERSION,
+          "x-ms-date": new Date().toUTCString(),
+        },
+      });
+      if (response.status !== 401 || refreshed) return response;
+      await response.body?.cancel();
+      token.refuse(bearer);
+    }
+  }
+
+  return {
+    async put(key, bytes) {
+      validateKey(key);
+      const response = await send(
+        "PUT",
+        key,
+        {
+          "x-ms-blob-type": "BlockBlob",
+          "Content-Type": "application/pdf",
+          "If-None-Match": "*",
+          // The service refuses a body whose MD5 changed in transit; reads verify the SHA-256.
+          "Content-MD5": createHash("md5").update(bytes).digest("base64"),
+          "x-ms-meta-sha256": hashBytes(bytes),
+        },
+        bytes,
+      );
+      await response.body?.cancel();
+      // An existing blob, or one this identity may not overwrite, counts only once storeBytes has
+      // read back the same bytes.
+      if ([201, 403, 409, 412].includes(response.status)) return;
+      throw new Error(`Storage write failed with status ${String(response.status)}`);
+    },
+    async get(key) {
+      validateKey(key);
+      const response = await send("GET", key, {});
+      if (response.status !== 200) {
+        await response.body?.cancel();
+        throw new Error(`Storage read failed with status ${String(response.status)}`);
+      }
+      return readBoundedBody(response, MAX_OBJECT_BYTES);
     },
   };
 }
@@ -136,25 +223,4 @@ export async function readBytes(object: StoredObject, driver = getStorage()): Pr
     throw new Error("Storage integrity mismatch");
   }
   return bytes;
-}
-
-async function boundedStorageRead(stream: ReadableStream): Promise<Uint8Array> {
-  const reader = stream.getReader();
-  const chunks: Uint8Array[] = [];
-  let length = 0;
-  try {
-    for (;;) {
-      const next = await reader.read();
-      if (next.done) break;
-      const chunk: unknown = next.value;
-      if (!(chunk instanceof Uint8Array)) throw new Error("Storage body is invalid");
-      length += chunk.byteLength;
-      if (length > MAX_OBJECT_BYTES) throw new Error("Storage object exceeds limit");
-      chunks.push(chunk);
-    }
-    return Buffer.concat(chunks);
-  } finally {
-    await reader.cancel();
-    reader.releaseLock();
-  }
 }

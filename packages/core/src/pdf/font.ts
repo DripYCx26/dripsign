@@ -1,13 +1,20 @@
 // One font for signature text in the PDF and the on-screen preview; the name preflight and the
 // renderer share these glyphs, widths and fit rules so a recorded signature always renders.
 import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument } from "pdf-lib";
 import type { PDFFont } from "pdf-lib";
 import { DomainError } from "../errors.ts";
 import { typedNameSchema } from "../schema.ts";
 
-export const SIGNATURE_FONT_URL = new URL("../../assets/NotoSans-Regular.ttf", import.meta.url);
+// A path from `import.meta.url`, not `new URL(..., import.meta.url)`: Next's bundler rewrites that
+// form into a `/_next/static/media/` asset URL that `readFile` cannot open in a server action.
+export const SIGNATURE_FONT_PATH = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../assets/NotoSans-Regular.ttf",
+);
 
 /** The signature box drawn on the signature page, in PDF points. */
 export const SIGNATURE_BOX = { width: 330, height: 46 } as const;
@@ -23,7 +30,7 @@ let fontBytes: Promise<Uint8Array> | undefined;
 let preflightFont: Promise<PDFFont> | undefined;
 
 export function loadSignatureFontBytes(): Promise<Uint8Array> {
-  fontBytes ??= readFile(SIGNATURE_FONT_URL);
+  fontBytes ??= readFile(SIGNATURE_FONT_PATH);
   return fontBytes;
 }
 

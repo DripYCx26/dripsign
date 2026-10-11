@@ -73,7 +73,12 @@ export async function revokeStaff(actor: StaffActor, email: string): Promise<voi
   });
 }
 
-async function requireRole(db: Db, actor: StaffActor, roles: readonly StaffRole[]): Promise<void> {
+/** Rechecks the actor's live role inside the caller's transaction; anything else is not found. */
+export async function requireRole(
+  db: Db,
+  actor: StaffActor,
+  roles: readonly StaffRole[],
+): Promise<void> {
   const found = await db.query<{ role: StaffRole }>(
     `SELECT role FROM dripsign.staff
      WHERE tenant_id = $1 AND email = $2 AND revoked_at IS NULL`,

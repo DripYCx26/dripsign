@@ -2,13 +2,13 @@
 // signed PDF and audit record, then commits them here.
 import { objectKey } from "../adapters/storage.ts";
 import type { StoredObject } from "../adapters/storage.ts";
-import { loadConfig } from "../config.ts";
 import type { Db } from "../db.ts";
 import { DomainError } from "../errors.ts";
-import { enqueue, lockLease } from "../jobs/outbox.ts";
+import { lockLease } from "../jobs/outbox.ts";
 import type { JobLease } from "../jobs/outbox.ts";
 import type { ArchiveEvidence } from "../pdf/archive.ts";
 import type { SigningField } from "../schema.ts";
+import { exportCompletion } from "./completionExport.ts";
 import { liveRecipients, notify } from "./notify.ts";
 import { withinTx } from "./state.ts";
 
@@ -192,11 +192,16 @@ async function commitArchive(
       input.auditRecord.byteLength,
     ],
   );
-  await db.query(
+  // ended_at is the completion time the executed event reports, in whole microseconds.
+  const completed = await db.query<{ revisionId: string; completedMicros: string }>(
     `UPDATE dripsign.signing_round SET status = 'completed', ended_at = now()
-     WHERE tenant_id = $1 AND id = $2`,
+     WHERE tenant_id = $1 AND id = $2
+     RETURNING revision_id AS "revisionId",
+       (extract(epoch FROM ended_at) * 1000000)::bigint::text AS "completedMicros"`,
     [tenantId, roundId],
   );
+  const round = completed.rows[0];
+  if (round === undefined) throw new Error(`Round ${roundId} does not exist`);
   await db.query(
     `UPDATE dripsign.agreement SET status = 'signed', version = version + 1, updated_at = now()
      WHERE tenant_id = $1 AND id = $2`,
@@ -205,13 +210,13 @@ async function commitArchive(
   const agreement = { tenantId, id: agreementId, title: input.title };
   const recipients = await liveRecipients(db, tenantId, agreementId);
   await notify(db, { agreement, template: "completed", to: recipients, resourceId: roundId });
-  const host = loadConfig().host?.tenants.find((tenant) => tenant.tenantId === tenantId);
-  if (host?.event) {
-    await enqueue(db, {
-      tenantId,
-      agreementId,
-      dedupeKey: `host_event:${roundId}`,
-      payload: { kind: "host_event", roundId },
-    });
-  }
+  await exportCompletion(db, {
+    tenantId,
+    agreementId,
+    roundId,
+    revisionId: round.revisionId,
+    completedAtMicros: Number(round.completedMicros),
+    signedDocumentSha256: input.signedDocument.sha256,
+    auditRecordSha256: input.auditRecord.sha256,
+  });
 }

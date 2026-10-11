@@ -3,7 +3,7 @@ import { afterAll, expect, it, vi } from "vitest";
 import { readSession } from "../auth/sessions.ts";
 import { closePool, getPool } from "../db.ts";
 import { acceptBridgeAssertion, verifyBridgeToken } from "./entry.ts";
-import { signExecutedEvent } from "./event.ts";
+import { executedEventBody, signExecutedEvent } from "./event.ts";
 
 // Golden bridge vector from dreach crates/dr-authority/src/golden_vectors_tests.rs
 // (BridgeKey seed [7; 32], issued at 1_790_828_000, nonce bytes 0..16).
@@ -49,7 +49,7 @@ vi.stubEnv(
   JSON.stringify({
     origin: HOST_ORIGIN,
     entry: ENTRY,
-    tenants: [{ firm: FIRM, tenantId, event: null }],
+    tenants: [{ firm: FIRM, tenantId }],
   }),
 );
 
@@ -104,19 +104,19 @@ it("accepts Dreach's golden bridge token once and refuses forged, expired or mis
   });
 });
 
-it("signs the executed event byte for byte like Dreach's vector", () => {
+it("freezes and signs the executed event byte for byte like Dreach's vector", () => {
   const ids = (n: number): string => `0000000${String(n)}-0000-4000-8000-000000000001`;
-  const signed = signExecutedEvent(
+  const body = executedEventBody(
     {
-      url: "https://app.example.test",
+      hostTenantId: ids(4),
+      senderBindingId: ids(1),
+      senderBindingRevision: 1,
+      senderGrantId: ids(2),
       issuer: "https://sign.example.test",
       audience: "https://app.example.test",
       keyId: "fixture-key",
       keyVersion: 1,
-      senderBindingId: ids(1),
-      senderBindingRevision: 1,
-      senderGrantId: ids(2),
-      hostTenantId: ids(4),
+      freshnessSeconds: 300,
     },
     {
       eventId: ids(3),
@@ -128,11 +128,14 @@ it("signs the executed event byte for byte like Dreach's vector", () => {
       signedDocumentSha256: "1".repeat(64),
       auditRecordSha256: "2".repeat(64),
     },
-    Buffer.from(EVENT_VECTOR.seedHex, "hex"),
-    BigInt(EVENT_VECTOR.issuedMicros),
   );
-  expect(signed.body).toBe(EVENT_VECTOR.body);
-  expect(createHash("sha256").update(signed.body).digest("hex")).toBe(EVENT_VECTOR.bodySha256);
+  expect(body).toBe(EVENT_VECTOR.body);
+  expect(createHash("sha256").update(body).digest("hex")).toBe(EVENT_VECTOR.bodySha256);
+  // The body's own keyId and keyVersion pick the key; a rotated-in key does not.
+  const fixture = { keyId: "fixture-key", keyVersion: 1, seed: EVENT_VECTOR.seedHex };
+  const rotated = { keyId: "fixture-key", keyVersion: 2, seed: "0a".repeat(32) };
+  const issued = BigInt(EVENT_VECTOR.issuedMicros);
+  const signed = signExecutedEvent(body, [rotated, fixture], issued, 300);
   expect(signed.frame.toString("hex")).toBe(EVENT_VECTOR.frameHex);
   expect(signed.headers).toEqual({
     "content-type": "application/json",
@@ -140,4 +143,5 @@ it("signs the executed event byte for byte like Dreach's vector", () => {
     "x-dripsign-expires-at-micros": EVENT_VECTOR.expiresMicros,
     "x-dripsign-signature": EVENT_VECTOR.signature,
   });
+  expect(() => signExecutedEvent(body, [rotated], issued, 300)).toThrow(/No configured/u);
 });

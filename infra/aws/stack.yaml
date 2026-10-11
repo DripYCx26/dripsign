@@ -1,0 +1,623 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: DripSign on private ECS Fargate, one image as web and worker plus a one-off migrate task.
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  PrivateSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+  HttpsListenerArn:
+    Type: String
+    AllowedPattern: '^arn:[^:]+:elasticloadbalancing:[^:]+:[0-9]{12}:listener/app/.+$'
+  AlbSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+  DatabaseSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Dedicated DripSign PostgreSQL security group.
+  DatabaseSecretArn:
+    Type: String
+    AllowedPattern: '^arn:[^:]+:secretsmanager:[^:]+:[0-9]{12}:secret:.+$'
+    Description: Plaintext TLS URL for dripsign_app in the dripsign database.
+  MigrationDatabaseSecretArn:
+    Type: String
+    AllowedPattern: '^arn:[^:]+:secretsmanager:[^:]+:[0-9]{12}:secret:.+$'
+    Description: Plaintext TLS URL for dripsign_migrator, readable only by the migrate task.
+  Image:
+    Type: String
+    AllowedPattern: '^.+\.dkr\.ecr\.[^/]+/[^@]+@sha256:[a-f0-9]{64}$'
+    Description: Private immutable mirror of the generic public artifact.
+  ImageRepositoryArn:
+    Type: String
+    AllowedPattern: '^arn:[^:]+:ecr:[^:]+:[0-9]{12}:repository/.+$'
+  Hostname:
+    Type: String
+    AllowedPattern: '^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$'
+    Description: Existing DNS name and certificate on the listener; the public origin is https://<Hostname>.
+  ListenerRulePriority:
+    Type: Number
+    MinValue: 1
+    MaxValue: 50000
+  TrustedProxyHops:
+    Type: Number
+    MinValue: 0
+    MaxValue: 10
+    Default: 1
+    Description: Proxies that append to X-Forwarded-For before web; one for a single ALB.
+  SesIdentityArn:
+    Type: String
+    AllowedPattern: '^arn:[^:]+:ses:[^:]+:[0-9]{12}:identity/.+$'
+  SesFromAddress:
+    Type: String
+    AllowedPattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$'
+  AiEnabled:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'false'
+    Description: When true, both config secrets must hold DRIPSIGN_ANTHROPIC_API_KEY; false hides the drafting assistant.
+  HostIntegration:
+    Type: String
+    Default: ''
+    Description: The DRIPSIGN_HOST JSON for a Dreach host app (public settings); empty turns the bridge entry off.
+  HostEventUrl:
+    Type: String
+    Default: ''
+    AllowedPattern: '^$|^https://[^/]+/v1/webhooks/dripsign$'
+    Description: Fixed https executed-event URL; set it and DRIPSIGN_COMPLETION_KEYS in the worker config secret to turn completion export on.
+  WebDesiredCount:
+    Type: Number
+    MinValue: 0
+    MaxValue: 10
+    Default: 0
+  WorkerDesiredCount:
+    Type: Number
+    MinValue: 0
+    MaxValue: 4
+    Default: 0
+Conditions:
+  AiOn: !Equals [!Ref AiEnabled, 'true']
+  HostOn: !Not [!Equals [!Ref HostIntegration, '']]
+  CompletionExportOn: !Not [!Equals [!Ref HostEventUrl, '']]
+Resources:
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+  Artifacts:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+  ArtifactPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref Artifacts
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt Artifacts.Arn
+              - !Sub '${Artifacts.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+  WebConfig:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Description: Web JSON keys, filled privately before starting ECS - DRIPSIGN_AUTH_SECRET (32+ bytes), and DRIPSIGN_ANTHROPIC_API_KEY when AiEnabled.
+  WorkerConfig:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Description: Worker JSON keys, filled privately before starting ECS - DRIPSIGN_AUTH_SECRET (the web value), DRIPSIGN_ANTHROPIC_API_KEY when AiEnabled, DRIPSIGN_COMPLETION_KEYS when HostEventUrl is set.
+  WebLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 30
+  WorkerLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 30
+  MigrateLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 30
+  WebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: DripSign web receives only ALB traffic.
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          SourceSecurityGroupId: !Ref AlbSecurityGroupId
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          DestinationSecurityGroupId: !Ref DatabaseSecurityGroupId
+  WorkerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: DripSign worker has no inbound access.
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          DestinationSecurityGroupId: !Ref DatabaseSecurityGroupId
+  DatabaseWebIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DatabaseSecurityGroupId
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref WebSecurityGroup
+  DatabaseWorkerIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DatabaseSecurityGroupId
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref WorkerSecurityGroup
+  MigrateSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: DripSign migrate task has no inbound access.
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          DestinationSecurityGroupId: !Ref DatabaseSecurityGroupId
+  DatabaseMigrateIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DatabaseSecurityGroupId
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref MigrateSecurityGroup
+  WebExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub 'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:*'
+      Policies:
+        - PolicyName: TaskStartup
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: '*'
+              - Effect: Allow
+                Action: ['ecr:BatchCheckLayerAvailability', 'ecr:GetDownloadUrlForLayer', 'ecr:BatchGetImage']
+                Resource: !Ref ImageRepositoryArn
+              - Effect: Allow
+                Action: ['logs:CreateLogStream', 'logs:PutLogEvents']
+                Resource: !GetAtt WebLogs.Arn
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: [!Ref WebConfig, !Ref DatabaseSecretArn]
+  WorkerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub 'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:*'
+      Policies:
+        - PolicyName: TaskStartup
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: '*'
+              - Effect: Allow
+                Action: ['ecr:BatchCheckLayerAvailability', 'ecr:GetDownloadUrlForLayer', 'ecr:BatchGetImage']
+                Resource: !Ref ImageRepositoryArn
+              - Effect: Allow
+                Action: ['logs:CreateLogStream', 'logs:PutLogEvents']
+                Resource: !GetAtt WorkerLogs.Arn
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: [!Ref WorkerConfig, !Ref DatabaseSecretArn]
+  MigrateExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub 'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:*'
+      Policies:
+        - PolicyName: TaskStartup
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: '*'
+              - Effect: Allow
+                Action: ['ecr:BatchCheckLayerAvailability', 'ecr:GetDownloadUrlForLayer', 'ecr:BatchGetImage']
+                Resource: !Ref ImageRepositoryArn
+              - Effect: Allow
+                Action: ['logs:CreateLogStream', 'logs:PutLogEvents']
+                Resource: !GetAtt MigrateLogs.Arn
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: [!Ref WorkerConfig, !Ref MigrationDatabaseSecretArn]
+  WebTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub 'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:*'
+      Policies:
+        - PolicyName: ArtifactAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ['s3:GetObject', 's3:GetObjectVersion', 's3:PutObject']
+                Resource: !Sub '${Artifacts.Arn}/*'
+  WorkerTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub 'arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:*'
+      Policies:
+        - PolicyName: JobDelivery
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ['s3:GetObject', 's3:GetObjectVersion', 's3:PutObject']
+                Resource: !Sub '${Artifacts.Arn}/*'
+              - Effect: Allow
+                Action: ['ses:SendEmail', 'ses:SendRawEmail']
+                Resource: !Ref SesIdentityArn
+                Condition:
+                  StringEquals:
+                    ses:FromAddress: !Ref SesFromAddress
+  WebTask:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Cpu: '512'
+      Memory: '1024'
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      ExecutionRoleArn: !GetAtt WebExecutionRole.Arn
+      TaskRoleArn: !GetAtt WebTaskRole.Arn
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      ContainerDefinitions:
+        - Name: web
+          Image: !Ref Image
+          Essential: true
+          Command: [pnpm, --filter, '@dripsign/web', start]
+          User: '1000:1000'
+          StopTimeout: 60
+          PortMappings:
+            - ContainerPort: 3000
+              Protocol: tcp
+          Environment:
+            - Name: NODE_ENV
+              Value: production
+            - Name: PORT
+              Value: '3000'
+            - Name: DRIPSIGN_PUBLIC_ORIGIN
+              Value: !Sub 'https://${Hostname}'
+            - Name: DRIPSIGN_TRUSTED_PROXY_HOPS
+              Value: !Ref TrustedProxyHops
+            - Name: DRIPSIGN_STORAGE
+              Value: s3
+            - Name: DRIPSIGN_S3_BUCKET
+              Value: !Ref Artifacts
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: DRIPSIGN_EMAIL_TRANSPORT
+              Value: ses
+            - Name: DRIPSIGN_EMAIL_FROM
+              Value: !Ref SesFromAddress
+            - !If
+              - HostOn
+              - Name: DRIPSIGN_HOST
+                Value: !Ref HostIntegration
+              - !Ref AWS::NoValue
+          Secrets:
+            - Name: DRIPSIGN_DATABASE_URL
+              ValueFrom: !Ref DatabaseSecretArn
+            - Name: DRIPSIGN_AUTH_SECRET
+              ValueFrom: !Sub '${WebConfig}:DRIPSIGN_AUTH_SECRET::'
+            - !If
+              - AiOn
+              - Name: DRIPSIGN_ANTHROPIC_API_KEY
+                ValueFrom: !Sub '${WebConfig}:DRIPSIGN_ANTHROPIC_API_KEY::'
+              - !Ref AWS::NoValue
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref WebLogs
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: web
+  WorkerTask:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Cpu: '512'
+      Memory: '1024'
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      ExecutionRoleArn: !GetAtt WorkerExecutionRole.Arn
+      TaskRoleArn: !GetAtt WorkerTaskRole.Arn
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      ContainerDefinitions:
+        - Name: worker
+          Image: !Ref Image
+          Essential: true
+          Command: [pnpm, --filter, '@dripsign/core', worker]
+          User: '1000:1000'
+          StopTimeout: 60
+          Environment:
+            - Name: NODE_ENV
+              Value: production
+            - Name: DRIPSIGN_PUBLIC_ORIGIN
+              Value: !Sub 'https://${Hostname}'
+            - Name: DRIPSIGN_STORAGE
+              Value: s3
+            - Name: DRIPSIGN_S3_BUCKET
+              Value: !Ref Artifacts
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: DRIPSIGN_EMAIL_TRANSPORT
+              Value: ses
+            - Name: DRIPSIGN_EMAIL_FROM
+              Value: !Ref SesFromAddress
+            - !If
+              - HostOn
+              - Name: DRIPSIGN_HOST
+                Value: !Ref HostIntegration
+              - !Ref AWS::NoValue
+            - !If
+              - CompletionExportOn
+              - Name: DRIPSIGN_HOST_EVENT_URL
+                Value: !Ref HostEventUrl
+              - !Ref AWS::NoValue
+          Secrets:
+            - Name: DRIPSIGN_DATABASE_URL
+              ValueFrom: !Ref DatabaseSecretArn
+            - Name: DRIPSIGN_AUTH_SECRET
+              ValueFrom: !Sub '${WorkerConfig}:DRIPSIGN_AUTH_SECRET::'
+            - !If
+              - AiOn
+              - Name: DRIPSIGN_ANTHROPIC_API_KEY
+                ValueFrom: !Sub '${WorkerConfig}:DRIPSIGN_ANTHROPIC_API_KEY::'
+              - !Ref AWS::NoValue
+            - !If
+              - CompletionExportOn
+              - Name: DRIPSIGN_COMPLETION_KEYS
+                ValueFrom: !Sub '${WorkerConfig}:DRIPSIGN_COMPLETION_KEYS::'
+              - !Ref AWS::NoValue
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref WorkerLogs
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: worker
+  MigrateTask:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Cpu: '512'
+      Memory: '1024'
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      ExecutionRoleArn: !GetAtt MigrateExecutionRole.Arn
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      ContainerDefinitions:
+        - Name: migrate
+          Image: !Ref Image
+          Essential: true
+          Command: [pnpm, --filter, '@dripsign/core', cli, migrate]
+          User: '1000:1000'
+          Environment:
+            - Name: NODE_ENV
+              Value: production
+            - Name: DRIPSIGN_PUBLIC_ORIGIN
+              Value: !Sub 'https://${Hostname}'
+            - Name: DRIPSIGN_STORAGE
+              Value: s3
+            - Name: DRIPSIGN_S3_BUCKET
+              Value: !Ref Artifacts
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: DRIPSIGN_EMAIL_TRANSPORT
+              Value: ses
+            - Name: DRIPSIGN_EMAIL_FROM
+              Value: !Ref SesFromAddress
+          Secrets:
+            - Name: DRIPSIGN_DATABASE_URL
+              ValueFrom: !Ref MigrationDatabaseSecretArn
+            - Name: DRIPSIGN_AUTH_SECRET
+              ValueFrom: !Sub '${WorkerConfig}:DRIPSIGN_AUTH_SECRET::'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref MigrateLogs
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: migrate
+  WebTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VpcId
+      Port: 3000
+      Protocol: HTTP
+      TargetType: ip
+      HealthCheckPath: /api/health
+      Matcher:
+        HttpCode: '200'
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '30'
+  HostRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref HttpsListenerArn
+      Priority: !Ref ListenerRulePriority
+      Conditions:
+        - Field: host-header
+          HostHeaderConfig:
+            Values: [!Ref Hostname]
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref WebTargetGroup
+  WebService:
+    Type: AWS::ECS::Service
+    DependsOn: HostRule
+    Properties:
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref WebTask
+      DesiredCount: !Ref WebDesiredCount
+      LaunchType: FARGATE
+      PlatformVersion: '1.4.0'
+      EnableExecuteCommand: false
+      HealthCheckGracePeriodSeconds: 60
+      DeploymentConfiguration:
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets: !Ref PrivateSubnetIds
+          SecurityGroups: [!Ref WebSecurityGroup]
+      LoadBalancers:
+        - ContainerName: web
+          ContainerPort: 3000
+          TargetGroupArn: !Ref WebTargetGroup
+  WorkerService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref WorkerTask
+      DesiredCount: !Ref WorkerDesiredCount
+      LaunchType: FARGATE
+      PlatformVersion: '1.4.0'
+      EnableExecuteCommand: false
+      DeploymentConfiguration:
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets: !Ref PrivateSubnetIds
+          SecurityGroups: [!Ref WorkerSecurityGroup]
+Outputs:
+  PublicOrigin:
+    Value: !Sub 'https://${Hostname}'
+  MigrateTask:
+    Value: !Ref MigrateTask
+  MigrateSecurityGroup:
+    Value: !Ref MigrateSecurityGroup
+  Cluster:
+    Value: !Ref Cluster
+  WebService:
+    Value: !GetAtt WebService.Name
+  WorkerService:
+    Value: !GetAtt WorkerService.Name
+  ArtifactBucket:
+    Value: !Ref Artifacts
+  WebConfigSecretArn:
+    Value: !Ref WebConfig
+  WorkerConfigSecretArn:
+    Value: !Ref WorkerConfig
+  WebTaskRoleArn:
+    Value: !GetAtt WebTaskRole.Arn
+  WorkerTaskRoleArn:
+    Value: !GetAtt WorkerTaskRole.Arn

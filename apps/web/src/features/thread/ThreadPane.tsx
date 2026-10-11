@@ -1,7 +1,7 @@
 "use client";
 
 import type { AgreementView, Capacity, ProposalView } from "@dripsign/core/types";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import type { RunCommand } from "@/features/workspace/commands.ts";
 import { PENDING_PROPOSAL_ID } from "@/features/workspace/nextStep.ts";
 import { EmptyState } from "@/ui";
@@ -68,6 +68,21 @@ function useSentFeedback(itemCount: number) {
 }
 
 /**
+ * Opens the thread at its newest end, where the turn and the composer are. An item taller than the
+ * list (a long proposal) opens at its own top, so its title is never scrolled out of sight.
+ */
+function useOpenAtNewest(list: RefObject<HTMLOListElement | null>, itemCount: number) {
+  useEffect(() => {
+    const element = list.current;
+    const newest = element?.lastElementChild;
+    if (element === null || newest == null) return;
+    const newestTop = newest.getBoundingClientRect().top - element.getBoundingClientRect().top;
+    const end = element.scrollHeight - element.clientHeight;
+    element.scrollTo({ top: Math.min(end, element.scrollTop + newestTop) });
+  }, [itemCount, list]);
+}
+
+/**
  * The proposal thread: whose turn it is, the conversation oldest first as an ordered list, and the
  * composer. Staff and recipients see the same list; the view already filtered what each may see.
  */
@@ -77,10 +92,7 @@ export function ThreadPane({ view, capacity, run, busy }: ThreadPaneProps) {
   const [mode, setMode] = useState<ComposerMode>("message");
   const { list, announcement, sent } = useSentFeedback(items.length);
 
-  // Open the thread at its newest end, where the turn and the composer are.
-  useEffect(() => {
-    list.current?.scrollTo({ top: list.current.scrollHeight });
-  }, [items.length, list]);
+  useOpenAtNewest(list, items.length);
 
   async function decide(decision: Decision, proposal: ProposalView) {
     await run(

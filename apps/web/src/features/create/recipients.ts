@@ -15,8 +15,9 @@ export interface RowErrors {
 
 export const DUPLICATE_EMAIL = "Each recipient needs a different email address.";
 
-export function emptyRow(): RecipientRow {
-  return { key: randomId(), name: "", email: "", isSigner: true };
+/** A blank recipient row; `key` lets server-rendered initial state be deterministic. */
+export function emptyRow(key: string = randomId()): RecipientRow {
+  return { key, name: "", email: "", isSigner: true };
 }
 
 const normal = (email: string) => email.trim().toLowerCase();

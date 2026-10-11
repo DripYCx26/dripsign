@@ -12,8 +12,9 @@ export interface EditableSection {
   readonly body: string;
 }
 
-export function emptySection(): EditableSection {
-  return { id: randomId(), heading: "", body: "" };
+/** A blank section; `id` lets server-rendered initial state be deterministic. */
+export function emptySection(id: string = randomId()): EditableSection {
+  return { id, heading: "", body: "" };
 }
 
 /** The anchor other screens link to for a section of the reading view. */
