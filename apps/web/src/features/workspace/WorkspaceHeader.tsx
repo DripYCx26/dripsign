@@ -7,7 +7,7 @@ import type { RunCommand } from "./commands.ts";
 import styles from "./WorkspaceHeader.module.css";
 import { nextStep } from "./nextStep.ts";
 import { pillStatus } from "./status.ts";
-import type { WorkspaceTab } from "./tabs.ts";
+import type { RailMode, WorkspaceTab } from "./tabs.ts";
 import { WorkspaceMenu, WorkspacePrimary } from "./WorkspaceActions.tsx";
 import type { Panel } from "./WorkspacePanels.tsx";
 
@@ -16,6 +16,7 @@ type WorkspaceHeaderProps = Readonly<{
   capacity: Capacity;
   run: RunCommand;
   busy: boolean;
+  rail: RailMode;
   tab: WorkspaceTab;
   onTab: (tab: WorkspaceTab) => void;
   onPanel: (panel: Panel) => void;
@@ -30,15 +31,17 @@ const TABS = [
 ] as const;
 
 /**
- * The workspace head, one 56 px row: back, the title in the display face with its status, then
- * the primary action and menu. Under 1024 px the Chat | Document switch and the primary action
- * share a second row; each control is rendered once and placed by the grid.
+ * The workspace head, one 56 px row: back, the title in the display face with its status, the
+ * step's chip, then the primary action and menu. Under 1024 px the chip, the Chat | Document
+ * switch (only when there is a rail to switch to) and the primary action share a second row, and
+ * there is none when they are all absent. Each control is rendered once and placed by CSS.
  */
 export function WorkspaceHeader({
   view,
   capacity,
   run,
   busy,
+  rail,
   tab,
   onTab,
   onPanel,
@@ -46,35 +49,35 @@ export function WorkspaceHeader({
 }: WorkspaceHeaderProps) {
   const { title, status } = view.agreement;
   const step = nextStep(capacity, view);
+  const secondRow = rail !== "none" || step.label !== "" || step.chip !== undefined;
   return (
-    <header className={styles.header}>
+    <header className={styles.header} data-second-row={secondRow ? "" : undefined}>
       <div className={styles.back}>
         <BackButton label="Back to agreements" href={HOME[capacity]} />
       </div>
       <div className={styles.title}>
         <h1>{title}</h1>
         <Pill status={pillStatus(status)} />
-        {step.chip !== undefined && <Pill tone="info">{step.chip}</Pill>}
-        {capacity === "recipient" && (
-          <p className={styles.from}>
-            <span className={styles.dot} aria-hidden="true">
-              ·{" "}
-            </span>
-            {`From ${view.orgName}`}
-          </p>
-        )}
+        {capacity === "recipient" && <p className={styles.from}>{`From ${view.orgName}`}</p>}
       </div>
-      <div className={styles.toggle}>
-        <Segmented
-          label="Show"
-          hideLabel
-          size="sm"
-          name="workspace-pane"
-          options={TABS}
-          value={tab}
-          onChange={onTab}
-        />
-      </div>
+      {step.chip !== undefined && (
+        <div className={styles.chip}>
+          <Pill tone="info">{step.chip}</Pill>
+        </div>
+      )}
+      {rail !== "none" && (
+        <div className={styles.toggle}>
+          <Segmented
+            label="Show"
+            hideLabel
+            size="sm"
+            name="workspace-pane"
+            options={TABS}
+            value={tab}
+            onChange={onTab}
+          />
+        </div>
+      )}
       <div className={styles.primary}>
         <WorkspacePrimary step={step} run={run} busy={busy} onPanel={onPanel} onReveal={onReveal} />
       </div>

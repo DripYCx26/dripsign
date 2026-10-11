@@ -1,25 +1,5 @@
 .progress {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--ds-space-2);
   color: var(--ds-text-secondary);
   font-size: var(--ds-text-sm);
   line-height: var(--ds-leading-sm);
-}
-
-.dots {
-  display: inline-flex;
-  gap: var(--ds-space-1);
-}
-
-.dot {
-  width: var(--ds-space-2);
-  height: var(--ds-space-2);
-  border: 1px solid var(--ds-border-strong);
-  border-radius: var(--ds-radius-pill);
-}
-
-.dot[data-filled="true"] {
-  border-color: var(--ds-confirm);
-  background: var(--ds-confirm);
 }

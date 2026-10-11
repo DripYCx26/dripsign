@@ -27,7 +27,9 @@
   stroke-width: var(--ds-icon-stroke);
 }
 
+/* Basis zero with a floor: the words take the line and never wrap under the icon; only the action
+   drops to its own line when there is no room beside them. */
 .body {
-  flex: 1 1 auto;
-  min-width: 0;
+  flex: 1 1 0;
+  min-inline-size: 16ch;
 }

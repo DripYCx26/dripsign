@@ -18,9 +18,9 @@ type PrimaryActionProps = Readonly<{
  * a status and sits beside the agreement's pill, not here.
  */
 export function PrimaryAction({ step, busy, onCommand, onReveal }: PrimaryActionProps) {
-  const { label, kind, command, href, disabled = false, narrowOnly = false } = step;
+  const { label, kind, command, href, disabled = false } = step;
   return (
-    <span className={styles.action} data-narrow-only={narrowOnly ? "" : undefined}>
+    <span className={styles.action}>
       {label !== "" && kind === "navigate" && href !== undefined && (
         <ButtonLink variant="ink" href={href}>
           {label}

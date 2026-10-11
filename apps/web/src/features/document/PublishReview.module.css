@@ -1,6 +1,6 @@
 .review {
   display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
   align-items: start;
   gap: var(--ds-space-6);
 }
@@ -16,7 +16,7 @@
   }
 }
 
-/* One card for the outline or the changes and the signature fields; the PDF fills the other column. */
+/* One card for the changes (from revision 2) and the signature fields; the PDF fills the other column. */
 .left {
   display: grid;
   min-width: 0;
@@ -39,13 +39,6 @@
 
 .pdf {
   min-width: 0;
-}
-
-.outline {
-  display: grid;
-  gap: var(--ds-space-1);
-  margin: 0;
-  padding-left: var(--ds-space-5);
 }
 
 .muted {

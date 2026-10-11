@@ -1,11 +1,10 @@
-/* The sheet is [data-paper]: white with light-theme text on a dark device too, with the shadow
-   that gives it an edge there. */
+/* The sheet is [data-paper]: light-theme text on paper, off-white on a dark device. */
 .sheet {
   padding: clamp(var(--ds-space-5), 5vw, calc(var(--ds-space-14) + var(--ds-space-4)));
   border: var(--ds-hairline);
   border-radius: var(--ds-radius-card);
   background: var(--ds-paper);
-  box-shadow: var(--ds-shadow-press);
+  box-shadow: var(--ds-shadow-paper);
   color: var(--ds-text);
   font-family: var(--ds-font-display);
   font-size: var(--ds-text-read);
@@ -18,7 +17,8 @@
   line-height: var(--ds-display-sm-leading);
 }
 
-/* The suggestion sits in a second column at the heading's line, so the text never runs under it. */
+/* The suggestion sits in a second column at the heading's line, so the heading never runs under
+   it; the paragraphs below take the full width. */
 .section {
   margin-bottom: var(--ds-space-6);
   scroll-margin-top: calc(var(--ds-layout-doc-header) + var(--ds-space-4));
@@ -31,6 +31,10 @@
 }
 
 .section[data-suggestable] > * {
+  grid-column: 1 / -1;
+}
+
+.section[data-suggestable] > .heading {
   grid-column: 1;
 }
 
@@ -84,4 +88,15 @@
 .line {
   height: var(--ds-space-8);
   border-bottom: 1px solid var(--ds-text-secondary);
+}
+
+.ink {
+  display: flex;
+  min-height: var(--ds-space-8);
+  align-items: flex-end;
+  border-bottom: 1px solid var(--ds-text-secondary);
+  font-family: var(--ds-font-signature, var(--ds-font-display));
+  font-size: var(--ds-display-sm);
+  line-height: var(--ds-display-sm-leading);
+  overflow-wrap: anywhere;
 }

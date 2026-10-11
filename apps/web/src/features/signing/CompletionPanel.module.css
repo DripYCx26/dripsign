@@ -2,35 +2,3 @@
 .strip {
   margin-block: var(--ds-space-3);
 }
-
-.file {
-  display: inline-flex;
-  min-height: var(--ds-size-control-sm);
-  align-items: center;
-  gap: var(--ds-space-1);
-  color: var(--ds-text);
-  font-weight: var(--ds-weight-medium);
-}
-
-.file > svg {
-  width: var(--ds-size-icon-inline);
-  height: var(--ds-size-icon-inline);
-  stroke-width: var(--ds-icon-stroke);
-}
-
-/* Under 640 px the link is its icon alone, so the line stays one line; the words stay for screen readers. */
-@media (max-width: 639px) {
-  .label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-
-  .file {
-    min-width: var(--ds-size-control-sm);
-    justify-content: center;
-  }
-}

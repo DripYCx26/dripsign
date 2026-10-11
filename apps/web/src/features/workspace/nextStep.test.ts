@@ -133,12 +133,7 @@ const ROWS: readonly (readonly [string, Capacity, Scenario, NextStep])[] = [
       href: `/staff/agreements/${ID}/publish`,
     },
   ],
-  [
-    "staff: proposal waiting on staff",
-    "staff",
-    { allowed: ["accept", "counter", "reject"] },
-    { label: "Respond to proposal", kind: "scroll", href: "#pending-proposal", narrowOnly: true },
-  ],
+  ["staff: proposal waiting on staff", "staff", { allowed: ["accept", "counter", "reject"] }, NONE],
   [
     "staff: request signatures",
     "staff",
@@ -167,7 +162,7 @@ const ROWS: readonly (readonly [string, Capacity, Scenario, NextStep])[] = [
     "recipient: proposal waiting on recipient",
     "recipient",
     { allowed: ["accept", "counter", "reject"] },
-    { label: "Respond to proposal", kind: "scroll", href: "#pending-proposal", narrowOnly: true },
+    NONE,
   ],
   ["recipient: nothing to do", "recipient", { allowed: ["message", "propose"] }, NONE],
   [

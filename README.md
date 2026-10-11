@@ -34,16 +34,26 @@ Every identity is synthetic. Sign in at `/dev/sign-in`.
 
 | Identity | Try |
 |---|---|
-| `avery@northwind.test` (staff admin) | Create an agreement, publish a revision, request signatures; open the staff dashboard |
-| `sam@northwind.test` (staff member) | Accept a recipient proposal and republish the revision |
-| `jordan@client.test` (recipient) | Propose a change to "Mutual NDA"; read the thread; open a published revision |
-| `morgan@client.test` (recipient) | Sign "Q4 retainer" and download the signed PDF; read the audit record |
-| `taylor@client.test` (recipient) | An optional recipient: sees the agreement, is not asked to sign |
+| `avery@northwind.test` (staff admin) | Create an agreement, publish a revision, request signatures; answer Jordan's counter on "Mutual NDA"; open the team page and settings |
+| `sam@northwind.test` (staff member) | Open "Photography license", where Sam's proposal awaits Morgan; republish after an accepted change |
+| `jordan@client.test` (recipient) | Counter on "Mutual NDA"; propose a change to "Logo design brief"; read the signed "Office sublease" and its audit record |
+| `morgan@client.test` (recipient) | Decide Sam's proposal on "Photography license"; sign "Q4 retainer"; download the signed PDF |
+| `taylor@client.test` (recipient) | An optional recipient: sees the agreements, is never asked to sign |
 | `priya@harbor.test` (staff admin, other tenant) | Tenant isolation: sees none of Northwind's agreements |
-| `sam@northwind.test` again | Dual role: also a signer on Harbor Legal's "Speaking engagement"; switch between homes |
+| `sam@northwind.test` again | Dual role: also the signer on Harbor Legal's "Speaking engagement"; switch between homes |
 
-The seeded agreements cover every status: draft, in review with a pending proposal, signing,
-signed with both artifacts, and void.
+The eight seeded agreements cover every status:
+
+| Agreement | State |
+|---|---|
+| Website redesign services | Draft |
+| Mutual NDA | In review; Jordan's counter on the term is pending |
+| Photography license | In review (uploaded PDF); Sam's proposal is pending |
+| Logo design brief | In review; nothing proposed |
+| Q4 retainer | Signing; Jordan signed, Morgan has not |
+| Office sublease | Signed, both artifacts archived |
+| Equipment lease | Void |
+| Speaking engagement (Harbor Legal) | Signing; Sam has not signed |
 
 ## Subdirectories
 

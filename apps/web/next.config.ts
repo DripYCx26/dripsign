@@ -19,6 +19,11 @@ const config: NextConfig = {
   reactStrictMode: true,
   // Core ships TypeScript source with `.ts` import specifiers; Next compiles it in place.
   transpilePackages: ["@dripsign/core"],
+  // config.ts resolves relative storage paths from the workspace root at runtime; the build's
+  // tracer cannot follow that and warns about tracing the whole project, which is harmless here.
+  turbopack: {
+    ignoreIssue: [{ path: "**/packages/core/src/config.ts", title: /filesystem access/u }],
+  },
   headers() {
     return Promise.resolve([{ source: "/:path*", headers: SECURITY_HEADERS }]);
   },

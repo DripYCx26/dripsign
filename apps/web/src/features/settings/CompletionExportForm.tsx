@@ -62,15 +62,9 @@ function initialValues(settings: CompletionExportSettings): Partial<Record<Field
   };
 }
 
-function hints(settings: CompletionExportSettings): Partial<Record<FieldName, string>> {
-  return {
-    issuer: `This server signs as ${settings.expected.issuer}.`,
-    ...(settings.expected.audience === null
-      ? {}
-      : { audience: `Events go to ${settings.expected.audience}.` }),
-    freshnessSeconds: "How long each delivery attempt's signature stays valid, at most 300.",
-  };
-}
+const HINTS: Partial<Record<FieldName, string>> = {
+  freshnessSeconds: "How long each delivery attempt's signature stays valid, at most 300.",
+};
 
 /** Saves the next revision of the host's public pins; a stale form is refused, never merged. */
 export function CompletionExportForm({ settings }: Props) {
@@ -80,7 +74,6 @@ export function CompletionExportForm({ settings }: Props) {
   const [problem, setProblem] = useState<string | null>(null);
   const [saved, setSaved] = useState<number | null>(null);
   const initial = initialValues(settings);
-  const hint = hints(settings);
 
   async function submit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -120,7 +113,7 @@ export function CompletionExportForm({ settings }: Props) {
           <TextField
             label={label}
             name={name}
-            hint={hint[name]}
+            hint={HINTS[name]}
             defaultValue={initial[name]}
             autoComplete="off"
             required

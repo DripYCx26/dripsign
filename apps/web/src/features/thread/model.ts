@@ -21,7 +21,7 @@ export function currentRevision(view: AgreementView): RevisionView | null {
 }
 
 /** The one open proposal, if any (the database allows at most one). */
-export function pendingProposal(view: AgreementView): ProposalView | null {
+function pendingProposal(view: AgreementView): ProposalView | null {
   return view.proposals.find((proposal) => proposal.status === "pending") ?? null;
 }
 
@@ -31,7 +31,8 @@ export type ThreadItem =
   /** Milestones that happened in the same minute, one line each. */
   | Readonly<{ kind: "activity"; key: string; at: string; lines: readonly string[] }>;
 
-type ThreadSource = Pick<AgreementView, "messages" | "proposals" | "timeline" | "viewer">;
+type ThreadSource = Pick<AgreementView, "messages" | "proposals" | "timeline" | "viewer"> &
+  Readonly<{ agreement: Pick<AgreementView["agreement"], "voidReason"> }>;
 
 const MINUTE_MS = 60_000;
 
@@ -69,7 +70,10 @@ export function threadItems(view: ThreadSource): readonly ThreadItem[] {
       proposal,
     })),
     ...view.timeline.flatMap((item, index): ThreadItem[] => {
-      const line = describeMilestone(item, view.viewer);
+      const line = describeMilestone(item, {
+        viewer: view.viewer,
+        voidReason: view.agreement.voidReason,
+      });
       // The view has no row id; time, kind and position are stable for one snapshot.
       return line === null
         ? []

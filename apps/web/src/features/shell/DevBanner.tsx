@@ -9,15 +9,30 @@ import { standingWord } from "./standing.ts";
  * for a verified one. Renders nothing when the flag is off.
  */
 export async function DevBanner() {
-  if (!devLoginEnabled()) return null;
+  if (!(await devLoginEnabled())) return null;
   const session = await getSession();
-  const who =
-    session === null
-      ? "Not signed in"
-      : `Signed in as ${await devIdentityLabel(session.email)} (${standingWord(session)})`;
+  const name = session === null ? null : await devIdentityLabel(session.email);
   return (
     <div className={styles.banner}>
-      Development sign-in is on · {who} · <Link href="/dev/sign-in">Switch identity</Link>
+      <span className={styles.full}>Development sign-in is on</span>
+      <span className={styles.short}>Dev</span>
+      <span className={styles.who}>
+        {session === null || name === null ? (
+          "Not signed in"
+        ) : (
+          <>
+            <span className={styles.full}>Signed in as </span>
+            {name}
+            <span className={styles.full}> ({standingWord(session)})</span>
+          </>
+        )}
+      </span>
+      {session !== null && (
+        <Link href="/dev/sign-in" className={styles.switch}>
+          <span className={styles.full}>Switch identity</span>
+          <span className={styles.short}>Switch</span>
+        </Link>
+      )}
     </div>
   );
 }

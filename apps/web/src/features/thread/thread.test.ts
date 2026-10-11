@@ -51,13 +51,14 @@ it("drops the previous person's stored text when another identity takes over the
   expect(storage.getItem(mine)).toBe("my draft");
 });
 
-it("shows milestones only, says You for the viewer's own signature and groups one minute", () => {
+it("shows milestones only, says You for the viewer's own signature, groups one minute and carries the void reason", () => {
   const row = (
     at: string,
     kind: TimelineItem["kind"],
     detail: TimelineItem["detail"] = {},
   ): TimelineItem => ({ at, kind, actor: null, subjectId: null, detail });
   const items = threadItems({
+    agreement: { voidReason: "Sent to the wrong client" },
     messages: [],
     proposals: [],
     viewer: {
@@ -73,10 +74,12 @@ it("shows milestones only, says You for the viewer's own signature and groups on
       row("2026-10-11T10:05:00.000Z", "signature_recorded", { recipientId: "r-1", name: "Jordan" }),
       row("2026-10-11T10:05:30.000Z", "signature_recorded", { recipientId: "r-2", name: "Morgan" }),
       row("2026-10-11T10:05:30.000Z", "signing_completed"),
+      row("2026-10-11T10:30:00.000Z", "agreement_voided"),
     ],
   });
   expect(items.map((item) => (item.kind === "activity" ? item.lines : []))).toEqual([
     ["Revision 2 published"],
     ["You signed", "Morgan signed", "Everyone signed"],
+    ["Voided · Sent to the wrong client"],
   ]);
 });

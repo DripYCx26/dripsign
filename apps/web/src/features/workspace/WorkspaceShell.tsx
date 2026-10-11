@@ -3,9 +3,8 @@
 import type { AgreementView, Capacity } from "@dripsign/core/types";
 import { useState } from "react";
 import { useCommand } from "@/features/command/useCommand.ts";
-import { Banner } from "@/ui";
 import { CommandNotice } from "./CommandNotice.tsx";
-import { defaultTab, type WorkspaceTab } from "./tabs.ts";
+import { defaultTab, railMode, type WorkspaceTab } from "./tabs.ts";
 import { usePoll } from "./usePoll.ts";
 import { useWorkspaceNav } from "./useWorkspaceNav.ts";
 import { WorkspaceHeader } from "./WorkspaceHeader.tsx";
@@ -22,22 +21,6 @@ type WorkspaceShellProps = Readonly<{
 }>;
 
 const ASSISTANT_LIMIT = "Today's assistant limit is reached.";
-
-const DATE = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
-
-function VoidBanner({ agreement }: Readonly<{ agreement: AgreementView["agreement"] }>) {
-  const { voidedAt, voidReason } = agreement;
-  const parts = [
-    voidedAt === null ? "Voided" : `Voided ${DATE.format(new Date(voidedAt))}`,
-    ...(voidReason === null ? [] : [voidReason]),
-  ];
-  return <Banner tone="info">{parts.join(" · ")}</Banner>;
-}
 
 /**
  * The workspace both capacities share: the header, the thread rail beside the document, and
@@ -57,7 +40,10 @@ export function WorkspaceShell({
     capacity,
     initialView,
   );
-  const { tab, selectTab, reveal } = useWorkspaceNav(initialTab ?? defaultTab(initialView));
+  const nav = useWorkspaceNav(initialTab ?? defaultTab(initialView));
+  const rail = railMode(view);
+  // Without a rail there is only the document, whatever tab the address or a proposal asked for.
+  const tab = rail === "none" ? "document" : nav.tab;
   const [panel, setPanel] = useState<Panel | null>(null);
   const staff = capacity === "staff";
 
@@ -88,18 +74,19 @@ export function WorkspaceShell({
         capacity={capacity}
         run={run}
         busy={pending}
+        rail={rail}
         tab={tab}
-        onTab={selectTab}
+        onTab={nav.selectTab}
         onPanel={open}
-        onReveal={reveal}
+        onReveal={nav.reveal}
       />
-      {view.agreement.status === "void" && <VoidBanner agreement={view.agreement} />}
       {panel === null && notice}
       <WorkspacePanes
         view={view}
         capacity={capacity}
         run={run}
         busy={pending}
+        rail={rail}
         tab={tab}
         rev={rev}
       />

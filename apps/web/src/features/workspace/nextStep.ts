@@ -15,21 +15,15 @@ export type NextStep = Readonly<{
   href?: string;
   disabled?: boolean;
   chip?: string;
-  /** Shown only where the chat is a tab of its own (under 1024 px); beside it the card answers. */
-  narrowOnly?: boolean;
 }>;
 
-/** The elements a `scroll` step lands on; the thread and the workspace put these ids on them. */
-export const PENDING_PROPOSAL_ID = "pending-proposal";
+/** The element a `scroll` step lands on; the workspace puts this id on it. */
 export const DOCUMENT_PANE_ID = "document-pane";
 
+// No step scrolls here any more; the thread still marks its open proposal row with it, and goes
+// when that mark does.
+
 const NOTHING: NextStep = { label: "", kind: "none" };
-const RESPOND: NextStep = {
-  label: "Respond to proposal",
-  kind: "scroll",
-  href: `#${PENDING_PROPOSAL_ID}`,
-  narrowOnly: true,
-};
 
 function can(view: AgreementView, action: AgreementAction): boolean {
   return view.allowedActions.includes(action);
@@ -104,19 +98,16 @@ function staffStep(view: AgreementView): NextStep {
       chip: `${String(signedCount(round))} of ${String(round.signers.length)} signed`,
     };
   }
-  // A proposal waiting on staff comes first: publishing now would leave it based on an old revision.
-  if (can(view, "accept")) {
-    return RESPOND;
-  }
+  // A proposal waiting on staff comes first: publishing now would leave it based on an old
+  // revision. Its card carries the answer, so the header offers nothing.
+  if (can(view, "accept")) return NOTHING;
   return staffDraftStep(view);
 }
 
 function recipientStep(view: AgreementView): NextStep {
   const round = view.activeRound;
   if (round?.status === "finalizing") return finalizing(round);
-  if (can(view, "accept")) {
-    return RESPOND;
-  }
+  if (can(view, "accept")) return NOTHING;
   if (can(view, "sign")) {
     return {
       label: "Review and sign",

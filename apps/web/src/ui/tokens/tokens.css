@@ -76,8 +76,10 @@
   --ds-size-icon-tile: 20px;
   --ds-icon-stroke: 1.75;
 
-  /* The sheet of paper an agreement is read and signed on: white in both themes. */
+  /* The sheet of paper an agreement is read on: white, and off-white on a dark device with no
+     shadow, so a page of text does not glare against the dark canvas. */
   --ds-paper: #ffffff;
+  --ds-shadow-paper: 0 1px 2px rgb(22 23 27 / 8%);
 
   /* A list row's height and block padding. */
   --ds-row-height: var(--ds-size-row-list);
@@ -85,8 +87,9 @@
 
   /* Layout: the rail, the list pane, the reading width, the header and the narrow-screen drawer;
      the document column, the focused signing flow, and the development banner. */
-  /* The workspace thread rail: wide enough for a real chat, never wider than a third. */
-  --ds-layout-rail: clamp(400px, 33vw, 560px);
+  /* The workspace thread rail: wide enough for a real chat; the narrow one holds history only. */
+  --ds-layout-rail: clamp(440px, 36vw, 640px);
+  --ds-layout-rail-narrow: 320px;
   --ds-layout-page: 1280px;
   --ds-layout-doc-header: 44px;
   --ds-layout-sign: 960px;
@@ -238,6 +241,8 @@
     --ds-status-won-soft: #12291c;
     --ds-status-passed: #a3a4ab;
     --ds-status-passed-soft: #26272c;
+    --ds-paper: #ecebe6;
+    --ds-shadow-paper: none;
     --ds-shadow-press: 0 1px 2px rgb(0 0 0 / 50%);
     --ds-shadow-float: 0 16px 40px -12px rgb(0 0 0 / 64%), 0 0 0 1px rgb(255 255 255 / 6%);
     --ds-shadow-modal: 0 28px 72px -16px rgb(0 0 0 / 72%), 0 0 0 1px rgb(255 255 255 / 7%);

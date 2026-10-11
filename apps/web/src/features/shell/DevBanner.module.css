@@ -4,7 +4,9 @@
 .banner {
   display: flex;
   min-height: var(--ds-layout-dev-bar);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  white-space: nowrap;
   align-items: center;
   gap: var(--ds-space-1) var(--ds-space-2);
   padding: var(--ds-space-1) var(--ds-space-4);
@@ -14,4 +16,42 @@
   color: var(--ds-text-secondary);
   font-size: var(--ds-text-xs);
   line-height: var(--ds-leading-xs);
+}
+
+.switch {
+  color: var(--ds-text);
+  font-weight: var(--ds-weight-medium);
+}
+
+.switch:hover {
+  color: var(--ds-accent);
+}
+
+.who {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.switch {
+  flex: none;
+}
+
+.short {
+  display: none;
+}
+
+@media (max-width: 639px) {
+  .full {
+    display: none;
+  }
+
+  .short {
+    display: inline;
+  }
+
+  .short + .who::before {
+    content: "· ";
+  }
 }

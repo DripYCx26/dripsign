@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useProposalIntent } from "../thread/intent.ts";
-import { DOCUMENT_PANE_ID, PENDING_PROPOSAL_ID } from "./nextStep.ts";
 import type { WorkspaceTab } from "./tabs.ts";
 
 /**
@@ -14,9 +13,9 @@ function writeTab(tab: WorkspaceTab): void {
 }
 
 /**
- * Which tab the workspace shows and how a `scroll` step reaches its target: it first switches to
- * the tab that holds the element (on a phone the other pane is not rendered), then scrolls to it
- * and moves focus there.
+ * Which tab the workspace shows and how a `scroll` step reaches the document: it first switches to
+ * the tab that holds it (on a phone the other pane is not rendered), then scrolls there and moves
+ * focus.
  */
 export function useWorkspaceNav(initialTab: WorkspaceTab) {
   const [tab, setTab] = useState<WorkspaceTab>(initialTab);
@@ -28,11 +27,10 @@ export function useWorkspaceNav(initialTab: WorkspaceTab) {
   }
 
   function reveal(href: string) {
-    const id = href.slice(1);
-    selectTab(id === DOCUMENT_PANE_ID ? "document" : "chat");
+    selectTab("document");
     window.requestAnimationFrame(() => {
-      const target = document.getElementById(id);
-      target?.scrollIntoView({ block: id === PENDING_PROPOSAL_ID ? "center" : "start" });
+      const target = document.getElementById(href.slice(1));
+      target?.scrollIntoView({ block: "start" });
       target?.focus({ preventScroll: true });
     });
   }

@@ -50,19 +50,31 @@ function RecipientFields({
       aria-label={`Recipient ${String(index + 1)}`}
       disabled={disabled}
     >
-      <TextField
-        label="Name"
-        name={`recipient-name-${row.key}`}
-        autoComplete="off"
-        value={row.name}
-        maxLength={LIMITS.name}
-        error={errors?.name}
-        onChange={(name) => {
-          onEdit({ name });
-        }}
-      />
+      <div className={styles.top}>
+        <TextField
+          label="Name"
+          hideLabel
+          placeholder="Name"
+          name={`recipient-name-${row.key}`}
+          autoComplete="off"
+          value={row.name}
+          maxLength={LIMITS.name}
+          error={errors?.name}
+          onChange={(name) => {
+            onEdit({ name });
+          }}
+        />
+        <IconButton
+          label={`Remove recipient ${String(index + 1)}`}
+          icon={<X aria-hidden="true" />}
+          disabled={onlyRow}
+          onClick={onRemove}
+        />
+      </div>
       <TextField
         label="Email"
+        hideLabel
+        placeholder="Email"
         name={`recipient-email-${row.key}`}
         type="email"
         autoComplete="off"
@@ -73,22 +85,14 @@ function RecipientFields({
           onEdit({ email });
         }}
       />
-      <div className={styles.foot}>
-        <Checkbox
-          label="Required signer"
-          checked={row.isSigner}
-          disabled={!row.isSigner && signerLimitReached}
-          onChange={(isSigner) => {
-            onEdit({ isSigner });
-          }}
-        />
-        <IconButton
-          label={`Remove recipient ${String(index + 1)}`}
-          icon={<X aria-hidden="true" />}
-          disabled={onlyRow}
-          onClick={onRemove}
-        />
-      </div>
+      <Checkbox
+        label="Required signer"
+        checked={row.isSigner}
+        disabled={!row.isSigner && signerLimitReached}
+        onChange={(isSigner) => {
+          onEdit({ isSigner });
+        }}
+      />
     </fieldset>
   );
 }

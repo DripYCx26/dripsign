@@ -1,5 +1,6 @@
 import { SIGNING_VERIFICATION_MAX_AGE_MS } from "@dripsign/core/auth/sessions";
 import { loadAgreementView } from "@dripsign/core/domain/view";
+import { redirect } from "next/navigation";
 import { CompletionPanel } from "@/features/signing/CompletionPanel.tsx";
 import { FocusedFrame } from "@/features/signing/FocusedFrame.tsx";
 import { SignFlow } from "@/features/signing/SignFlow.tsx";
@@ -21,6 +22,8 @@ export default async function SignPage({ params }: SignPageProps) {
   const { actor } = await requireRecipient(id);
   const view = await loadAgreementView(actor, id);
   const state = signPageState(view);
+  // A finished agreement has nothing left to sign; its workspace holds the signed PDF.
+  if (state === "completed") redirect(`/agreements/${id}`);
   return (
     <FocusedFrame title={view.agreement.title} exitHref={`/agreements/${id}`}>
       {state === "sign" && (
@@ -31,9 +34,7 @@ export default async function SignPage({ params }: SignPageProps) {
         />
       )}
       {state === "signed" && <SignedStep agreementId={id} view={view} autoFocus={false} />}
-      {(state === "finalizing" || state === "completed") && (
-        <CompletionPanel view={view} capacity="recipient" />
-      )}
+      {state === "finalizing" && <CompletionPanel view={view} />}
       {(state === "void" || state === "closed") && (
         <SignUnavailable agreementId={id} view={view} autoFocus={false} />
       )}

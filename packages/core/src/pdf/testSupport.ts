@@ -1,9 +1,70 @@
 import { Readable } from "node:stream";
-import { createDeflate } from "node:zlib";
-import { randomBytes } from "node:crypto";
+import { createDeflate, deflateSync } from "node:zlib";
+import { performance } from "node:perf_hooks";
 import { PDFDocument, PDFName } from "pdf-lib";
 import { expect } from "vitest";
 import { prepareDraftPdf } from "./prepare.ts";
+import { assertInflationBound } from "./preflight.ts";
+
+export function assertPreflightWorkBound(): void {
+  const input = Buffer.from(`%PDF-1.7\n1${"%\r\n".repeat(40)}bad`);
+  expect(input.byteLength).toBe(133);
+  const started = performance.now();
+  assertInflationBound(input);
+  expect(performance.now() - started).toBeLessThan(100);
+  expect(() => {
+    assertInflationBound(
+      Buffer.from("1 0 obj << /Type 2 0 R /Length 0 >> stream\n\nendstream\nendobj"),
+    );
+  }).toThrow(expect.objectContaining({ code: "invalid" }));
+
+  const header = "1 0 obj << /Length 0000000000 >> stream\n";
+  const headers = Array.from({ length: 64 }, () => header).join("");
+  const body = Buffer.concat([Buffer.from(headers), Buffer.alloc(2 * 1024 * 1024, 32)]);
+  for (let index = 0; index < 64; index++) {
+    const start = index * header.length;
+    body.write(
+      String(body.byteLength - start - header.length).padStart(10, "0"),
+      start + header.indexOf("0000000000"),
+    );
+  }
+  const overlapping = Buffer.concat([body, Buffer.from("\nendstream\nendobj")]);
+  expect(() => {
+    assertInflationBound(overlapping);
+  }).toThrow(expect.objectContaining({ code: "invalid" }));
+}
+
+export async function assertUploadQueueBound(uploadBytes: Uint8Array): Promise<void> {
+  const controllers = Array.from({ length: 9 }, () => new AbortController());
+  const pending = controllers.map((controller) =>
+    prepareDraftPdf(
+      { title: "Queue bound fixture", signers: [], uploadBytes },
+      controller.signal,
+    ).then(
+      () => "accepted",
+      (error: unknown) => error,
+    ),
+  );
+  try {
+    await expect(
+      prepareDraftPdf({ title: "Overloaded fixture", signers: [], uploadBytes }),
+    ).rejects.toMatchObject({ code: "unavailable" });
+    controllers[1]?.abort(new Error("Queued cancellation"));
+    await expect(
+      Promise.race([
+        pending[1],
+        new Promise((resolve) =>
+          setTimeout(() => {
+            resolve("Cancellation delayed");
+          }, 100),
+        ),
+      ]),
+    ).resolves.toMatchObject({ message: "Queued cancellation" });
+  } finally {
+    for (const controller of controllers) controller.abort(new Error("Fixture cleanup"));
+    await Promise.all(pending);
+  }
+}
 
 async function inflationBomb(megabytes = 300, streamCount = 1): Promise<Uint8Array> {
   const block = Buffer.alloc(1024 * 1024);
@@ -63,27 +124,34 @@ export async function assertUploadInflationBound(): Promise<void> {
 
 export async function assertLargeConcurrentUploads(): Promise<void> {
   const document = await PDFDocument.create();
+  const width = 1152;
+  const pixels = Buffer.alloc(width * width * 3);
+  const imageBytes = deflateSync(pixels);
+  expect(pixels.byteLength * 20).toBeGreaterThan(64 * 1024 * 1024);
   for (let index = 0; index < 20; index++) {
     const page = document.addPage();
     const image = document.context.register(
-      document.context.flateStream(randomBytes(256 * 256 * 3), {
+      document.context.stream(imageBytes, {
         Type: "XObject",
         Subtype: "Image",
-        Width: 256,
-        Height: 256,
+        Width: width,
+        Height: width,
         ColorSpace: "DeviceRGB",
         BitsPerComponent: 8,
+        Filter: "FlateDecode",
       }),
     );
     page.node.setXObject(PDFName.of("SyntheticImage"), image);
     page.node.addContentStream(
       document.context.register(
-        document.context.stream("q 256 0 0 256 54 400 cm /SyntheticImage Do Q"),
+        document.context.stream("Gap9`0JYLa0E=END/,eQ@UPjjS?&;)>a\\ZVO]mp9m$X?1SuU_3Y7Ls>l@TK0~>", {
+          Filter: ["ASCII85Decode", "FlateDecode"],
+        }),
       ),
     );
   }
   const uploadBytes = await document.save();
-  expect(uploadBytes.byteLength).toBeGreaterThan(3 * 1024 * 1024);
+  expect(uploadBytes.byteLength).toBeLessThan(100 * 1024);
   const results = await Promise.all(
     [0, 1].map(() =>
       prepareDraftPdf({

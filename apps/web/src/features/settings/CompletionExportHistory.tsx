@@ -13,17 +13,21 @@ export function CompletionExportHistory({
         <li key={revision} className={styles.row}>
           <div className={styles.what}>
             <p className={styles.name}>
-              Revision {revision}
-              {index === 0 ? " · current" : ""}
+              {index === 0
+                ? `Revision ${String(revision)} (current)`
+                : `Revision ${String(revision)}`}
             </p>
             <p className={styles.detail}>
-              {createdBy} · <Moment value={createdAt} format="absolute" />
+              <span>{createdBy}</span>
+              <Moment value={createdAt} format="absolute" />
             </p>
             <p className={styles.pins}>
-              key {config.keyId} v{config.keyVersion} · binding {config.senderBindingId} r
-              {config.senderBindingRevision} · grant {config.senderGrantId} · tenant{" "}
-              {config.hostTenantId} · {config.issuer} → {config.audience} ·{" "}
-              {config.freshnessSeconds} s
+              <span>{`key ${config.keyId} v${String(config.keyVersion)}`}</span>
+              <span>{`binding ${config.senderBindingId} r${String(config.senderBindingRevision)}`}</span>
+              <span>{`grant ${config.senderGrantId}`}</span>
+              <span>{`tenant ${config.hostTenantId}`}</span>
+              <span>{`${config.issuer} → ${config.audience}`}</span>
+              <span>{`${String(config.freshnessSeconds)} s`}</span>
             </p>
           </div>
         </li>

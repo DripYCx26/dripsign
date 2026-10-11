@@ -72,6 +72,9 @@
 }
 
 .detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--ds-space-3);
   overflow-wrap: anywhere;
   color: var(--ds-text-secondary);
   font-size: var(--ds-text-sm);
@@ -79,6 +82,9 @@
 }
 
 .pins {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--ds-space-3);
   overflow-wrap: anywhere;
   color: var(--ds-text-secondary);
   font-family: var(--ds-mono);

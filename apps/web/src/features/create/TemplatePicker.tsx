@@ -15,9 +15,6 @@ export function TemplatePicker({ value, onChange, disabled = false }: TemplatePi
   return (
     <div className={styles.picker}>
       <div className={styles.chips} role="group" aria-label="Start from">
-        <span className={styles.lead} aria-hidden="true">
-          Start from
-        </span>
         {TEMPLATE_OPTIONS.map((option) => (
           <Button
             key={option.value}

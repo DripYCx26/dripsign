@@ -13,10 +13,9 @@
 }
 
 .card {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: var(--ds-space-3) var(--ds-space-4);
   border: var(--ds-hairline);
   border-radius: var(--ds-radius-card);
@@ -36,8 +35,15 @@
   line-height: var(--ds-leading-lg);
 }
 
+.name,
+.email,
+.role {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .email {
-  overflow-wrap: anywhere;
   font-family: var(--ds-mono);
   font-size: var(--ds-text-sm);
   line-height: var(--ds-leading-sm);
@@ -47,4 +53,11 @@
   color: var(--ds-text-secondary);
   font-size: var(--ds-text-sm);
   line-height: var(--ds-leading-sm);
+}
+
+/* A phone has no room for a name, an email and a wide button side by side. */
+@media (max-width: 639px) {
+  .card {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

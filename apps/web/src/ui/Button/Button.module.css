@@ -73,12 +73,11 @@
   color: var(--ds-text);
 }
 
-/* An action that reads as a link: the accent, underlined, no box; the target keeps its height. */
+/* An action that reads as a link: the accent, no box and no underline; the target keeps its
+   height. */
 .button[data-variant="link"] {
   padding-inline: 0;
   color: var(--ds-accent);
-  text-decoration: underline;
-  text-underline-offset: var(--ds-space-half);
 }
 
 .button[data-variant="link"]:enabled:hover {
@@ -102,9 +101,11 @@
   color: var(--ds-text);
 }
 
+/* Disabled, whatever the variant: a raised face with a hairline and tertiary ink, never a dark or
+   filled slab. */
 .button:disabled {
   border-color: var(--ds-border);
-  background: var(--ds-surface-subtle);
+  background: var(--ds-surface-raised);
   color: var(--ds-text-tertiary);
   cursor: not-allowed;
 }

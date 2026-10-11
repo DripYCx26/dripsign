@@ -54,11 +54,3 @@
   align-items: center;
   margin-inline-start: calc(-1 * var(--ds-space-2));
 }
-
-.closed {
-  padding: var(--ds-space-4);
-  border-top: var(--ds-hairline);
-  background: var(--ds-surface);
-  color: var(--ds-text-secondary);
-  text-align: center;
-}

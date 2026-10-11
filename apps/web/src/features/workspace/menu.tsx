@@ -1,10 +1,19 @@
 import type { AgreementView, Capacity } from "@dripsign/core/types";
 import type { ReactNode } from "react";
-import { Ban, Download, Sparkles, Undo2, Users } from "@/ui";
+import { formatBytes } from "@/features/signing/format.ts";
+import { Ban, Download, FileText, Sparkles, Undo2, Users } from "@/ui";
 
-export type MenuId = "recipients" | "assistant" | "download" | "cancel" | "void";
+export type MenuId = "audit" | "recipients" | "assistant" | "download" | "cancel" | "void";
 
 type MenuItem = Readonly<{ id: MenuId; label: string; icon: ReactNode; danger?: boolean }>;
+
+/** The completed round's audit record, once the archive worker has stored it. */
+function auditRecord(view: AgreementView) {
+  const round = view.completedRound;
+  return round === null
+    ? undefined
+    : view.artifacts.find((a) => a.roundId === round.id && a.kind === "audit_record");
+}
 
 /**
  * The overflow menu's items for this viewer. Each exists only where the policy allows it, so an
@@ -14,7 +23,13 @@ export function menuItems(view: AgreementView, capacity: Capacity): readonly Men
   const can = (action: AgreementView["allowedActions"][number]) =>
     view.allowedActions.includes(action);
   const staff = capacity === "staff";
+  const audit = view.agreement.status === "signed" ? auditRecord(view) : undefined;
   const items: (MenuItem | false)[] = [
+    audit !== undefined && {
+      id: "audit",
+      label: `Audit record · ${formatBytes(audit.byteLength)}`,
+      icon: <FileText />,
+    },
     staff && { id: "recipients", label: "Recipients", icon: <Users /> },
     staff && can("ask_ai") && { id: "assistant", label: "Private assistant", icon: <Sparkles /> },
     can("download") && { id: "download", label: "Download current PDF", icon: <Download /> },

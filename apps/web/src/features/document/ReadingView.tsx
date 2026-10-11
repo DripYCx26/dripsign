@@ -1,11 +1,13 @@
 import type { DocumentSource } from "@dripsign/core/schema";
 import { sectionAnchor } from "./sections.ts";
+import { Moment } from "@/ui";
 import styles from "./ReadingView.module.css";
 import { SuggestEdit } from "./SuggestEdit.tsx";
 
 export interface ReadingSigner {
   readonly id: string;
   readonly name: string;
+  readonly signature?: { readonly typedName: string; readonly signedAt: string } | null;
 }
 
 type ReadingViewProps = Readonly<{
@@ -54,8 +56,20 @@ export function ReadingView({ source, signers, suggestable }: ReadingViewProps) 
           <ul className={styles.signers}>
             {signers.map((signer) => (
               <li key={signer.id} className={styles.signer}>
-                <span className={styles.line} aria-hidden="true" />
-                <span>{signer.name}</span>
+                {signer.signature ? (
+                  <>
+                    <span className={styles.ink}>{signer.signature.typedName}</span>
+                    <span>
+                      {signer.name} · signed{" "}
+                      <Moment value={signer.signature.signedAt} format="absolute" />
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className={styles.line} aria-hidden="true" />
+                    <span>{signer.name}</span>
+                  </>
+                )}
               </li>
             ))}
           </ul>

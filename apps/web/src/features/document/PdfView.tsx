@@ -2,11 +2,11 @@
 
 import type { SigningField } from "@dripsign/core/schema";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import { Fragment, useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ExternalLink, Notice, Skeleton } from "@/ui";
 import type { FieldMarkerPerson } from "./FieldMarkers.tsx";
 import { loadPdfjs } from "./loadPdfjs.ts";
-import { PdfPage } from "./PdfPage.tsx";
+import { PdfPage, type PageShape } from "./PdfPage.tsx";
 import styles from "./PdfView.module.css";
 
 type PdfViewProps = Readonly<{
@@ -27,7 +27,7 @@ type PdfViewProps = Readonly<{
 type Loaded =
   | Readonly<{ status: "loading" }>
   | Readonly<{ status: "error" }>
-  | Readonly<{ status: "ready"; doc: PDFDocumentProxy; firstPageRatio: number }>;
+  | Readonly<{ status: "ready"; doc: PDFDocumentProxy; firstPage: PageShape }>;
 
 type ToolbarProps = Readonly<{
   src: string;
@@ -37,26 +37,18 @@ type ToolbarProps = Readonly<{
   actions: ReactNode;
 }>;
 
-/** One 40 px row: what is known of the file, a link to open it, and the caller's control. */
+/** One 40 px row: what is known of the file, a button to open it, and the caller's control. */
 function Toolbar({ src, pages, lead, actions }: ToolbarProps) {
-  const facts: ReactNode[] = [
-    lead,
-    pages !== null && `${String(pages)} ${pages === 1 ? "page" : "pages"}`,
-    <a key="open" href={src} target="_blank" rel="noreferrer" className={styles.open}>
-      Open PDF
-      <ExternalLink aria-hidden="true" />
-      <span className="ds-visually-hidden"> (opens in a new tab)</span>
-    </a>,
-  ].filter((fact) => fact !== null && fact !== false && fact !== undefined);
   return (
     <div className={styles.bar}>
       <div className={styles.facts}>
-        {facts.map((fact, index) => (
-          <Fragment key={index}>
-            {index > 0 && <span aria-hidden="true">·</span>}
-            {fact}
-          </Fragment>
-        ))}
+        {lead}
+        {pages !== null && <span>{`${String(pages)} ${pages === 1 ? "page" : "pages"}`}</span>}
+        <a href={src} target="_blank" rel="noreferrer" className={styles.open}>
+          Open PDF
+          <ExternalLink aria-hidden="true" />
+          <span className="ds-visually-hidden"> (opens in a new tab)</span>
+        </a>
       </div>
       {actions}
     </div>
@@ -81,7 +73,11 @@ function PdfDocument({ src, fields, viewerRecipientId, people = [], lead, action
         const first = await doc.getPage(1);
         const view = first.getViewport({ scale: 1 });
         if (!stopped()) {
-          setLoaded({ status: "ready", doc, firstPageRatio: view.width / view.height });
+          setLoaded({
+            status: "ready",
+            doc,
+            firstPage: { width: view.width, ratio: view.width / view.height },
+          });
         }
       } catch {
         if (!stopped()) setLoaded({ status: "error" });
@@ -95,7 +91,7 @@ function PdfDocument({ src, fields, viewerRecipientId, people = [], lead, action
 
   const pages = loaded.status === "ready" ? loaded.doc.numPages : null;
   return (
-    <div className={styles.pages}>
+    <div className={styles.view}>
       <Toolbar src={src} pages={pages} lead={lead} actions={actions} />
       {loaded.status === "error" && (
         <Notice tone="stop" live="alert">
@@ -110,19 +106,24 @@ function PdfDocument({ src, fields, viewerRecipientId, people = [], lead, action
           <Skeleton width={50} />
         </div>
       )}
-      {loaded.status === "ready" &&
-        Array.from({ length: loaded.doc.numPages }, (_, index) => index + 1).map((pageNumber) => (
-          <PdfPage
-            key={pageNumber}
-            doc={loaded.doc}
-            pageNumber={pageNumber}
-            total={loaded.doc.numPages}
-            firstPageRatio={loaded.firstPageRatio}
-            fields={fields.filter((field) => field.page === pageNumber)}
-            people={people}
-            viewerRecipientId={viewerRecipientId}
-          />
-        ))}
+      {loaded.status === "ready" && (
+        <div className={styles.pages}>
+          {Array.from({ length: loaded.doc.numPages }, (_, index) => index + 1).map(
+            (pageNumber) => (
+              <PdfPage
+                key={pageNumber}
+                doc={loaded.doc}
+                pageNumber={pageNumber}
+                total={loaded.doc.numPages}
+                firstPage={loaded.firstPage}
+                fields={fields.filter((field) => field.page === pageNumber)}
+                people={people}
+                viewerRecipientId={viewerRecipientId}
+              />
+            ),
+          )}
+        </div>
+      )}
     </div>
   );
 }

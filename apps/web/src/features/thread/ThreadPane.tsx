@@ -3,12 +3,10 @@
 import type { AgreementView, Capacity, ProposalView } from "@dripsign/core/types";
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import type { RunCommand } from "@/features/workspace/commands.ts";
-import { PENDING_PROPOSAL_ID } from "@/features/workspace/nextStep.ts";
-import { EmptyState } from "@/ui";
 import { Composer, type Sent } from "./Composer.tsx";
 import { cancelProposal } from "./intent.ts";
 import { MessageItem } from "./MessageItem.tsx";
-import { isOwn, pendingProposal, threadItems, turnSentence, type ThreadItem } from "./model.ts";
+import { isOwn, threadItems, turnSentence, type ThreadItem } from "./model.ts";
 import { ProposalCard, type Decision } from "./ProposalCard.tsx";
 import { SystemRow } from "./SystemRow.tsx";
 import styles from "./ThreadPane.module.css";
@@ -93,13 +91,13 @@ function ThreadRow({ item, view, capacity, busy, onDecide }: ThreadRowProps) {
 
 /**
  * The chat rail: the conversation oldest first as an ordered list (messages as bubbles, proposals
- * as cards, milestones as small system rows) with the composer pinned under it. Staff and
+ * as cards, milestones as small system rows) with the composer, when there is one, pinned under
+ * it; a thread with only milestones is just the list. Staff and
  * recipients see the same list; the view already filtered what each may see. Whose turn it is
  * is announced, not displayed: the cards and the primary action already say it.
  */
 export function ThreadPane({ view, capacity, run, busy }: ThreadPaneProps) {
   const items = threadItems(view);
-  const pendingId = pendingProposal(view)?.id;
   const list = useRef<HTMLOListElement>(null);
   const { announcement, announce } = useSentAnnouncement();
 
@@ -123,23 +121,10 @@ export function ThreadPane({ view, capacity, run, busy }: ThreadPaneProps) {
 
   return (
     <div className={styles.pane}>
-      {items.length === 0 ? (
-        <div className={styles.list}>
-          <EmptyState message="No messages yet." />
-        </div>
-      ) : (
+      {items.length > 0 && (
         <ol className={styles.list} ref={list} aria-label="Thread">
           {items.map((item) => (
-            <li
-              key={item.key}
-              className={styles.item}
-              id={
-                item.kind === "proposal" && item.proposal.id === pendingId
-                  ? PENDING_PROPOSAL_ID
-                  : undefined
-              }
-              tabIndex={-1}
-            >
+            <li key={item.key} className={styles.item} tabIndex={-1}>
               <ThreadRow
                 item={item}
                 view={view}

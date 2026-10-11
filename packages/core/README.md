@@ -9,13 +9,13 @@ the jobs worker and the CLI. Next-free; web imports it as `@dripsign/core/<path>
 |---|---|
 | `schema/` | `schema.sql`, the one baseline schema, edited in place |
 | `assets/` | The one font, used for PDF text and the signature preview |
-| `src/` | `config.ts`, `db.ts`, `errors.ts`, `schema.ts`, `types.ts`, `cli.ts`, `seed.ts` |
-| `src/domain/` | Policy, commands, views, receipts, revisions and signing |
+| `src/` | `config.ts`, `db.ts`, `errors.ts`, `schema.ts`, `types.ts`, `cli.ts`, `seed.ts`; `seed/` holds the demo cast and script |
+| `src/domain/` | Policy, commands, views, receipts, revisions, signing, staff roster, completion export |
 | `src/auth/` | Email codes, sessions, rate limits, capacity resolution |
-| `src/host/` | Ed25519 entry assertion and executed event |
+| `src/host/` | Ed25519 entry assertion and executed event (completion export) |
 | `src/jobs/` | Outbox, runner, handlers, mail, sweep, worker entry |
-| `src/adapters/` | Storage (file, S3), email (SMTP, SES), Anthropic |
-| `src/pdf/` | Font, rendering, preparation, signed PDF and audit record |
+| `src/adapters/` | Storage (file, S3, Azure Blob), email (SMTP, SES, Azure), Anthropic |
+| `src/pdf/` | Font, rendering, preparation, inflation preflight, isolated upload parser, signed PDF and audit record |
 
 ## Commands
 

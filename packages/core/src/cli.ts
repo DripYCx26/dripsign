@@ -89,11 +89,14 @@ async function addStaff(args: readonly string[]): Promise<void> {
   if (!parsed.success) throw new Error(USAGE);
   const input = parsed.data;
   const tenantId = await tx(async (db) => {
-    const tenant = await db.query<{ id: string }>(
+    await db.query(
       `INSERT INTO dripsign.tenant (id, name) VALUES ($1, $2)
-       ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-       RETURNING id`,
+       ON CONFLICT (name) DO NOTHING`,
       [randomUUID(), input.tenant],
+    );
+    const tenant = await db.query<{ id: string }>(
+      "SELECT id FROM dripsign.tenant WHERE name = $1",
+      [input.tenant],
     );
     const id = tenant.rows[0]?.id;
     if (id === undefined) throw new Error("Tenant upsert returned no row.");

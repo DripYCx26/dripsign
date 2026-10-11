@@ -291,19 +291,8 @@ export const commandSchema = z.discriminatedUnion("kind", [
 
 export const COMMAND_KINDS = commandSchema.options.map((option) => option.shape.kind.value);
 
-export const STAFF_LIST_FILTERS = [
-  "all",
-  "needs_you",
-  "draft",
-  "negotiating",
-  "signing",
-  "signed",
-  "void",
-] as const;
-
 export const staffListQuerySchema = z.strictObject({
   q: z.string().trim().max(LIMITS.search).optional(),
-  status: z.enum(STAFF_LIST_FILTERS).optional(),
   cursor: z.string().max(200).optional(),
 });
 
@@ -390,7 +379,6 @@ export type NewAgreementInput = z.infer<typeof newAgreementInputSchema>;
 export type Command = z.infer<typeof commandSchema>;
 export type CommandKind = Command["kind"];
 export type CommandOf<K extends CommandKind> = Extract<Command, { kind: K }>;
-export type StaffListFilter = (typeof STAFF_LIST_FILTERS)[number];
 export type StaffListQuery = z.infer<typeof staffListQuerySchema>;
 export type EmailTemplate = (typeof EMAIL_TEMPLATES)[number];
 export type JobPayload = z.infer<typeof jobPayloadSchema>;

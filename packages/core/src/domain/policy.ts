@@ -84,8 +84,6 @@ export function allowedActions(
   return ordered(allowed);
 }
 
-// The dashboard's "needs you" filter restates the staff next steps below (retry_preparation,
-// accept, publish, request_signatures) in SQL as NEEDS_YOU in lists.ts; change both together.
 function addStaffActions(snapshot: PolicySnapshot, allowed: Set<AgreementAction>): void {
   const editable = snapshot.status === "draft" || snapshot.status === "negotiating";
   allowed.add("void");

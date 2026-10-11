@@ -8,7 +8,7 @@ export const metadata: Metadata = { title: "Development identities" };
 
 export default async function DevSignInPage() {
   // Off means the page does not exist, not that it refuses.
-  if (!devLoginEnabled()) notFound();
+  if (!(await devLoginEnabled())) notFound();
   return (
     <EntryFrame title="Development identities" width="wide">
       <DevIdentityPicker identities={await devIdentities()} />

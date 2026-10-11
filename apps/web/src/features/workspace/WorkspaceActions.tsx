@@ -49,12 +49,14 @@ export function WorkspaceMenu({
   if (items.length === 0) return null;
 
   function onMenu(id: MenuId) {
-    if (id !== "download") {
+    if (id === "audit") {
+      window.location.assign(fileUrl(view.agreement.id, "audit", { as: capacity }));
+    } else if (id === "download") {
+      const kind = view.agreement.currentRevisionNumber === null ? "draft" : "current";
+      window.location.assign(fileUrl(view.agreement.id, kind, { as: capacity }));
+    } else {
       onPanel(id);
-      return;
     }
-    const kind = view.agreement.currentRevisionNumber === null ? "draft" : "current";
-    window.location.assign(fileUrl(view.agreement.id, kind, { as: capacity }));
   }
 
   return <Menu label="More actions" icon={<Ellipsis />} items={items} onAction={onMenu} />;

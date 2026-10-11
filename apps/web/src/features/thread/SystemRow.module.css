@@ -8,3 +8,7 @@
   line-height: var(--ds-leading-xs);
   overflow-wrap: anywhere;
 }
+
+.time {
+  white-space: nowrap;
+}

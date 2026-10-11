@@ -47,9 +47,11 @@ export function TeamRoster({ members, selfEmail }: Props) {
             <li key={member.email} className={styles.member}>
               <p className={styles.name}>{member.name ?? "—"}</p>
               <p className={styles.detail}>{member.email}</p>
-              <p className={styles.detail}>{member.role === "admin" ? "Admin" : "Member"}</p>
-              <p className={styles.detail}>
-                <Moment value={member.addedAt} format="relative" />
+              <p className={styles.meta}>
+                <span>{member.role === "admin" ? "Admin" : "Member"}</span>
+                <span>
+                  <Moment value={member.addedAt} format="relative" />
+                </span>
               </p>
               {member.email !== selfEmail && (
                 <Button

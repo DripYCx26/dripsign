@@ -6,6 +6,8 @@
   min-height: 0;
   flex: 1 1 auto;
   flex-direction: column;
+  /* With no list (milestones aside, nothing yet) the composer still sits at the bottom. */
+  justify-content: flex-end;
 }
 
 .list {

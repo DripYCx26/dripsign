@@ -41,7 +41,10 @@ export async function closePool(): Promise<void> {
   await current?.end();
 }
 
-/** READ COMMITTED write transaction. Lock order: receipt, agreement row, grant row, job rows. */
+/**
+ * READ COMMITTED write transaction. Agreement lock order: receipt, agreement, grant, job rows.
+ * Roster changes: tenant roster advisory lock before staff rows or tenant foreign-key locks.
+ */
 export function tx<T>(fn: (db: Db) => Promise<T>, target: pg.Pool = getPool()): Promise<T> {
   return inTransaction(target, "BEGIN ISOLATION LEVEL READ COMMITTED", WRITE_SETTINGS, fn);
 }

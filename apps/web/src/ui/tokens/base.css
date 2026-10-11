@@ -52,9 +52,10 @@ button:disabled {
   cursor: not-allowed;
 }
 
+/* Links carry no underline: the accent marks them, and chrome links are buttons or rows. */
 a {
   color: var(--ds-accent);
-  text-underline-offset: var(--ds-space-half);
+  text-decoration: none;
 }
 
 a:hover {

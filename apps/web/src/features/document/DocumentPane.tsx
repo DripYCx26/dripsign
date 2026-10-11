@@ -150,7 +150,7 @@ function Body({ view, capacity, target, mode, pdfOpened, suggestable }: BodyProp
   const reading = (
     <ReadingView
       source={source}
-      signers={peopleFor(view, targetSignerIds(target))}
+      signers={signersWithSignatures(view, target)}
       suggestable={suggestable}
     />
   );
@@ -301,4 +301,16 @@ export function DocumentPane({ rev, ...pane }: PaneProps & Readonly<{ rev?: numb
   const target = resolveTarget(pane.view, pane.capacity, rev);
   if (target === null) return <EmptyState message="This agreement has no document yet." />;
   return <LoadedPane {...pane} target={target} />;
+}
+
+/** Signers of the target, each with their signature when the live or completed round on this revision holds one. */
+function signersWithSignatures(view: AgreementView, target: DocumentTarget) {
+  const revisionId = target.kind === "revision" ? target.revision.id : null;
+  const round = [view.completedRound, view.activeRound].find(
+    (item) => item !== null && item.revisionId === revisionId,
+  );
+  return peopleFor(view, targetSignerIds(target)).map((person) => ({
+    ...person,
+    signature: round?.signers.find((s) => s.recipientId === person.id)?.signature ?? null,
+  }));
 }

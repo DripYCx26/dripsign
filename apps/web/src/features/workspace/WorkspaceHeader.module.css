@@ -1,6 +1,6 @@
-/* One 56 px row: back, title, primary action, menu. Under 1024 px a second row holds the
-   Chat | Document switch and the primary action, so the switch is the only one on the page; the
-   second row is a flex wrap, so its widths never resize the first row's title. */
+/* One 56 px row: back, title, chip, primary action, menu. Under 1024 px a second row holds the
+   Chat | Document switch, the chip and the primary action, so the switch is the only one on the
+   page. The row is a flex wrap, so its widths never resize the first row's title. */
 
 .header {
   display: flex;
@@ -44,6 +44,10 @@
   display: none;
 }
 
+.chip {
+  flex: none;
+}
+
 .primary,
 .menu {
   display: flex;
@@ -73,8 +77,8 @@
     order: 3;
   }
 
-  /* The line break between the two rows. */
-  .header::after {
+  /* The line break between the two rows, present only when the second row has something. */
+  .header[data-second-row]::after {
     content: "";
     order: 4;
     flex-basis: 100%;
@@ -87,32 +91,34 @@
     order: 5;
   }
 
-  .primary {
+  .chip {
     order: 6;
+  }
+
+  .primary {
+    order: 7;
     flex: 1 1 auto;
     justify-content: flex-end;
   }
 }
 
-/* A long title wraps beside the back button instead of ellipsising. */
+/* A phone: the title is one line, smaller, with its pills beside it; who it is from is in the
+   conversation. */
 @media (max-width: 639px) {
   .header {
     padding-inline: var(--ds-space-3);
   }
 
-  .title {
-    flex-wrap: wrap;
-  }
-
-  .dot {
-    display: none;
-  }
-
   .title > h1 {
-    max-width: 100%;
+    font-size: var(--ds-text-xl);
+    line-height: var(--ds-leading-xl);
+  }
+
+  .title > :not(h1) {
     flex: none;
-    overflow: visible;
-    overflow-wrap: anywhere;
-    white-space: normal;
+  }
+
+  .from {
+    display: none;
   }
 }

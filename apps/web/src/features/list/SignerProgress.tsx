@@ -8,9 +8,8 @@ export interface SignerProgressModel {
 }
 
 /**
- * How far a signature request has got: "1 of 2 signed" with a dot per required signer, or, once
- * the last signature is in, that the signed files are being prepared. The dots are decoration;
- * the words carry the meaning.
+ * How far a signature request has got: "1 of 2 signed", or, once the last signature is in, that
+ * the signed files are being prepared.
  */
 export function SignerProgress({ signed, required, finalizing, delayed }: SignerProgressModel) {
   if (finalizing) {
@@ -21,14 +20,6 @@ export function SignerProgress({ signed, required, finalizing, delayed }: Signer
     );
   }
   return (
-    <span className={styles.progress}>
-      <span className={styles.dots} aria-hidden="true">
-        {Array.from({ length: required }, (_, index) => (
-          // The dots are positional and never reorder.
-          <span key={index} className={styles.dot} data-filled={index < signed} />
-        ))}
-      </span>
-      {`${String(signed)} of ${String(required)} signed`}
-    </span>
+    <span className={styles.progress}>{`${String(signed)} of ${String(required)} signed`}</span>
   );
 }

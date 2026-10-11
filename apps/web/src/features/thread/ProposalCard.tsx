@@ -164,6 +164,7 @@ function ProposalBody(props: ProposalCardProps) {
 export function ProposalCard(props: ProposalCardProps) {
   const { view, proposal } = props;
   const state = cardState(view, proposal);
+  const open = state === "pending" || state === "stale";
   if (state === "superseded") {
     const by = counteredBy(view, proposal);
     return (
@@ -183,7 +184,11 @@ export function ProposalCard(props: ProposalCardProps) {
     );
   }
   return (
-    <article className={styles.card} data-state={state}>
+    <article
+      className={styles.card}
+      data-state={state}
+      data-turn={open && canAnswer(view) ? "you" : undefined}
+    >
       <ProposalBody {...props} />
     </article>
   );

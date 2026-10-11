@@ -1,4 +1,4 @@
-/* A proposal card: raised, hairline, an attention edge while it waits on someone. */
+/* A proposal card: raised, hairline, an attention edge while it waits on the viewer. */
 
 .card {
   display: grid;
@@ -9,8 +9,7 @@
   background: var(--ds-surface-raised);
 }
 
-.card[data-state="pending"],
-.card[data-state="stale"] {
+.card[data-turn="you"] {
   border-inline-start: var(--ds-space-1) solid var(--ds-attention);
 }
 
@@ -76,7 +75,7 @@
 .superseded {
   display: grid;
   gap: var(--ds-space-1);
-  margin-inline-start: var(--ds-space-4);
+  margin-inline-start: var(--ds-space-6);
 }
 
 .summary {

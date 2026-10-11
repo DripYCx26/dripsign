@@ -12,8 +12,10 @@ export function SystemRow({ at, lines }: SystemRowProps) {
           {line}
           {index === lines.length - 1 && (
             <>
-              {" · "}
-              <Ago value={at} />
+              {" "}
+              <span className={styles.time}>
+                <Ago value={at} />
+              </span>
             </>
           )}
         </p>

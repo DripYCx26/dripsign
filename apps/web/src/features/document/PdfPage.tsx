@@ -12,11 +12,15 @@ const NEAR_VIEWPORT = "200% 0px";
 // Beyond twice the device pixel ratio a canvas costs memory and adds no visible sharpness.
 const MAX_PIXEL_RATIO = 2;
 
+/** The first page's size at scale 1 (CSS pixels): its shape and the narrowest it is drawn. */
+export type PageShape = Readonly<{ width: number; ratio: number }>;
+
 type PdfPageProps = Readonly<{
   doc: PDFDocumentProxy;
   pageNumber: number;
   total: number;
-  firstPageRatio: number;
+  /** Stands in for the page until it is drawn. */
+  firstPage: PageShape;
   fields: readonly SigningField[];
   people: readonly FieldMarkerPerson[];
   viewerRecipientId: string | null;
@@ -66,7 +70,7 @@ export function PdfPage({
   doc,
   pageNumber,
   total,
-  firstPageRatio,
+  firstPage,
   fields,
   people,
   viewerRecipientId,
@@ -74,7 +78,7 @@ export function PdfPage({
   const { slot, near, width } = useSlot();
   const canvas = useRef<HTMLCanvasElement>(null);
   const text = useRef<HTMLDivElement>(null);
-  const [ratio, setRatio] = useState(firstPageRatio);
+  const [shape, setShape] = useState(firstPage);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
@@ -95,7 +99,7 @@ export function PdfPage({
         const viewport = page.getViewport({ scale: scale * pixels });
         target.width = Math.floor(viewport.width);
         target.height = Math.floor(viewport.height);
-        setRatio(base.width / base.height);
+        setShape({ width: base.width, ratio: base.width / base.height });
         task = page.render({ canvas: target, viewport });
         // The layer is laid out in CSS pixels from this factor, before it is constructed.
         layer.style.setProperty("--total-scale-factor", String(scale));
@@ -121,7 +125,11 @@ export function PdfPage({
   }, [near, width, doc, pageNumber]);
 
   return (
-    <div ref={slot} className={styles.slot} style={{ aspectRatio: ratio }}>
+    <div
+      ref={slot}
+      className={styles.slot}
+      style={{ aspectRatio: shape.ratio, minWidth: shape.width }}
+    >
       <canvas
         ref={canvas}
         className={styles.canvas}

@@ -51,8 +51,10 @@ export function UndeliveredExports({ items, deliveryEnabled }: Props) {
                     {item.state === "queued" ? <Clock size={14} /> : <OctagonAlert size={14} />}
                   </span>
                   {item.state === "queued" ? "Sending" : "Delivery stopped"}
-                </span>{" "}
-                · signed <Moment value={item.completedAt} format="absolute" />
+                </span>
+                <span>
+                  signed <Moment value={item.completedAt} format="absolute" />
+                </span>
               </p>
               <p className={styles.pins}>event {item.eventId}</p>
             </div>

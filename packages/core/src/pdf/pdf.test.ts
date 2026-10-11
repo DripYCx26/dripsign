@@ -8,7 +8,12 @@ import { assertRenderableName } from "./font.ts";
 import { prepareDraftPdf } from "./prepare.ts";
 import { renderAuditRecord, renderSignedPdf } from "./archive.ts";
 import type { ArchiveEvidence } from "./archive.ts";
-import { assertLargeConcurrentUploads, assertUploadInflationBound } from "./testSupport.ts";
+import {
+  assertLargeConcurrentUploads,
+  assertUploadInflationBound,
+  assertPreflightWorkBound,
+  assertUploadQueueBound,
+} from "./testSupport.ts";
 
 interface PdfReader {
   getDocument(input: { data: Uint8Array; verbosity: number }): {
@@ -149,6 +154,8 @@ describe("PDF evidence", () => {
     const uploaded = await PDFDocument.create();
     uploaded.addPage();
     const uploadBytes = await uploaded.save();
+    assertPreflightWorkBound();
+    await assertUploadQueueBound(uploadBytes);
     const copied = await prepareDraftPdf({ title: evidence.title, signers, uploadBytes });
     expect(copied.pageCount).toBe(2);
     const cancellation = new AbortController();

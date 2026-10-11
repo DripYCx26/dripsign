@@ -1,13 +1,16 @@
 import type { TimelineItem, TimelineKind, ViewerView } from "@dripsign/core/types";
 
-type Describe = (item: TimelineItem, viewer: ViewerView) => string;
+/** What a milestone's wording depends on besides the timeline row itself. */
+export type MilestoneContext = Readonly<{ viewer: ViewerView; voidReason: string | null }>;
+
+type Describe = (item: TimelineItem, context: MilestoneContext) => string;
 
 const text = (item: TimelineItem, key: string): string | null => {
   const value = item.detail[key];
   return typeof value === "string" ? value : null;
 };
 
-function signed(item: TimelineItem, viewer: ViewerView): string {
+function signed(item: TimelineItem, { viewer }: MilestoneContext): string {
   const recipientId = text(item, "recipientId");
   const mine = recipientId !== null && recipientId === viewer.recipientId;
   return mine ? "You signed" : `${text(item, "name") ?? "A signer"} signed`;
@@ -22,10 +25,12 @@ const MILESTONES: Readonly<Partial<Record<TimelineKind, Describe>>> = {
   signing_requested: () => "Signatures requested",
   signature_recorded: signed,
   signing_completed: () => "Everyone signed",
-  agreement_voided: () => "Agreement voided",
+  // The reason lives on the agreement, not the timeline row; one reason, so it rides on the one row.
+  agreement_voided: (_item, { voidReason }) =>
+    voidReason === null ? "Voided" : `Voided · ${voidReason}`,
 };
 
 /** One short line for a milestone, or null when the timeline row is not one. */
-export function describeMilestone(item: TimelineItem, viewer: ViewerView): string | null {
-  return MILESTONES[item.kind]?.(item, viewer) ?? null;
+export function describeMilestone(item: TimelineItem, context: MilestoneContext): string | null {
+  return MILESTONES[item.kind]?.(item, context) ?? null;
 }

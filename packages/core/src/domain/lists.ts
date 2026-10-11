@@ -39,12 +39,6 @@ const ROUND_PROGRESS = `LEFT JOIN LATERAL (
     ORDER BY g.created_at DESC LIMIT 1
   ) g ON true`;
 
-// SQL twin of the staff next steps in policy.ts (addStaffActions), which links back here: retry a
-// failed preparation, answer a recipient proposal, publish draft changes, or request signatures.
-// Change both together.
-const NEEDS_YOU = `(a.status IN ('draft', 'negotiating') AND a.draft->'preparation'->>'status' = 'failed')
-    OR (a.status = 'negotiating' AND (p.by IS DISTINCT FROM 'staff' OR a.draft_dirty))`;
-
 interface Progress {
   roundStatus: RoundStatus | null;
   signed: number | null;
@@ -72,7 +66,7 @@ export async function listStaffAgreements(
   actor: StaffActor,
   query: StaffListQuery,
 ): Promise<Page<StaffListItem>> {
-  const { q, status = "all", cursor } = parseOrInvalid(staffListQuerySchema, query);
+  const { q, cursor } = parseOrInvalid(staffListQuerySchema, query);
   const after = cursor === undefined ? null : decodeCursor(cursor);
   const pattern = q === undefined || q === "" ? null : `%${q.replace(/[\\%_]/gu, "\\$&")}%`;
   return readTx(async (db) => {
@@ -109,20 +103,11 @@ export async function listStaffAgreements(
            SELECT 1 FROM dripsign.recipient r
            WHERE r.tenant_id = a.tenant_id AND r.agreement_id = a.id
              AND (r.name ILIKE $2 OR r.email ILIKE $2)))
-         AND CASE $3::text WHEN 'all' THEN true WHEN 'needs_you' THEN ${NEEDS_YOU}
-           ELSE a.status = $3::text END
-         AND ($4::bigint IS NULL OR (a.updated_at, a.id)
-           < (timestamptz 'epoch' + $4::bigint * interval '1 microsecond', $5::uuid))
+         AND ($3::bigint IS NULL OR (a.updated_at, a.id)
+           < (timestamptz 'epoch' + $3::bigint * interval '1 microsecond', $4::uuid))
        ORDER BY a.updated_at DESC, a.id DESC
-       LIMIT $6`,
-      [
-        actor.tenantId,
-        pattern,
-        status,
-        after?.micros ?? null,
-        after?.id ?? null,
-        LIMITS.pageSize + 1,
-      ],
+       LIMIT $5`,
+      [actor.tenantId, pattern, after?.micros ?? null, after?.id ?? null, LIMITS.pageSize + 1],
     );
     const rows = found.rows.slice(0, LIMITS.pageSize);
     const last = rows.at(-1);

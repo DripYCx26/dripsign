@@ -33,6 +33,15 @@
 
 .main[data-width="wide"] {
   max-width: var(--ds-layout-page);
+  padding-inline: var(--ds-space-6);
+}
+
+/* The gutters PageContainer uses, so the brand, the title and the cards share one edge. */
+@media (max-width: 639px) {
+  .head,
+  .main[data-width="wide"] {
+    padding-inline: var(--ds-space-4);
+  }
 }
 
 /* Sign-in and its neighbours sit in the middle of the screen, not under the brand. */

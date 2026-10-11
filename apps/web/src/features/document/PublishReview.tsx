@@ -1,4 +1,4 @@
-import type { DocumentSource, SigningField } from "@dripsign/core/schema";
+import type { SigningField } from "@dripsign/core/schema";
 import type { AgreementView, RevisionView } from "@dripsign/core/types";
 import { fileUrl } from "@/features/files";
 import { Notice, Pill } from "@/ui";
@@ -12,25 +12,6 @@ const SHORT_LENGTH = 12;
 
 function fieldWords(field: SigningField): string {
   return `${field.type === "signature" ? "Signature" : "Date"} · page ${String(field.page)}`;
-}
-
-/** A first revision has nothing to compare with, so it lists what the document holds. */
-function RevisionOutline({
-  source,
-  pageCount,
-}: Readonly<{ source: DocumentSource | null; pageCount: number }>) {
-  if (source === null) {
-    return <p className={styles.muted}>{`Uploaded PDF · ${String(pageCount)} pages`}</p>;
-  }
-  return (
-    <ol className={styles.outline}>
-      {source.sections.map((section, index) => (
-        <li key={section.id}>
-          {section.heading === "" ? `Section ${String(index + 1)}` : section.heading}
-        </li>
-      ))}
-    </ol>
-  );
 }
 
 function SignerFields({
@@ -97,11 +78,8 @@ function WhatChanged({
 }: Readonly<{
   draft: NonNullable<AgreementView["draft"]>;
   document: { readonly pageCount: number; readonly sha256: string };
-  previous: RevisionView | undefined;
+  previous: RevisionView;
 }>) {
-  if (previous === undefined) {
-    return <RevisionOutline source={draft.source} pageCount={document.pageCount} />;
-  }
   if (draft.source === null) {
     return (
       <PdfChange draftPages={document.pageCount} draftSha={document.sha256} previous={previous} />
@@ -111,8 +89,8 @@ function WhatChanged({
 }
 
 /**
- * The last look before a revision is published: what changed since the current revision, who
- * signs where, and the exact PDF that will be published with its SHA. Publishing needs the
+ * The last look before a revision is published: what changed since the current revision (a first
+ * revision has nothing to compare), who signs where, and the exact PDF that will be published with its SHA. Publishing needs the
  * reviewer's word that they read the PDF, and a different PDF asks for it again.
  */
 export function PublishReview({ view }: Readonly<{ view: AgreementView }>) {
@@ -138,14 +116,12 @@ export function PublishReview({ view }: Readonly<{ view: AgreementView }>) {
   return (
     <div className={styles.review}>
       <div className={styles.left}>
-        <section className={styles.part} aria-labelledby="what-changed">
-          <h2 id="what-changed">
-            {previous === undefined
-              ? "What’s in this revision"
-              : `What changed since revision ${String(previous.number)}`}
-          </h2>
-          <WhatChanged draft={draft} document={document} previous={previous} />
-        </section>
+        {previous !== undefined && (
+          <section className={styles.part} aria-labelledby="what-changed">
+            <h2 id="what-changed">{`What changed since revision ${String(previous.number)}`}</h2>
+            <WhatChanged draft={draft} document={document} previous={previous} />
+          </section>
+        )}
         <SignerFields view={view} previous={previous} />
       </div>
       <section className={styles.pdf} aria-label="The PDF that will be published">

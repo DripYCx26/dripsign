@@ -1,7 +1,15 @@
-.pages {
+.view {
   display: grid;
   gap: var(--ds-space-4);
   min-width: 0;
+}
+
+/* Pages fit the width they are given but never draw narrower than scale 1, so on a phone the
+   text stays legible and the sheets scroll sideways inside this box, under the toolbar. */
+.pages {
+  display: grid;
+  gap: var(--ds-space-4);
+  overflow-x: auto;
 }
 
 .bar {
@@ -20,14 +28,25 @@
   min-width: 0;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--ds-space-2);
+  gap: var(--ds-space-2) var(--ds-space-4);
 }
 
+/* A quiet button, not a link: secondary ink, a box on hover, no underline. */
 .open {
   display: inline-flex;
+  min-height: var(--ds-size-control-sm);
   align-items: center;
   gap: var(--ds-space-1);
-  min-height: var(--ds-size-target-min);
+  border-radius: var(--ds-radius-control);
+  padding: 0 var(--ds-space-2);
+  color: var(--ds-text-secondary);
+  font-weight: var(--ds-weight-medium);
+  text-decoration: none;
+}
+
+.open:hover {
+  background: var(--ds-surface-subtle);
+  color: var(--ds-text);
 }
 
 .open > svg {

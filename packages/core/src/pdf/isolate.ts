@@ -6,16 +6,61 @@ import type { PreparationInput, PreparedPdf } from "./prepare.ts";
 
 const WORKER_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), "upload-worker.mjs");
 const PARSE_TIMEOUT_MS = 30_000;
-let uploadQueue: Promise<void> = Promise.resolve();
+const MAX_QUEUED_UPLOADS = 8;
+
+interface QueuedUpload {
+  input: PreparationInput;
+  signal: AbortSignal | undefined;
+  resolve: (result: PreparedPdf) => void;
+  reject: (error: unknown) => void;
+  abort: () => void;
+}
+
+const uploadQueue: QueuedUpload[] = [];
+let uploadActive = false;
 
 export function isolateUpload(input: PreparationInput, signal?: AbortSignal): Promise<PreparedPdf> {
   signal?.throwIfAborted();
-  const result = uploadQueue.then(() => runUpload(input, signal));
-  uploadQueue = result.then(
-    () => undefined,
-    () => undefined,
-  );
-  return result;
+  if (uploadQueue.length >= MAX_QUEUED_UPLOADS)
+    return Promise.reject(new DomainError("unavailable", "The PDF parser is busy."));
+  return new Promise((resolve, reject) => {
+    const entry: QueuedUpload = {
+      input,
+      signal,
+      resolve,
+      reject,
+      abort: () => {
+        const index = uploadQueue.indexOf(entry);
+        if (index === -1) return;
+        uploadQueue.splice(index, 1);
+        signal?.removeEventListener("abort", entry.abort);
+        const reason: unknown = signal?.reason;
+        reject(reason instanceof Error ? reason : new Error("PDF preparation cancelled"));
+      },
+    };
+    uploadQueue.push(entry);
+    signal?.addEventListener("abort", entry.abort, { once: true });
+    if (signal?.aborted) entry.abort();
+    startNextUpload();
+  });
+}
+
+function startNextUpload(): void {
+  if (uploadActive) return;
+  const entry = uploadQueue.shift();
+  if (!entry) return;
+  uploadActive = true;
+  entry.signal?.removeEventListener("abort", entry.abort);
+  void (async () => {
+    try {
+      entry.resolve(await runUpload(entry.input, entry.signal));
+    } catch (error) {
+      entry.reject(error);
+    } finally {
+      uploadActive = false;
+      startNextUpload();
+    }
+  })();
 }
 
 function runUpload(input: PreparationInput, signal?: AbortSignal): Promise<PreparedPdf> {

@@ -148,10 +148,7 @@ export function Composer({ view, capacity, run, busy, onSent }: ComposerProps) {
       </div>
     );
   }
-  if (!canMessage && !canPropose) {
-    if (view.agreement.status !== "draft") return null;
-    return <p className={styles.closed}>Chat opens after you publish.</p>;
-  }
+  if (!canMessage && !canPropose) return null;
   return (
     <div className={styles.composer} id="composer">
       <MessageComposer

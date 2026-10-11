@@ -11,12 +11,13 @@ workspace, recipient portal and signing flow. Decisions live in `packages/core`.
 | `/dev/sign-in` | Only with `DRIPSIGN_DEV_LOGIN=1` on a loopback origin outside production |
 | `/` | A signed-in recipient: agreements they are on |
 | `/agreements/[id]` | A live recipient of that agreement |
-| `/agreements/[id]/sign` | A required signer of the active round |
-| `/staff` | Live staff: dashboard |
+| `/agreements/[id]/sign` | A required signer of the active round: review, then sign |
+| `/staff` | Live staff: dashboard and agreement list |
 | `/staff/new` | Live staff: create an agreement |
 | `/staff/agreements/[id]` | Staff of the agreement's tenant: workspace |
-| `/staff/agreements/[id]/publish` | Staff of the tenant: publish review |
+| `/staff/agreements/[id]/publish` | Staff of the tenant: review the draft PDF, then publish |
 | `/staff/team` | Staff admins; anyone else gets not found |
+| `/staff/settings` | Staff admins: completion export settings and undelivered exports; anyone else gets not found |
 | `GET /api/agreements/[id]/files/[kind]` | Staff or recipient of the agreement; kinds `draft`, `current`, `revision`, `signed`, `audit` |
 | `POST /api/agreements/[id]/upload` | Staff of the tenant; raw PDF |
 | `POST /api/bridge/session` | A host with a valid signed assertion; off unless `DRIPSIGN_HOST` |

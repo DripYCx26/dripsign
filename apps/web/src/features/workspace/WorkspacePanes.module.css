@@ -1,5 +1,6 @@
 /* The workspace body: the rail and the document, filling the height under the header, each
-   scrolling alone. Under 1024 px one column; data-tab chooses which region shows. */
+   scrolling alone. The rail is full, narrow (history only) or absent, and the document takes the
+   rest. Under 1024 px one column; data-tab chooses which region shows. */
 
 .panes {
   display: grid;
@@ -7,6 +8,14 @@
   flex: 1 1 0;
   grid-template-columns: var(--ds-layout-rail) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
+}
+
+.panes[data-rail="narrow"] {
+  grid-template-columns: var(--ds-layout-rail-narrow) minmax(0, 1fr);
+}
+
+.panes[data-rail="none"] {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 /* The thread inside lists and the composer pins itself; this column only gives it the height. It
@@ -38,7 +47,8 @@
 }
 
 @media (max-width: 1023px) {
-  .panes {
+  .panes,
+  .panes[data-rail="narrow"] {
     grid-template-columns: minmax(0, 1fr);
   }
 

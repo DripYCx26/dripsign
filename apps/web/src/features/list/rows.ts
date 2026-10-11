@@ -21,7 +21,7 @@ export interface RowGroup {
   readonly rows: readonly RowModel[];
 }
 
-/** An empty phrase says nothing the row's status pill does not already say. */
+/** An empty phrase says nothing the row's status pill (or its signature progress) does not. */
 type Standing<G extends string> = Readonly<{ group: G; phrase: string }>;
 
 type StaffGroup = "needs" | "waiting" | "drafts" | "done";
@@ -41,10 +41,6 @@ const INBOX_HEADINGS: Readonly<Record<InboxGroup, string>> = {
   done: "Done",
 };
 
-function plural(count: number, one: string, many: string): string {
-  return count === 1 ? one : many;
-}
-
 function progressOf(item: {
   status: AgreementStatus;
   signedCount: number;
@@ -52,8 +48,7 @@ function progressOf(item: {
   finalizing: boolean;
   finalizingDelayed: boolean;
 }): SignerProgressModel | null {
-  const live = item.status === "signing" || item.status === "signed";
-  if (!live || item.requiredCount === 0) return null;
+  if (item.status !== "signing" || item.requiredCount === 0) return null;
   return {
     signed: item.signedCount,
     required: item.requiredCount,
@@ -97,11 +92,9 @@ export function staffStanding(item: StaffListItem): Standing<StaffGroup> {
     case "void":
       return { group: "done", phrase: "" };
     case "signed":
-      return { group: "done", phrase: "Signed by everyone" };
+      return { group: "done", phrase: "" };
     case "signing":
-      return item.finalizing
-        ? { group: "waiting", phrase: "All signatures are in" }
-        : { group: "waiting", phrase: "Waiting for signatures" };
+      return { group: "waiting", phrase: "" };
     case "negotiating":
       return negotiatingStanding(item);
     case "draft":
@@ -130,18 +123,11 @@ function staffRow(item: StaffListItem): RowModel {
 }
 
 function signingStanding(item: InboxItem): Standing<InboxGroup> {
-  if (item.finalizing) return { group: "waiting", phrase: "All signatures are in" };
+  if (item.finalizing) return { group: "waiting", phrase: "" };
   if (item.viewerIsRequiredSigner && !item.viewerHasSigned) {
     return { group: "sign", phrase: "Review and sign" };
   }
-  if (item.viewerHasSigned) {
-    const others = item.requiredCount - item.signedCount;
-    return {
-      group: "waiting",
-      phrase: `You signed · waiting on ${String(others)} ${plural(others, "other", "others")}`,
-    };
-  }
-  return { group: "waiting", phrase: "Waiting for signatures" };
+  return { group: "waiting", phrase: item.viewerHasSigned ? "You signed" : "" };
 }
 
 /** The group and next-step phrase of one inbox item, from the recipient's side. */
@@ -157,9 +143,7 @@ export function inboxStanding(item: InboxItem): Standing<InboxGroup> {
       if (item.pendingProposalBy === "staff") {
         return { group: "respond", phrase: "Respond to proposal" };
       }
-      return item.pendingProposalBy === "recipient"
-        ? { group: "waiting", phrase: `Waiting for ${item.orgName} to respond` }
-        : { group: "waiting", phrase: `Waiting on ${item.orgName}` };
+      return { group: "waiting", phrase: `Waiting on ${item.orgName}` };
   }
 }
 

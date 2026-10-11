@@ -23,8 +23,18 @@
   white-space: nowrap;
 }
 
+/* The subtitle drops under the h1, in the column after the back button, instead of under it. */
 @media (max-width: 639px) {
   .page {
     padding-inline: var(--ds-space-4);
+  }
+
+  .head {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .title {
+    grid-column: 2;
   }
 }
