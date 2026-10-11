@@ -1,0 +1,12 @@
+/* The wrapper adds no box of its own: its button is laid out by the header. */
+
+.action {
+  display: contents;
+}
+
+/* Beside the rail the proposal card carries its own Accept, Counter and Decline. */
+@media (min-width: 1024px) {
+  .action[data-narrow-only] {
+    display: none;
+  }
+}

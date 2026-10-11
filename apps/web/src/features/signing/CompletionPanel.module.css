@@ -1,20 +1,6 @@
-/* The strip and the signers read as one box above the document. */
-.panel {
-  margin-block: var(--ds-space-4);
-  overflow: hidden;
-  border: var(--ds-hairline);
-  border-radius: var(--ds-radius-card);
-  background: var(--ds-surface);
-}
-
-.panel > :last-child {
-  border-bottom: 0;
-}
-
-.files {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--ds-space-1) var(--ds-space-3);
+/* Air above and below the line, as the document pane has none of its own at the top. */
+.strip {
+  margin-block: var(--ds-space-3);
 }
 
 .file {
@@ -32,29 +18,19 @@
   stroke-width: var(--ds-icon-stroke);
 }
 
-.signers {
-  display: grid;
-  margin: 0;
-  padding: 0 var(--ds-space-4);
-  list-style: none;
-}
+/* Under 640 px the link is its icon alone, so the line stays one line; the words stay for screen readers. */
+@media (max-width: 639px) {
+  .label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 
-.signer {
-  display: flex;
-  min-height: var(--ds-size-row-compact);
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--ds-space-2);
-  font-size: var(--ds-text-md);
-  line-height: var(--ds-leading-md);
-}
-
-.signer + .signer {
-  border-top: var(--ds-hairline);
-}
-
-.signer time {
-  color: var(--ds-text-secondary);
-  font-size: var(--ds-text-sm);
+  .file {
+    min-width: var(--ds-size-control-sm);
+    justify-content: center;
+  }
 }

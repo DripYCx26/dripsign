@@ -18,7 +18,7 @@ export function AgreementRow({ row }: Readonly<{ row: RowModel }>) {
           <span className={styles.subline}>{row.subline}</span>
         </span>
         <span className={styles.next}>
-          <span className={styles.phrase}>{row.phrase}</span>
+          {row.phrase !== "" && <span className={styles.phrase}>{row.phrase}</span>}
           {row.progress !== null && <SignerProgress {...row.progress} />}
         </span>
         <span className={styles.status}>

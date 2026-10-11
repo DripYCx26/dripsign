@@ -1,4 +1,4 @@
-import type { SigningField } from "@dripsign/core/schema";
+import type { DocumentSource, SigningField } from "@dripsign/core/schema";
 import type { AgreementView, RevisionView } from "@dripsign/core/types";
 import { fileUrl } from "@/features/files";
 import { Notice, Pill } from "@/ui";
@@ -14,6 +14,25 @@ function fieldWords(field: SigningField): string {
   return `${field.type === "signature" ? "Signature" : "Date"} · page ${String(field.page)}`;
 }
 
+/** A first revision has nothing to compare with, so it lists what the document holds. */
+function RevisionOutline({
+  source,
+  pageCount,
+}: Readonly<{ source: DocumentSource | null; pageCount: number }>) {
+  if (source === null) {
+    return <p className={styles.muted}>{`Uploaded PDF · ${String(pageCount)} pages`}</p>;
+  }
+  return (
+    <ol className={styles.outline}>
+      {source.sections.map((section, index) => (
+        <li key={section.id}>
+          {section.heading === "" ? `Section ${String(index + 1)}` : section.heading}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function SignerFields({
   view,
   previous,
@@ -23,7 +42,7 @@ function SignerFields({
   const nameOf = (id: string) => view.recipients.find((item) => item.id === id)?.name ?? "Signer";
   const removed = (previous?.signerIds ?? []).filter((id) => !draft.signerIds.includes(id));
   return (
-    <section className={styles.card} aria-labelledby="signer-fields">
+    <section className={styles.part} aria-labelledby="signer-fields">
       <h2 id="signer-fields">Signature fields</h2>
       {draft.signerIds.length === 0 ? (
         <p className={styles.muted}>No required signers.</p>
@@ -57,8 +76,7 @@ function PdfChange({
   draftPages,
   draftSha,
   previous,
-}: Readonly<{ draftPages: number; draftSha: string; previous: RevisionView | undefined }>) {
-  if (previous === undefined) return null;
+}: Readonly<{ draftPages: number; draftSha: string; previous: RevisionView }>) {
   if (previous.sha256 === draftSha) {
     return <p className={styles.muted}>The PDF is the same as revision {previous.number}.</p>;
   }
@@ -70,6 +88,26 @@ function PdfChange({
       <dd>{`${String(draftPages)} pages · ${draftSha.slice(0, SHORT_LENGTH)}`}</dd>
     </dl>
   );
+}
+
+function WhatChanged({
+  draft,
+  document,
+  previous,
+}: Readonly<{
+  draft: NonNullable<AgreementView["draft"]>;
+  document: { readonly pageCount: number; readonly sha256: string };
+  previous: RevisionView | undefined;
+}>) {
+  if (previous === undefined) {
+    return <RevisionOutline source={draft.source} pageCount={document.pageCount} />;
+  }
+  if (draft.source === null) {
+    return (
+      <PdfChange draftPages={document.pageCount} draftSha={document.sha256} previous={previous} />
+    );
+  }
+  return <SectionDiff before={previous.source} after={draft.source} />;
 }
 
 /**
@@ -100,44 +138,34 @@ export function PublishReview({ view }: Readonly<{ view: AgreementView }>) {
   return (
     <div className={styles.review}>
       <div className={styles.left}>
-        <section className={styles.card} aria-labelledby="what-changed">
+        <section className={styles.part} aria-labelledby="what-changed">
           <h2 id="what-changed">
             {previous === undefined
               ? "What’s in this revision"
               : `What changed since revision ${String(previous.number)}`}
           </h2>
-          {draft.source === null ? (
-            <PdfChange
-              draftPages={document.pageCount}
-              draftSha={document.sha256}
-              previous={previous}
-            />
-          ) : (
-            <SectionDiff before={previous?.source ?? null} after={draft.source} />
-          )}
+          <WhatChanged draft={draft} document={document} previous={previous} />
         </section>
         <SignerFields view={view} previous={previous} />
       </div>
-      <div className={styles.right}>
-        <section className={styles.card} aria-label="The PDF that will be published">
-          <PdfView
-            src={fileUrl(view.agreement.id, "draft", { as: "staff" })}
-            sha256={document.sha256}
-            fields={draft.signingFields}
-            viewerRecipientId={null}
-            people={view.recipients.map(({ id, name }) => ({ id, name }))}
-            lead={<CopyHash sha256={document.sha256} label="SHA-256" />}
-          />
-        </section>
-        <PublishAction
-          // A different PDF is a new review: the checkbox starts unchecked.
-          key={document.sha256}
-          view={view}
-          reviewedSha256={document.sha256}
-          number={number}
-          isFirst={isFirst}
+      <section className={styles.pdf} aria-label="The PDF that will be published">
+        <PdfView
+          src={fileUrl(view.agreement.id, "draft", { as: "staff" })}
+          sha256={document.sha256}
+          fields={draft.signingFields}
+          viewerRecipientId={null}
+          people={view.recipients.map(({ id, name }) => ({ id, name }))}
+          lead={<CopyHash sha256={document.sha256} label="SHA-256" />}
         />
-      </div>
+      </section>
+      <PublishAction
+        // A different PDF is a new review: the checkbox starts unchecked.
+        key={document.sha256}
+        view={view}
+        reviewedSha256={document.sha256}
+        number={number}
+        isFirst={isFirst}
+      />
     </div>
   );
 }

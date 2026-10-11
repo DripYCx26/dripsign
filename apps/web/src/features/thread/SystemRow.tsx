@@ -1,18 +1,23 @@
-import type { TimelineItem } from "@dripsign/core/types";
-import { describeActivity } from "@/features/manage/activity.ts";
-import { Moment } from "@/ui";
+import { Ago } from "./Ago.tsx";
 import styles from "./SystemRow.module.css";
 
-/** A milestone of the agreement as a small centred line in the conversation, evidence beneath. */
-export function SystemRow({ item }: Readonly<{ item: TimelineItem }>) {
-  const { text, evidence } = describeActivity(item);
+type SystemRowProps = Readonly<{ at: string; lines: readonly string[] }>;
+
+/** Milestones of one moment as quiet left-aligned lines, the time after the last. */
+export function SystemRow({ at, lines }: SystemRowProps) {
   return (
     <div className={styles.row}>
-      <p>
-        {`${text.replace(/\.$/u, "")} · `}
-        <Moment value={item.at} format="absolute" />
-      </p>
-      {evidence !== undefined && evidence !== "" && <p className={styles.evidence}>{evidence}</p>}
+      {lines.map((line, index) => (
+        <p key={line}>
+          {line}
+          {index === lines.length - 1 && (
+            <>
+              {" · "}
+              <Ago value={at} />
+            </>
+          )}
+        </p>
+      ))}
     </div>
   );
 }

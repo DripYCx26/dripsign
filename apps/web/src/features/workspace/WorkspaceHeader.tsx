@@ -5,6 +5,7 @@ import { Pill, Segmented } from "@/ui";
 import { BackButton } from "./BackButton.tsx";
 import type { RunCommand } from "./commands.ts";
 import styles from "./WorkspaceHeader.module.css";
+import { nextStep } from "./nextStep.ts";
 import { pillStatus } from "./status.ts";
 import type { WorkspaceTab } from "./tabs.ts";
 import { WorkspaceMenu, WorkspacePrimary } from "./WorkspaceActions.tsx";
@@ -44,6 +45,7 @@ export function WorkspaceHeader({
   onReveal,
 }: WorkspaceHeaderProps) {
   const { title, status } = view.agreement;
+  const step = nextStep(capacity, view);
   return (
     <header className={styles.header}>
       <div className={styles.back}>
@@ -52,6 +54,7 @@ export function WorkspaceHeader({
       <div className={styles.title}>
         <h1>{title}</h1>
         <Pill status={pillStatus(status)} />
+        {step.chip !== undefined && <Pill tone="info">{step.chip}</Pill>}
         {capacity === "recipient" && (
           <p className={styles.from}>
             <span className={styles.dot} aria-hidden="true">
@@ -73,14 +76,7 @@ export function WorkspaceHeader({
         />
       </div>
       <div className={styles.primary}>
-        <WorkspacePrimary
-          view={view}
-          capacity={capacity}
-          run={run}
-          busy={busy}
-          onPanel={onPanel}
-          onReveal={onReveal}
-        />
+        <WorkspacePrimary step={step} run={run} busy={busy} onPanel={onPanel} onReveal={onReveal} />
       </div>
       <div className={styles.menu}>
         <WorkspaceMenu view={view} capacity={capacity} onPanel={onPanel} />

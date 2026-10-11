@@ -3,9 +3,10 @@
 import type { AgreementView, Capacity, ProposalView } from "@dripsign/core/types";
 import { useState } from "react";
 import { SectionDiff } from "@/features/document/SectionDiff.tsx";
-import { Avatar, Button, Moment, Pill } from "@/ui";
+import { Avatar, Button, ChevronRight, Pill } from "@/ui";
+import { Ago } from "./Ago.tsx";
 import { startProposal } from "./intent.ts";
-import { baseSourceOf, counteredBy, describeChange, isOwn, otherSideLabel } from "./model.ts";
+import { baseSourceOf, counteredBy, describeChange, isOwn } from "./model.ts";
 import styles from "./ProposalCard.module.css";
 
 export type Decision = "accept" | "reject";
@@ -35,16 +36,9 @@ function canAnswer(view: AgreementView): boolean {
   );
 }
 
-function OpenMark({
-  view,
-  capacity,
-  proposal,
-}: Readonly<Omit<ProposalCardProps, "busy" | "onDecide">>) {
+function OpenMark({ view, proposal }: Readonly<Omit<ProposalCardProps, "busy" | "onDecide">>) {
   if (canAnswer(view)) return <Pill tone="attention">Your turn</Pill>;
-  if (isOwn(proposal.author, view)) {
-    return <Pill tone="info">{`Waiting on ${otherSideLabel(view, capacity)}`}</Pill>;
-  }
-  return <Pill tone="info">Open</Pill>;
+  return <Pill tone="info">{isOwn(proposal.author, view) ? "Waiting" : "Open"}</Pill>;
 }
 
 function StateMark(props: Readonly<Omit<ProposalCardProps, "busy" | "onDecide">>) {
@@ -146,16 +140,16 @@ function ProposalBody(props: ProposalCardProps) {
       <p className={styles.reason}>{proposal.text}</p>
       {proposal.replacementSource !== null &&
         (open ? (
-          diff
+          <div className={styles.diff}>{diff}</div>
         ) : (
           <details className={styles.change}>
             <summary>Show change</summary>
-            {diff}
+            <div className={styles.diff}>{diff}</div>
           </details>
         ))}
       <footer className={styles.foot}>
         <p className={styles.time}>
-          <Moment value={proposal.createdAt} format="absolute" />
+          <Ago value={proposal.createdAt} />
         </p>
         {open && <Decisions {...props} />}
       </footer>
@@ -179,6 +173,7 @@ export function ProposalCard(props: ProposalCardProps) {
           <span>{by === null ? "Countered" : `Countered by ${by.label}`}</span>
           <span className={styles.show} aria-hidden="true">
             Show
+            <ChevronRight />
           </span>
         </summary>
         <article className={styles.card} data-state="superseded">

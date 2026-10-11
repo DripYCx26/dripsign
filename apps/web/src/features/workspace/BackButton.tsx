@@ -16,6 +16,7 @@ export function BackButton({ label, href }: BackButtonProps) {
     <IconButton
       label={label}
       icon={<ChevronLeft />}
+      shape="round"
       onClick={() => {
         router.push(href);
       }}

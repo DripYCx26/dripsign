@@ -3,6 +3,7 @@
 // always beside a word or inside a control whose label names it, and wrapped aria-hidden.
 export {
   ArrowLeft,
+  ArrowDown,
   ArrowRight,
   ArrowUp,
   ArrowUpDown,

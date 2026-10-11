@@ -1,13 +1,12 @@
-/* One row: the search at 320 px and the status filters beside it; they wrap on a narrow screen. */
-
-.controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--ds-space-3) var(--ds-space-4);
-}
+/* The search at 320 px; the full width of the page under 640. */
 
 .search {
-  min-width: 0;
-  flex: 0 1 calc(var(--ds-space-10) * 8);
+  width: calc(var(--ds-space-10) * 8);
+  max-width: 100%;
+}
+
+@media (max-width: 639px) {
+  .search {
+    width: 100%;
+  }
 }

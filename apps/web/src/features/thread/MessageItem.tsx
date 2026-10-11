@@ -1,5 +1,5 @@
 import type { MessageView } from "@dripsign/core/types";
-import { Moment } from "@/ui";
+import { Ago } from "./Ago.tsx";
 import styles from "./MessageItem.module.css";
 
 type MessageItemProps = Readonly<{ message: MessageView; own: boolean }>;
@@ -11,7 +11,7 @@ export function MessageItem({ message, own }: MessageItemProps) {
       {!own && <p className={styles.author}>{message.author.label}</p>}
       <p className={styles.bubble}>{message.body}</p>
       <p className={styles.time}>
-        <Moment value={message.createdAt} format="absolute" />
+        <Ago value={message.createdAt} />
       </p>
     </article>
   );

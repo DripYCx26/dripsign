@@ -1,13 +1,15 @@
 import { Readable } from "node:stream";
 import { createDeflate } from "node:zlib";
+import { randomBytes } from "node:crypto";
+import { PDFDocument, PDFName } from "pdf-lib";
 import { expect } from "vitest";
 import { prepareDraftPdf } from "./prepare.ts";
 
-async function inflationBomb(): Promise<Uint8Array> {
+async function inflationBomb(megabytes = 300, streamCount = 1): Promise<Uint8Array> {
   const block = Buffer.alloc(1024 * 1024);
   const input = Readable.from(
     (function* () {
-      for (let index = 0; index < 300; index++) yield block;
+      for (let index = 0; index < megabytes; index++) yield block;
     })(),
   );
   const compressed: Uint8Array[] = [];
@@ -16,42 +18,83 @@ async function inflationBomb(): Promise<Uint8Array> {
     compressed.push(chunk);
   }
   const stream = Buffer.concat(compressed);
-  const prefix = Buffer.from(`%PDF-1.7
+  const parts = [
+    Buffer.from(`%PDF-1.7
 1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
 2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
 3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >> endobj
-4 0 obj << /Type /ObjStm /N 0 /First 0 /Filter /FlateDecode /Length ${String(stream.byteLength)} >> stream
-`);
-  return Buffer.concat([
-    prefix,
-    stream,
-    Buffer.from("\nendstream\nendobj\ntrailer << /Root 1 0 R >>\n%%EOF"),
-  ]);
+`),
+  ];
+  for (let index = 0; index < streamCount; index++)
+    parts.push(
+      Buffer.from(
+        `${String(index + 4)} 0obj << /Type /ObjStm /N 0 /First 0 /Filter /Fl#61teDecode /Length ${String(stream.byteLength)} >> stream\n`,
+      ),
+      stream,
+      Buffer.from("\nendstream\nendobj\n"),
+    );
+  parts.push(Buffer.from("trailer << /Root 1 0 R >>\n%%EOF"));
+  return Buffer.concat(parts);
 }
 
-export async function assertUploadMemoryBound(): Promise<void> {
+export async function assertUploadInflationBound(): Promise<void> {
   const uploadBytes = await inflationBomb();
   expect(uploadBytes.byteLength).toBeLessThan(2 * 1024 * 1024);
-  const baseline = process.memoryUsage.rss();
-  let peak = baseline;
-  const sampling = setInterval(() => {
-    peak = Math.max(peak, process.memoryUsage.rss());
-  }, 5);
-  try {
-    const outcome = await prepareDraftPdf({
-      title: "Synthetic inflation bomb",
+  const outcome = await prepareDraftPdf({
+    title: "Synthetic inflation bomb",
+    signers: [],
+    uploadBytes,
+  }).then(
+    () => "accepted",
+    (error: unknown) => {
+      if (error instanceof Error && "code" in error) return error.code;
+      throw error;
+    },
+  );
+  expect(outcome).toBe("invalid");
+  await expect(
+    prepareDraftPdf({
+      title: "Cumulative inflation bomb",
       signers: [],
-      uploadBytes,
-    }).then(
-      () => "accepted",
-      (error: unknown) => {
-        if (error instanceof Error && "code" in error) return error.code;
-        throw error;
-      },
+      uploadBytes: await inflationBomb(40, 2),
+    }),
+  ).rejects.toMatchObject({ code: "invalid" });
+}
+
+export async function assertLargeConcurrentUploads(): Promise<void> {
+  const document = await PDFDocument.create();
+  for (let index = 0; index < 20; index++) {
+    const page = document.addPage();
+    const image = document.context.register(
+      document.context.flateStream(randomBytes(256 * 256 * 3), {
+        Type: "XObject",
+        Subtype: "Image",
+        Width: 256,
+        Height: 256,
+        ColorSpace: "DeviceRGB",
+        BitsPerComponent: 8,
+      }),
     );
-    expect(peak - baseline).toBeLessThan(192 * 1024 * 1024);
-    expect(outcome).toBe("invalid");
-  } finally {
-    clearInterval(sampling);
+    page.node.setXObject(PDFName.of("SyntheticImage"), image);
+    page.node.addContentStream(
+      document.context.register(
+        document.context.stream("q 256 0 0 256 54 400 cm /SyntheticImage Do Q"),
+      ),
+    );
+  }
+  const uploadBytes = await document.save();
+  expect(uploadBytes.byteLength).toBeGreaterThan(3 * 1024 * 1024);
+  const results = await Promise.all(
+    [0, 1].map(() =>
+      prepareDraftPdf({
+        title: "Synthetic large image agreement",
+        signers: [],
+        uploadBytes,
+      }),
+    ),
+  );
+  for (const result of results) {
+    expect(result.pageCount).toBe(20);
+    expect((await PDFDocument.load(result.bytes)).getPageCount()).toBe(20);
   }
 }

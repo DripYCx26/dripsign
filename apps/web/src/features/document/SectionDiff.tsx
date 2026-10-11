@@ -1,20 +1,16 @@
 import type { DocumentSource } from "@dripsign/core/schema";
-import { ArrowUpDown, Pencil, Pill, Plus, Trash2 } from "@/ui";
-import { diffSources, type SectionChange, type SectionDiffItem, type WordOp } from "./diff.ts";
+import type { ReactNode } from "react";
+import { ArrowUpDown, Pill, Plus, Trash2 } from "@/ui";
+import { diffSources, type SectionDiffItem, type WordOp } from "./diff.ts";
 import styles from "./SectionDiff.module.css";
 
-const CHANGE: Readonly<
-  Record<
-    Exclude<SectionChange, "unchanged">,
-    Readonly<{ word: string; tone: "confirm" | "stop" | "info"; icon: "plus" | "trash" | "pencil" }>
-  >
+/** Only whole sections that appear or vanish are marked; edited words mark themselves. */
+const WHOLE: Readonly<
+  Record<"added" | "removed", Readonly<{ word: string; tone: "confirm" | "stop"; icon: ReactNode }>>
 > = {
-  added: { word: "Added", tone: "confirm", icon: "plus" },
-  removed: { word: "Removed", tone: "stop", icon: "trash" },
-  changed: { word: "Changed", tone: "info", icon: "pencil" },
+  added: { word: "Added", tone: "confirm", icon: <Plus /> },
+  removed: { word: "Removed", tone: "stop", icon: <Trash2 /> },
 };
-
-const ICONS = { plus: <Plus />, trash: <Trash2 />, pencil: <Pencil /> } as const;
 
 /** Added and removed runs carry hidden words, so the change is never colour or line style alone. */
 function Ops({ ops }: Readonly<{ ops: readonly WordOp[] }>) {
@@ -35,17 +31,17 @@ function Ops({ ops }: Readonly<{ ops: readonly WordOp[] }>) {
   });
 }
 
-/** Unchanged text in its old place: nothing to show, so it folds into the disclosure. */
+/** Unchanged text in its old place: nothing to show. */
 const isQuiet = (item: SectionDiffItem) => item.change === "unchanged" && !item.moved;
 
 function ChangedSection({ item }: Readonly<{ item: SectionDiffItem }>) {
   if (isQuiet(item)) return null;
-  const kind = item.change === "unchanged" ? null : CHANGE[item.change];
+  const kind = item.change === "added" || item.change === "removed" ? WHOLE[item.change] : null;
   return (
     <li className={styles.section}>
       <div className={styles.head}>
         {kind !== null && (
-          <Pill tone={kind.tone} icon={ICONS[kind.icon]}>
+          <Pill tone={kind.tone} icon={kind.icon}>
             {kind.word}
           </Pill>
         )}
@@ -70,8 +66,8 @@ function ChangedSection({ item }: Readonly<{ item: SectionDiffItem }>) {
 
 /**
  * What changed between two versions of the terms: sections by id, then the words inside a changed
- * section. Sections that neither changed nor moved fold into one disclosure. A null `before` is a
- * first revision.
+ * section. Sections that neither changed nor moved are left out. A null `before` is a first
+ * revision.
  */
 export function SectionDiff({
   before,
@@ -79,9 +75,7 @@ export function SectionDiff({
 }: Readonly<{ before: DocumentSource | null; after: DocumentSource | null }>) {
   if (after === null) return <p className={styles.empty}>There are no written terms to compare.</p>;
   const diff = diffSources(before, after);
-  const unchanged = diff.sections.filter(isQuiet);
-  const changed = diff.sections.length - unchanged.length;
-  if (changed === 0 && diff.title === null) {
+  if (diff.title === null && diff.sections.every(isQuiet)) {
     return <p className={styles.empty}>No changes to the terms.</p>;
   }
   return (
@@ -96,18 +90,6 @@ export function SectionDiff({
           <ChangedSection key={item.id} item={item} />
         ))}
       </ol>
-      {unchanged.length > 0 && (
-        <details className={styles.unchanged}>
-          <summary>{`${String(unchanged.length)} unchanged ${unchanged.length === 1 ? "section" : "sections"}`}</summary>
-          <ul>
-            {unchanged.map((item) => (
-              <li key={item.id}>
-                <Ops ops={item.heading} />
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
     </div>
   );
 }

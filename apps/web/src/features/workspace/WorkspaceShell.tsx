@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useCommand } from "@/features/command/useCommand.ts";
 import { Banner } from "@/ui";
 import { CommandNotice } from "./CommandNotice.tsx";
-import type { WorkspaceTab } from "./tabs.ts";
+import { defaultTab, type WorkspaceTab } from "./tabs.ts";
 import { usePoll } from "./usePoll.ts";
 import { useWorkspaceNav } from "./useWorkspaceNav.ts";
 import { WorkspaceHeader } from "./WorkspaceHeader.tsx";
@@ -17,7 +17,7 @@ type WorkspaceShellProps = Readonly<{
   agreementId: string;
   capacity: Capacity;
   initialView: AgreementView;
-  initialTab: WorkspaceTab;
+  initialTab: WorkspaceTab | undefined;
   rev: number | undefined;
 }>;
 
@@ -57,7 +57,7 @@ export function WorkspaceShell({
     capacity,
     initialView,
   );
-  const { tab, selectTab, reveal } = useWorkspaceNav(initialTab);
+  const { tab, selectTab, reveal } = useWorkspaceNav(initialTab ?? defaultTab(initialView));
   const [panel, setPanel] = useState<Panel | null>(null);
   const staff = capacity === "staff";
 

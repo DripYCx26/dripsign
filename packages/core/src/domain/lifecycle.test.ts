@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { PDFDocument } from "pdf-lib";
 import { expect, it } from "vitest";
-import { getPool } from "../db.ts";
+import { getPool, tx } from "../db.ts";
 import { createHandlers } from "../jobs/handlers.ts";
 import type { ClaimedJob, JobLease } from "../jobs/outbox.ts";
 import { LIMITS, SIGNING_CONSENT } from "../schema.ts";
@@ -10,7 +10,9 @@ import type { NewAgreementInput, NewRecipient } from "../schema.ts";
 import type { Actor, AgreementView, RecipientActor, StaffActor } from "../types.ts";
 import { createAgreement, executeCommand, storeUpload } from "./commands.ts";
 import { sha256Hex } from "./receipts.ts";
-import { addStaff, revokeStaff } from "./staff.ts";
+import { addStaff, revokeStaff, upsertStaff } from "./staff.ts";
+import { loadArchiveEvidence } from "./archive.ts";
+import { renderAuditRecord } from "../pdf/archive.ts";
 import { loadAgreementView } from "./view.ts";
 
 function must<T>(value: T | null | undefined): T {
@@ -43,10 +45,7 @@ async function staffActor(): Promise<StaffActor> {
     tenantId,
     `Acme ${tenantId}`,
   ]);
-  await getPool().query(
-    "INSERT INTO dripsign.staff (tenant_id, email, role) VALUES ($1, $2, 'admin')",
-    [tenantId, email],
-  );
+  await tx((db) => upsertStaff(db, tenantId, { email, role: "admin" }));
   return { capacity: "staff", tenantId, email, role: "admin", ...(await session(email)) };
 }
 
@@ -125,13 +124,37 @@ async function publish(staff: StaffActor, agreementId: string): Promise<Agreemen
   });
 }
 
-async function negotiating(recipients: readonly NewRecipient[]) {
+async function negotiating(recipients: readonly NewRecipient[], recipientIds?: readonly string[]) {
   const staff = await staffActor();
   const id = await createAgreement(staff, `key-${randomUUID()}`, {
     title: "Services agreement",
     document: { kind: "source", source: terms("Twelve months.") },
     recipients: [...recipients],
   });
+  if (recipientIds) {
+    await getPool().query("DELETE FROM dripsign.recipient WHERE agreement_id = $1", [id]);
+    for (const [index, recipient] of recipients.entries()) {
+      await getPool().query(
+        `INSERT INTO dripsign.recipient
+         (tenant_id, agreement_id, id, email, name, is_signer, added_at)
+         VALUES ($1, $2, $3, $4, $5, $6, now() + $7 * interval '1 millisecond')`,
+        [
+          staff.tenantId,
+          id,
+          recipientIds[index],
+          recipient.email,
+          recipient.name,
+          recipient.isSigner,
+          index,
+        ],
+      );
+    }
+    await run(staff, id, {
+      kind: "save_draft",
+      expectedVersion: (await loadAgreementView(staff, id)).agreement.version,
+      source: terms("Twelve months."),
+    });
+  }
   const view = await publish(staff, id);
   const actors = await Promise.all(recipients.map((recipient) => recipientActor(recipient.email)));
   return { staff, id, view, actors };
@@ -253,7 +276,19 @@ it("cancels signing only by a signer's proposal, voids on removal, keeps one sig
   const taylor = person("Taylor Kim", false);
   const jordan = person("Jordan Lee", true);
   const morgan = person("Morgan Diaz", true);
-  const { staff, id, view: published, actors } = await negotiating([taylor, jordan, morgan]);
+  const {
+    staff,
+    id,
+    view: published,
+    actors,
+  } = await negotiating(
+    [taylor, jordan, morgan],
+    [
+      "ffffffff-ffff-4fff-8fff-ffffffffffff",
+      "88888888-8888-4888-8888-888888888888",
+      "11111111-1111-4111-8111-111111111111",
+    ],
+  );
   const taylorActor = must(actors[0]);
   const jordanActor = must(actors[1]);
   const morganActor = must(actors[2]);
@@ -323,6 +358,26 @@ it("cancels signing only by a signer's proposal, voids on removal, keeps one sig
   expect(revision.signerIds).toEqual(order);
   const signatureFields = revision.signingFields.filter((field) => field.type === "signature");
   expect(signatureFields.map((field) => field.recipientId)).toEqual(order);
+  view = await run(staff, id, {
+    kind: "request_signatures",
+    expectedVersion: view.agreement.version,
+  });
+  await run(jordanActor, id, signCommand(view, "Jordan Lee"));
+  await run(taylorActor, id, signCommand(view, "Taylor Kim"));
+  const evidence = must(
+    await loadArchiveEvidence(getPool(), {
+      tenantId: staff.tenantId,
+      roundId: must(view.activeRound).id,
+    }),
+  );
+  expect(evidence.signers.map((signer) => signer.recipientId)).toEqual(order);
+  // Input signature arrival order must not affect the audit's frozen signer order.
+  expect(
+    await renderAuditRecord({ ...evidence, signatures: [...evidence.signatures].reverse() }),
+  ).toEqual(await renderAuditRecord(evidence));
+  expect(
+    await renderAuditRecord({ ...evidence, signers: [...evidence.signers].reverse() }),
+  ).not.toEqual(await renderAuditRecord(evidence));
 });
 
 it("keeps an upload on rename, fences, replays, and rechecks authority after lock waits", async () => {
@@ -389,6 +444,9 @@ it("keeps an upload on rename, fences, replays, and rechecks authority after loc
   await expect(addStaff(second, { email: second.email, role: "member" })).rejects.toMatchObject({
     code: "invalid",
   });
+  await expect(
+    tx((db) => upsertStaff(db, second.tenantId, { email: second.email, role: "member" })),
+  ).rejects.toMatchObject({ code: "invalid" });
   const third = await colleague(second);
   const revoked = await Promise.allSettled([
     revokeStaff(second, third.email),

@@ -2,7 +2,7 @@
 
 import { LIMITS } from "@dripsign/core/schema";
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Button, ChevronDown, IconButton, Plus, TextArea, TextField, X } from "@/ui";
+import { ArrowDown, ArrowUp, Button, IconButton, Plus, TextArea, TextField, X } from "@/ui";
 import { emptySection, type EditableSection } from "./sections.ts";
 import styles from "./SectionEditor.module.css";
 
@@ -59,6 +59,7 @@ function SectionFields({
         <div className={styles.heading}>
           <TextField
             label="Heading"
+            hideLabel
             name={`heading-${section.id}`}
             placeholder="Heading"
             value={section.heading}
@@ -79,7 +80,7 @@ function SectionFields({
           />
           <IconButton
             label="Move section down"
-            icon={<ChevronDown aria-hidden="true" />}
+            icon={<ArrowDown aria-hidden="true" />}
             disabled={last}
             onClick={() => {
               onMove(1);
@@ -93,16 +94,18 @@ function SectionFields({
           />
         </div>
       </div>
-      <TextArea
-        label="Text"
-        name={`body-${section.id}`}
-        placeholder="Text. Blank line between paragraphs."
-        maxLength={LIMITS.sourceBytes}
-        value={section.body}
-        onChange={(body) => {
-          onEdit({ body });
-        }}
-      />
+      <div className={styles.body}>
+        <TextArea
+          label="Text"
+          name={`body-${section.id}`}
+          placeholder="Text. Blank line between paragraphs."
+          maxLength={LIMITS.sourceBytes}
+          value={section.body}
+          onChange={(body) => {
+            onEdit({ body });
+          }}
+        />
+      </div>
     </fieldset>
   );
 }

@@ -137,7 +137,7 @@ const ROWS: readonly (readonly [string, Capacity, Scenario, NextStep])[] = [
     "staff: proposal waiting on staff",
     "staff",
     { allowed: ["accept", "counter", "reject"] },
-    { label: "Respond to proposal", kind: "scroll", href: "#pending-proposal" },
+    { label: "Respond to proposal", kind: "scroll", href: "#pending-proposal", narrowOnly: true },
   ],
   [
     "staff: request signatures",
@@ -167,7 +167,7 @@ const ROWS: readonly (readonly [string, Capacity, Scenario, NextStep])[] = [
     "recipient: proposal waiting on recipient",
     "recipient",
     { allowed: ["accept", "counter", "reject"] },
-    { label: "Respond to proposal", kind: "scroll", href: "#pending-proposal" },
+    { label: "Respond to proposal", kind: "scroll", href: "#pending-proposal", narrowOnly: true },
   ],
   ["recipient: nothing to do", "recipient", { allowed: ["message", "propose"] }, NONE],
   [

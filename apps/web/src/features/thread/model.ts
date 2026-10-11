@@ -6,9 +6,8 @@ import type {
   ParticipantRef,
   ProposalView,
   RevisionView,
-  TimelineItem,
-  TimelineKind,
 } from "@dripsign/core/types";
+import { describeMilestone } from "../manage/activity.ts";
 import type { TextScope } from "./useStoredText.ts";
 
 /** Where focus returns when proposing ends, so typing can go on. */
@@ -29,21 +28,33 @@ export function pendingProposal(view: AgreementView): ProposalView | null {
 export type ThreadItem =
   | Readonly<{ kind: "message"; key: string; at: string; message: MessageView }>
   | Readonly<{ kind: "proposal"; key: string; at: string; proposal: ProposalView }>
-  | Readonly<{ kind: "activity"; key: string; at: string; item: TimelineItem }>;
+  /** Milestones that happened in the same minute, one line each. */
+  | Readonly<{ kind: "activity"; key: string; at: string; lines: readonly string[] }>;
 
-/**
- * Timeline rows the thread already shows as proposal cards, and the staff-private assistant
- * request, which is not part of the conversation.
- */
-const NOT_SYSTEM_ROWS: ReadonlySet<TimelineKind> = new Set([
-  "proposal_created",
-  "proposal_accepted",
-  "proposal_rejected",
-  "ai_requested",
-]);
+type ThreadSource = Pick<AgreementView, "messages" | "proposals" | "timeline" | "viewer">;
+
+const MINUTE_MS = 60_000;
+
+/** Folds neighbouring milestones of the same minute into one row; order is never changed. */
+function groupMilestones(items: readonly ThreadItem[]): ThreadItem[] {
+  const grouped: ThreadItem[] = [];
+  for (const item of items) {
+    const last = grouped.at(-1);
+    if (
+      last?.kind === "activity" &&
+      item.kind === "activity" &&
+      Math.floor(Date.parse(last.at) / MINUTE_MS) === Math.floor(Date.parse(item.at) / MINUTE_MS)
+    ) {
+      grouped[grouped.length - 1] = { ...last, lines: [...last.lines, ...item.lines] };
+    } else {
+      grouped.push(item);
+    }
+  }
+  return grouped;
+}
 
 /** Messages, proposals and the agreement's milestones as one conversation, oldest first. */
-export function threadItems(view: AgreementView): readonly ThreadItem[] {
+export function threadItems(view: ThreadSource): readonly ThreadItem[] {
   const items: ThreadItem[] = [
     ...view.messages.map((message): ThreadItem => ({
       kind: "message",
@@ -57,21 +68,24 @@ export function threadItems(view: AgreementView): readonly ThreadItem[] {
       at: proposal.createdAt,
       proposal,
     })),
-    ...view.timeline.flatMap((item, index): ThreadItem[] =>
-      NOT_SYSTEM_ROWS.has(item.kind)
+    ...view.timeline.flatMap((item, index): ThreadItem[] => {
+      const line = describeMilestone(item, view.viewer);
+      // The view has no row id; time, kind and position are stable for one snapshot.
+      return line === null
         ? []
-        : // The view has no row id; time, kind and position are stable for one snapshot.
-          [
+        : [
             {
               kind: "activity",
               key: `activity-${item.at}-${item.kind}-${String(index)}`,
               at: item.at,
-              item,
+              lines: [line],
             },
-          ],
-    ),
+          ];
+    }),
   ];
-  return items.sort((a, b) => Date.parse(a.at) - Date.parse(b.at) || a.key.localeCompare(b.key));
+  return groupMilestones(
+    items.sort((a, b) => Date.parse(a.at) - Date.parse(b.at) || a.key.localeCompare(b.key)),
+  );
 }
 
 /** The scope a viewer's stored composer text lives under. */

@@ -11,13 +11,12 @@
   list-style: none;
 }
 
+/* A flat run under a 2 px rule, so a diff inside a card or a chat bubble is not a card in a card. */
 .section {
   display: grid;
   gap: var(--ds-space-2);
-  padding: var(--ds-space-4);
-  border: var(--ds-hairline);
-  border-radius: var(--ds-radius-card);
-  background: var(--ds-surface);
+  padding-left: var(--ds-space-3);
+  border-left: 2px solid var(--ds-border-strong);
 }
 
 .head {
@@ -67,19 +66,4 @@
 
 .empty {
   color: var(--ds-text-secondary);
-}
-
-.unchanged {
-  color: var(--ds-text-secondary);
-  font-size: var(--ds-text-sm);
-}
-
-.unchanged summary {
-  min-height: var(--ds-size-target-min);
-  cursor: pointer;
-}
-
-.unchanged ul {
-  margin: var(--ds-space-2) 0 0;
-  padding-left: var(--ds-space-5);
 }

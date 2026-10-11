@@ -59,9 +59,14 @@ function signatures(evidence: ArchiveEvidence): ArchiveEvidence["signatures"] {
     if (signed < opened || signed > generated || verified > signed)
       throw new DomainError("invalid", "The signing evidence times are inconsistent.");
   }
-  return [...evidence.signatures].sort((a, b) =>
-    a.recipientId < b.recipientId ? -1 : a.recipientId > b.recipientId ? 1 : 0,
+  const byRecipient = new Map(
+    evidence.signatures.map((signature) => [signature.recipientId, signature]),
   );
+  return evidence.signers.map((signer) => {
+    const signature = byRecipient.get(signer.recipientId);
+    if (!signature) throw new DomainError("invalid", "A required signature is missing.");
+    return signature;
+  });
 }
 
 function timestamp(value: string): number {

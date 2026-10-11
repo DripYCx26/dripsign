@@ -6,13 +6,21 @@ import type { PreparationInput, PreparedPdf } from "./prepare.ts";
 
 const WORKER_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), "upload-worker.mjs");
 const PARSE_TIMEOUT_MS = 30_000;
-const MAX_RSS_GROWTH = 96 * 1024 * 1024;
-const MEMORY_POLL_MS = 25;
+let uploadQueue: Promise<void> = Promise.resolve();
 
 export function isolateUpload(input: PreparationInput, signal?: AbortSignal): Promise<PreparedPdf> {
   signal?.throwIfAborted();
+  const result = uploadQueue.then(() => runUpload(input, signal));
+  uploadQueue = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
+
+function runUpload(input: PreparationInput, signal?: AbortSignal): Promise<PreparedPdf> {
+  signal?.throwIfAborted();
   return new Promise((resolve, reject) => {
-    const rssLimit = process.memoryUsage.rss() + MAX_RSS_GROWTH;
     const worker = new Worker(WORKER_PATH, {
       workerData: input,
       // Do not inherit the CLI's loader or test runner arguments into an independent parser.
@@ -24,7 +32,6 @@ export function isolateUpload(input: PreparationInput, signal?: AbortSignal): Pr
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      clearInterval(memoryPoll);
       signal?.removeEventListener("abort", abort);
       void worker.terminate().then(
         () => {
@@ -42,11 +49,6 @@ export function isolateUpload(input: PreparationInput, signal?: AbortSignal): Pr
     const timer = setTimeout(() => {
       finish(undefined, new DomainError("invalid", "The PDF took too long to prepare."));
     }, PARSE_TIMEOUT_MS);
-    // RSS includes every thread's native allocations; V8 heap limits do not cover stream inflation.
-    const memoryPoll = setInterval(() => {
-      if (process.memoryUsage.rss() > rssLimit)
-        finish(undefined, new DomainError("invalid", "The PDF exceeded its memory limit."));
-    }, MEMORY_POLL_MS);
     signal?.addEventListener("abort", abort, { once: true });
     worker.once("message", (message: { result?: PreparedPdf; code?: string }) => {
       if (message.result) finish(message.result);

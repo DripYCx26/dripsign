@@ -30,7 +30,18 @@ export function StepFrame({ title, autoFocus, wide = false, children }: StepFram
   );
 }
 
-/** The step's actions; below 640 px they stick to the bottom of the screen. */
-export function StepActions({ children }: Readonly<{ children: ReactNode }>) {
-  return <div className={styles.actions}>{children}</div>;
+type StepActionsProps = Readonly<{
+  /** What the buttons depend on, at the start of the row: the review checkbox. */
+  lead?: ReactNode;
+  children: ReactNode;
+}>;
+
+/** The step's actions, pinned to the bottom of the screen with their checkbox beside them. */
+export function StepActions({ lead, children }: StepActionsProps) {
+  return (
+    <div className={styles.actions}>
+      {lead}
+      <div className={styles.buttons}>{children}</div>
+    </div>
+  );
 }

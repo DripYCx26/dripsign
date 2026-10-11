@@ -9,9 +9,14 @@
   grid-template-rows: minmax(0, 1fr);
 }
 
-/* The thread inside lists and the composer pins itself; this column only gives it the height. */
+/* The thread inside lists and the composer pins itself; this column only gives it the height. It
+   is positioned and clipped (not hidden: a clip cannot be scrolled) so a visually hidden label,
+   absolute at its scrolled place in the thread, cannot stretch the page or let a scroll-into-view
+   move this column. */
 .rail {
+  position: relative;
   display: flex;
+  overflow: clip;
   min-width: 0;
   min-height: 0;
   flex-direction: column;
@@ -20,6 +25,7 @@
 }
 
 .document {
+  position: relative;
   min-width: 0;
   min-height: 0;
   padding: 0 var(--ds-space-6) var(--ds-space-10);

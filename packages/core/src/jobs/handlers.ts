@@ -116,13 +116,15 @@ async function archive(
   const signedDocument = await storeBytes(tenantId, signedBytes, storage);
   const auditRecord = await storeBytes(tenantId, auditBytes, storage);
   signal.throwIfAborted();
-  await completeArchive(getPool(), {
+  const outcome = await completeArchive(getPool(), {
     tenantId,
     roundId: job.payload.roundId,
     leaseFence: { id: job.id, leaseToken: job.leaseToken },
     signedDocument,
     auditRecord,
   });
+  if (outcome === "lease_lost")
+    console.error("dripsign: archive lease lost", { id: job.id, code: outcome });
 }
 
 async function ai(job: JobOf<"ai_suggest">, signal: AbortSignal): Promise<void> {

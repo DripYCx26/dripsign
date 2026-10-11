@@ -42,17 +42,32 @@ export function listStaff(actor: StaffActor): Promise<readonly StaffMember[]> {
 
 /** Adds or reinstates a member, or changes a role; an admin steps down only if another stays. */
 export async function addStaff(actor: StaffActor, input: NewStaffMember): Promise<void> {
+  await tx((db) => upsertStaff(db, actor.tenantId, input, actor));
+}
+
+/** Operator path: bootstraps an empty roster, with the same lock and last-admin guard. */
+export async function upsertStaff(
+  db: Db,
+  tenantId: string,
+  input: NewStaffMember,
+  actor?: StaffActor,
+): Promise<void> {
   const email = parseOrInvalid(emailSchema, input.email);
   const name = input.name === undefined ? null : parseOrInvalid(personNameSchema, input.name);
-  await changeRoster(actor, async (db) => {
-    await db.query(
-      `INSERT INTO dripsign.staff (tenant_id, email, name, role) VALUES ($1, $2, $3, $4)
+  await changeRoster(
+    db,
+    tenantId,
+    async () => {
+      await db.query(
+        `INSERT INTO dripsign.staff (tenant_id, email, name, role) VALUES ($1, $2, $3, $4)
        ON CONFLICT (tenant_id, email)
        DO UPDATE SET role = EXCLUDED.role, revoked_at = NULL,
                      name = coalesce(EXCLUDED.name, dripsign.staff.name)`,
-      [actor.tenantId, email, name, input.role],
-    );
-  });
+        [tenantId, email, name, input.role],
+      );
+    },
+    actor,
+  );
 }
 
 /** Another admin removes a member; nobody removes themselves. */
@@ -61,34 +76,44 @@ export async function revokeStaff(actor: StaffActor, email: string): Promise<voi
   if (target === actor.email) {
     throw new DomainError("invalid", "You can’t remove yourself. Ask another admin.");
   }
-  await changeRoster(actor, async (db) => {
-    const revoked = await db.query(
-      `UPDATE dripsign.staff SET revoked_at = now()
+  await tx((db) =>
+    changeRoster(
+      db,
+      actor.tenantId,
+      async () => {
+        const revoked = await db.query(
+          `UPDATE dripsign.staff SET revoked_at = now()
        WHERE tenant_id = $1 AND email = $2 AND revoked_at IS NULL`,
-      [actor.tenantId, target],
-    );
-    if (revoked.rowCount !== 1) throw notFound();
-  });
+          [actor.tenantId, target],
+        );
+        if (revoked.rowCount !== 1) throw notFound();
+      },
+      actor,
+    ),
+  );
 }
 
 /**
  * One roster change per tenant at a time, by a live admin, leaving at least one live admin: two
  * admins removing each other at once cannot leave the tenant with none.
  */
-function changeRoster(actor: StaffActor, change: (db: Db) => Promise<void>): Promise<void> {
-  return tx(async (db) => {
-    await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
-      `dripsign.staff-roster:${actor.tenantId}`,
-    ]);
-    await requireRole(db, actor, ["admin"]);
-    await change(db);
-    const admin = await db.query(
-      `SELECT 1 FROM dripsign.staff
+async function changeRoster(
+  db: Db,
+  tenantId: string,
+  change: () => Promise<void>,
+  actor?: StaffActor,
+): Promise<void> {
+  await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+    `dripsign.staff-roster:${tenantId}`,
+  ]);
+  if (actor) await requireRole(db, actor, ["admin"]);
+  await change();
+  const admin = await db.query(
+    `SELECT 1 FROM dripsign.staff
        WHERE tenant_id = $1 AND role = 'admin' AND revoked_at IS NULL LIMIT 1`,
-      [actor.tenantId],
-    );
-    if (admin.rowCount !== 1) throw new DomainError("invalid", "Make someone else an admin first.");
-  });
+    [tenantId],
+  );
+  if (admin.rowCount !== 1) throw new DomainError("invalid", "Make someone else an admin first.");
 }
 
 /** Rechecks the actor's live role inside the caller's transaction; anything else is not found. */

@@ -227,6 +227,33 @@ export const SPEAKING_ENGAGEMENT: DocumentSource = {
   ],
 };
 
+export const LOGO_BRIEF: DocumentSource = {
+  title: "Logo design brief",
+  sections: [
+    {
+      id: "deliverables",
+      heading: "Deliverables",
+      paragraphs: [
+        "The Studio will deliver three logo concepts, two rounds of revisions on the chosen concept, and final files in vector and PNG formats.",
+      ],
+    },
+    {
+      id: "fee",
+      heading: "Fee and schedule",
+      paragraphs: [
+        "The fixed fee is 3,200 USD, invoiced half on signing and half on delivery. Concepts arrive within two weeks of signing.",
+      ],
+    },
+    {
+      id: "rights",
+      heading: "Rights",
+      paragraphs: [
+        "On full payment the Client owns the chosen logo. The Studio may show the work in its portfolio.",
+      ],
+    },
+  ],
+};
+
 /** A copy of the source with one section's paragraphs replaced. */
 export function withSection(
   source: DocumentSource,

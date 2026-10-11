@@ -2,7 +2,7 @@
 
 import { LIMITS } from "@dripsign/core/schema";
 import { randomId } from "@/features/document/ids.ts";
-import { Button, Checkbox, IconButton, Plus, TextField, Trash2 } from "@/ui";
+import { Button, Checkbox, IconButton, Plus, TextField, X } from "@/ui";
 import {
   duplicateKeys,
   DUPLICATE_EMAIL,
@@ -84,7 +84,7 @@ function RecipientFields({
         />
         <IconButton
           label={`Remove recipient ${String(index + 1)}`}
-          icon={<Trash2 aria-hidden="true" />}
+          icon={<X aria-hidden="true" />}
           disabled={onlyRow}
           onClick={onRemove}
         />

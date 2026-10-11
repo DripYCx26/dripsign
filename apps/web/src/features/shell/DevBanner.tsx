@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { devIdentityLabel, devLoginEnabled } from "@/features/dev/identities.ts";
 import { getSession } from "@/server/session.ts";
-import { Banner } from "@/ui";
+import styles from "./DevBanner.module.css";
 import { standingWord } from "./standing.ts";
 
 /**
@@ -16,8 +16,8 @@ export async function DevBanner() {
       ? "Not signed in"
       : `Signed in as ${await devIdentityLabel(session.email)} (${standingWord(session)})`;
   return (
-    <Banner tone="attention">
+    <div className={styles.banner}>
       Development sign-in is on · {who} · <Link href="/dev/sign-in">Switch identity</Link>
-    </Banner>
+    </div>
   );
 }

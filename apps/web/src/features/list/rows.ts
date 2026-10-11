@@ -21,6 +21,7 @@ export interface RowGroup {
   readonly rows: readonly RowModel[];
 }
 
+/** An empty phrase says nothing the row's status pill does not already say. */
 type Standing<G extends string> = Readonly<{ group: G; phrase: string }>;
 
 type StaffGroup = "needs" | "waiting" | "drafts" | "done";
@@ -37,7 +38,7 @@ const INBOX_HEADINGS: Readonly<Record<InboxGroup, string>> = {
   sign: "Needs your signature",
   respond: "Your turn to respond",
   waiting: "Waiting on others",
-  done: "Completed",
+  done: "Done",
 };
 
 function plural(count: number, one: string, many: string): string {
@@ -94,7 +95,7 @@ function negotiatingStanding(item: StaffListItem): Standing<StaffGroup> {
 export function staffStanding(item: StaffListItem): Standing<StaffGroup> {
   switch (item.status) {
     case "void":
-      return { group: "done", phrase: "Voided" };
+      return { group: "done", phrase: "" };
     case "signed":
       return { group: "done", phrase: "Signed by everyone" };
     case "signing":
@@ -147,9 +148,8 @@ function signingStanding(item: InboxItem): Standing<InboxGroup> {
 export function inboxStanding(item: InboxItem): Standing<InboxGroup> {
   switch (item.status) {
     case "void":
-      return { group: "done", phrase: "Voided" };
     case "signed":
-      return { group: "done", phrase: "Signed" };
+      return { group: "done", phrase: "" };
     case "signing":
       return signingStanding(item);
     case "negotiating":

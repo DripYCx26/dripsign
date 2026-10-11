@@ -35,29 +35,37 @@ export function TeamRoster({ members, selfEmail }: Props) {
           {problem}
         </Notice>
       )}
-      <ul className={styles.members}>
-        {members.map((member) => (
-          <li key={member.email} className={styles.member}>
-            <p className={styles.name}>{member.name ?? "—"}</p>
-            <p className={styles.detail}>{member.email}</p>
-            <p className={styles.detail}>{member.role === "admin" ? "Admin" : "Member"}</p>
-            <p className={styles.detail}>
-              Added <Moment value={member.addedAt} format="relative" />
-            </p>
-            {member.email !== selfEmail && (
-              <Button
-                variant="quiet"
-                size="sm"
-                onClick={() => {
-                  setRevoking(member);
-                }}
-              >
-                Remove
-              </Button>
-            )}
-          </li>
-        ))}
-      </ul>
+      <div className={styles.table}>
+        <div className={styles.head} aria-hidden="true">
+          <span>Name</span>
+          <span>Email</span>
+          <span>Role</span>
+          <span>Added</span>
+        </div>
+        <ul className={styles.members}>
+          {members.map((member) => (
+            <li key={member.email} className={styles.member}>
+              <p className={styles.name}>{member.name ?? "—"}</p>
+              <p className={styles.detail}>{member.email}</p>
+              <p className={styles.detail}>{member.role === "admin" ? "Admin" : "Member"}</p>
+              <p className={styles.detail}>
+                <Moment value={member.addedAt} format="relative" />
+              </p>
+              {member.email !== selfEmail && (
+                <Button
+                  variant="quiet"
+                  size="sm"
+                  onClick={() => {
+                    setRevoking(member);
+                  }}
+                >
+                  Remove
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
       <AddStaffForm />
       <Dialog
         open={revoking !== null}

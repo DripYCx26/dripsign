@@ -78,11 +78,13 @@ export async function loadArchiveEvidence(
        s.verified_at AS "verifiedAt", s.signed_at AS "signedAt", s.session_id AS "sessionId",
        s.ip_address AS "ipAddress", s.user_agent AS "userAgent"
      FROM dripsign.round_signer rs
+     JOIN dripsign.signing_round g ON g.tenant_id = rs.tenant_id AND g.id = rs.round_id
+     JOIN dripsign.revision v ON v.tenant_id = g.tenant_id AND v.id = g.revision_id
      JOIN dripsign.signature s
        ON s.tenant_id = rs.tenant_id AND s.round_id = rs.round_id
       AND s.recipient_id = rs.recipient_id
      WHERE rs.tenant_id = $1 AND rs.round_id = $2
-     ORDER BY rs.recipient_id`,
+     ORDER BY array_position(v.signer_ids, rs.recipient_id)`,
     [tenantId, roundId],
   );
   // AI requests are staff-private; the audit record is shared with every party.

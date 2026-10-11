@@ -9,7 +9,7 @@ type IconButtonProps = Readonly<{
   icon: ReactNode;
   variant?: Exclude<ButtonVariant, "link"> | undefined;
   size?: Exclude<ButtonSize, "lg"> | undefined;
-  /** `round` is the composer's send button: a pill-shaped 32 px circle. */
+  /** `round` is a 32 px circle: the composer's send button, the back chevron. */
   shape?: "square" | "round" | undefined;
   type?: "button" | "submit" | undefined;
   disabled?: boolean | undefined;

@@ -14,24 +14,34 @@
   outline: none;
 }
 
+/* Pinned to the foot of the screen under a long document, like the publish action. */
 .actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-3) var(--ds-space-4);
+  padding: var(--ds-space-3) var(--ds-space-4);
+  border: var(--ds-hairline);
+  border-radius: var(--ds-radius-card);
+  background: var(--ds-surface);
+  box-shadow: var(--ds-shadow-float);
+}
+
+.buttons {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
   gap: var(--ds-space-3);
 }
 
 @media (max-width: 639px) {
-  .actions {
-    position: sticky;
-    bottom: 0;
-    margin: 0 calc(var(--ds-space-4) * -1);
-    border-top: var(--ds-hairline);
-    background: var(--ds-surface);
-    padding: var(--ds-space-3) var(--ds-space-4);
-  }
-
-  .actions > * {
+  .buttons > * {
     flex: 1 1 auto;
   }
 }

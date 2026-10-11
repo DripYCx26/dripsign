@@ -1,0 +1,17 @@
+/* The development strip: one quiet line on the surface, an attention rule on its start edge, so a
+   local identity is never mistaken for a verified one without a loud slab on every page. */
+
+.banner {
+  display: flex;
+  min-height: var(--ds-layout-dev-bar);
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-1) var(--ds-space-2);
+  padding: var(--ds-space-1) var(--ds-space-4);
+  border-bottom: var(--ds-hairline);
+  border-inline-start: var(--ds-space-1) solid var(--ds-attention);
+  background: var(--ds-surface);
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-xs);
+  line-height: var(--ds-leading-xs);
+}

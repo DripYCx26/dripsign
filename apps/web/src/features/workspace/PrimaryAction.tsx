@@ -1,8 +1,9 @@
 "use client";
 
 import type { Command } from "@dripsign/core/schema";
-import { Button, ButtonLink, Pill } from "@/ui";
+import { Button, ButtonLink } from "@/ui";
 import type { NextStep } from "./nextStep.ts";
+import styles from "./PrimaryAction.module.css";
 
 type PrimaryActionProps = Readonly<{
   step: NextStep;
@@ -12,12 +13,14 @@ type PrimaryActionProps = Readonly<{
   onReveal: (href: string) => void;
 }>;
 
-/** The one primary action `nextStep` chose, in whatever form its kind calls for. */
+/**
+ * The one primary action `nextStep` chose, in whatever form its kind calls for. The step's chip is
+ * a status and sits beside the agreement's pill, not here.
+ */
 export function PrimaryAction({ step, busy, onCommand, onReveal }: PrimaryActionProps) {
-  const { label, kind, command, href, disabled = false, chip } = step;
+  const { label, kind, command, href, disabled = false, narrowOnly = false } = step;
   return (
-    <>
-      {chip !== undefined && <Pill tone="info">{chip}</Pill>}
+    <span className={styles.action} data-narrow-only={narrowOnly ? "" : undefined}>
       {label !== "" && kind === "navigate" && href !== undefined && (
         <ButtonLink variant="ink" href={href}>
           {label}
@@ -50,6 +53,6 @@ export function PrimaryAction({ step, busy, onCommand, onReveal }: PrimaryAction
           {label}
         </Button>
       )}
-    </>
+    </span>
   );
 }

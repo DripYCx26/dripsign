@@ -17,6 +17,8 @@ type MenuItemData<I extends string> = Readonly<{
   /** An action that removes or ends something; drawn in the stop tone. */
   danger?: boolean | undefined;
   disabled?: boolean | undefined;
+  /** Listed only below 640 px, for what a wider screen shows elsewhere (the top bar's links). */
+  narrowOnly?: boolean | undefined;
 }>;
 
 type MenuProps<I extends string> = Readonly<{
@@ -26,6 +28,8 @@ type MenuProps<I extends string> = Readonly<{
   icon: ReactNode;
   variant?: "secondary" | "quiet" | undefined;
   items: readonly MenuItemData<I>[];
+  /** Words above the items that are not actions, such as who is signed in. */
+  caption?: ReactNode;
   disabled?: boolean | undefined;
   /** Receives one of the item ids, after the menu has closed and focus is back on the trigger. */
   onAction: (id: I) => void;
@@ -38,7 +42,10 @@ function useMenuBehaviour() {
   const [open, setOpen] = useState(false);
 
   function enabledItems(): HTMLButtonElement[] {
-    return Array.from(popover.current?.querySelectorAll<HTMLButtonElement>("button:enabled") ?? []);
+    // An item hidden at this width (narrowOnly) has no offsetParent and cannot take focus.
+    return Array.from(
+      popover.current?.querySelectorAll<HTMLButtonElement>("button:enabled") ?? [],
+    ).filter((item) => item.offsetParent !== null);
   }
 
   function place() {
@@ -115,6 +122,7 @@ export function Menu<I extends string>({
   icon,
   variant = "quiet",
   items,
+  caption,
   disabled = false,
   onAction,
 }: MenuProps<I>) {
@@ -150,6 +158,11 @@ export function Menu<I extends string>({
         onToggle={onToggle}
         onKeyDown={onMenuKey}
       >
+        {caption !== undefined && (
+          <div role="presentation" className={styles.caption}>
+            {caption}
+          </div>
+        )}
         {items.map((item) => (
           <button
             key={item.id}
@@ -157,6 +170,7 @@ export function Menu<I extends string>({
             role="menuitem"
             className={styles.item}
             data-tone={item.danger === true ? "stop" : undefined}
+            data-narrow-only={item.narrowOnly === true ? "" : undefined}
             disabled={item.disabled === true}
             onClick={() => {
               popover.current?.hidePopover();

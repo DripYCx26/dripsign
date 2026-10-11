@@ -43,16 +43,15 @@ export function AppShell({ session, home, children }: AppShellProps) {
         }
         {...(home === "staff" ? { nav: <ShellNav links={links} /> } : {})}
         account={
-          <>
-            <span className={styles.role}>{roleLabel}</span>
-            <AccountMenu
-              email={session.email}
-              home={home}
-              bothHomes={hasBothHomes(session)}
-              tenants={session.staffTenants}
-              selectedTenantId={tenant?.id ?? null}
-            />
-          </>
+          <AccountMenu
+            email={session.email}
+            roleLabel={roleLabel}
+            home={home}
+            bothHomes={hasBothHomes(session)}
+            links={home === "staff" ? links : []}
+            tenants={session.staffTenants}
+            selectedTenantId={tenant?.id ?? null}
+          />
         }
       />
       <main id="main" className={styles.main}>

@@ -1,21 +1,20 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
-import { Segmented, TextField } from "@/ui";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { TextField } from "@/ui";
 import styles from "./ListControls.module.css";
-import { listHref, STATUS_FILTERS, type ListState } from "./query.ts";
+import { listHref } from "./query.ts";
 
 const SEARCH_DELAY_MS = 250;
 
 /**
- * The search field and status filters. The URL (`?q=&status=`) is the state: a change replaces
- * it and the server renders the new list, so a filtered view can be shared and survives reload.
+ * The search field. The URL (`?q=`) is the state: a change replaces it and the server renders the
+ * new list, so a searched view can be shared and survives reload.
  */
-export function ListControls({ q, status }: ListState) {
+export function ListControls({ q }: Readonly<{ q: string }>) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [shownStatus, setShownStatus] = useOptimistic(status);
   const [text, setText] = useState(q);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -26,44 +25,27 @@ export function ListControls({ q, status }: ListState) {
     [],
   );
 
-  function go(next: ListState) {
-    startTransition(() => {
-      setShownStatus(next.status);
-      router.replace(listHref(next), { scroll: false });
-    });
-  }
-
   function search(value: string) {
     setText(value);
     clearTimeout(timer.current);
     timer.current = setTimeout(() => {
-      go({ q: value, status });
+      startTransition(() => {
+        router.replace(listHref(value), { scroll: false });
+      });
     }, SEARCH_DELAY_MS);
   }
 
   return (
-    <div className={styles.controls} aria-busy={pending}>
-      <div className={styles.search}>
-        <TextField
-          label="Search"
-          hideLabel
-          name="q"
-          type="search"
-          autoComplete="off"
-          placeholder="Search title or recipient"
-          value={text}
-          onChange={search}
-        />
-      </div>
-      <Segmented
-        label="Status"
+    <div className={styles.search} aria-busy={pending}>
+      <TextField
+        label="Search"
         hideLabel
-        name="status"
-        options={STATUS_FILTERS}
-        value={shownStatus}
-        onChange={(value) => {
-          go({ q: text, status: value });
-        }}
+        name="q"
+        type="search"
+        autoComplete="off"
+        placeholder="Search title or recipient"
+        value={text}
+        onChange={search}
       />
     </div>
   );

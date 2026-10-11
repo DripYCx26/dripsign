@@ -77,7 +77,7 @@ function ThreadRow({ item, view, capacity, busy, onDecide }: ThreadRowProps) {
     case "message":
       return <MessageItem message={item.message} own={isOwn(item.message.author, view)} />;
     case "activity":
-      return <SystemRow item={item.item} />;
+      return <SystemRow at={item.at} lines={item.lines} />;
     case "proposal":
       return (
         <ProposalCard

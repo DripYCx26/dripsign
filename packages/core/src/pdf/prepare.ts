@@ -14,6 +14,7 @@ import type { DocumentSource, SigningField } from "../schema.ts";
 import { assertTextRenderable, embedSignatureFont, SIGNATURE_BOX, wrapPdfText } from "./font.ts";
 import { MAX_PREPARED_PAGES, metadata, pageNumbers, PAPER, savePdf, textWriter } from "./render.ts";
 import { isolateUpload } from "./isolate.ts";
+import { assertInflationBound } from "./preflight.ts";
 
 const signerSchema = z.strictObject({ id: uuidSchema, name: personNameSchema, email: emailSchema });
 export type DraftSigner = z.infer<typeof signerSchema>;
@@ -86,6 +87,7 @@ async function loadUploadedPdf(bytes: Uint8Array): Promise<PDFDocument> {
   if (bytes.byteLength === 0 || bytes.byteLength > LIMITS.pdfBytes) {
     throw new DomainError("invalid", "The PDF exceeds the upload limit.");
   }
+  assertInflationBound(bytes);
   let document: PDFDocument;
   try {
     document = await PDFDocument.load(bytes, { updateMetadata: false, throwOnInvalidObject: true });

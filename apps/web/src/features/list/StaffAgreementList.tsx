@@ -7,10 +7,9 @@ import { listStaff } from "@/server/actions/agreements.ts";
 import { Button, ButtonLink, EmptyState, Notice } from "@/ui";
 import { AgreementList } from "./AgreementList.tsx";
 import styles from "./StaffAgreementList.module.css";
-import { isFiltered, type ListState } from "./query.ts";
 import { flatStaffRows, groupStaffRows } from "./rows.ts";
 
-type Props = Readonly<{ initial: Page<StaffListItem> }> & ListState;
+type Props = Readonly<{ initial: Page<StaffListItem>; q: string }>;
 
 type More = Readonly<{
   /** The first page these rows were fetched after; a new first page makes them stale. */
@@ -20,32 +19,26 @@ type More = Readonly<{
 }>;
 
 /**
- * The dashboard's list: the server's first page for the URL's filters, then "Load more" pages
- * fetched with the same filters and cursor. Grouped when unfiltered, flat when searched.
+ * The dashboard's list: the server's first page for the URL's search, then "Load more" pages
+ * fetched with the same search and cursor. Grouped when not searching, flat when searching.
  */
-export function StaffAgreementList({ initial, q, status }: Props) {
+export function StaffAgreementList({ initial, q }: Props) {
   const [more, setMore] = useState<More | null>(null);
   const [loading, setLoading] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
 
-  // New filters bring a new first page object; rows loaded after the old one no longer belong.
+  // A new search brings a new first page object; rows loaded after the old one no longer belong.
   const loaded = more?.base === initial ? more : null;
   const items = loaded === null ? initial.items : [...initial.items, ...loaded.items];
   const nextCursor = loaded === null ? initial.nextCursor : loaded.nextCursor;
-  const filtered = isFiltered({ q, status });
+  const searching = q !== "";
 
   async function loadMore() {
     if (nextCursor === null || loading) return;
     setLoading(true);
     setProblem(null);
-    const result = await settle(
-      listStaff({
-        ...(q === "" ? {} : { q }),
-        ...(status === "all" ? {} : { status }),
-        cursor: nextCursor,
-      }),
-    );
+    const result = await settle(listStaff({ ...(searching ? { q } : {}), cursor: nextCursor }));
     setLoading(false);
     if (!result.ok) {
       setProblem(result.message);
@@ -60,8 +53,8 @@ export function StaffAgreementList({ initial, q, status }: Props) {
   }
 
   if (items.length === 0) {
-    return filtered ? (
-      <EmptyState message="Nothing matches these filters." />
+    return searching ? (
+      <EmptyState message="Nothing matches this search." />
     ) : (
       <EmptyState
         message="No agreements yet."
@@ -75,7 +68,7 @@ export function StaffAgreementList({ initial, q, status }: Props) {
   }
   return (
     <div className={styles.list}>
-      <AgreementList groups={filtered ? flatStaffRows(items) : groupStaffRows(items)} />
+      <AgreementList groups={searching ? flatStaffRows(items) : groupStaffRows(items)} />
       {problem !== null && (
         <Notice tone="stop" live="alert">
           {problem}

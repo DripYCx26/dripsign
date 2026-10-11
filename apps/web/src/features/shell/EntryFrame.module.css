@@ -32,7 +32,16 @@
 }
 
 .main[data-width="wide"] {
-  max-width: var(--ds-layout-sheet-max);
+  max-width: var(--ds-layout-page);
+}
+
+/* Sign-in and its neighbours sit in the middle of the screen, not under the brand. */
+@media (min-width: 640px) {
+  .main[data-width="entry"] {
+    align-content: center;
+    flex: 1 1 auto;
+    padding-block: var(--ds-space-6);
+  }
 }
 
 .title {

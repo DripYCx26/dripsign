@@ -1,16 +1,10 @@
-/* Activity merged into the chat: quiet, centred, never a bubble. */
+/* A milestone in the conversation: one quiet line at the bubble gutter, never a bubble. */
 
 .row {
   display: grid;
-  justify-items: center;
   gap: var(--ds-space-half);
   color: var(--ds-text-tertiary);
   font-size: var(--ds-text-xs);
   line-height: var(--ds-leading-xs);
-  text-align: center;
   overflow-wrap: anywhere;
-}
-
-.evidence {
-  font-family: var(--ds-mono);
 }

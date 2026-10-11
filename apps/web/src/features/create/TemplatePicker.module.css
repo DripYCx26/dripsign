@@ -8,3 +8,15 @@
   font-size: var(--ds-text-sm);
   line-height: var(--ds-leading-sm);
 }
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+
+.lead {
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+}

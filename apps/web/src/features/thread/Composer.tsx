@@ -55,24 +55,34 @@ function MessageComposer({ view, scope, run, busy, canPropose, onSent }: Message
         void send();
       }}
     >
-      <textarea
-        id={MESSAGE_FIELD_ID}
-        ref={field}
-        className={styles.field}
-        rows={1}
-        aria-label="Message"
-        placeholder={`Message ${otherSideLabel(view, scope.capacity)}`}
-        maxLength={LIMITS.messageText}
-        value={text}
-        onChange={(event) => {
-          setStored(event.target.value);
-        }}
-        onKeyDown={(event) => {
-          sendOnEnter(event, () => void send());
-        }}
-      />
-      <div className={styles.foot}>
-        {canPropose ? (
+      <div className={styles.row}>
+        <textarea
+          id={MESSAGE_FIELD_ID}
+          ref={field}
+          className={styles.field}
+          rows={1}
+          aria-label="Message"
+          placeholder={`Message ${otherSideLabel(view, scope.capacity)}`}
+          maxLength={LIMITS.messageText}
+          value={text}
+          onChange={(event) => {
+            setStored(event.target.value);
+          }}
+          onKeyDown={(event) => {
+            sendOnEnter(event, () => void send());
+          }}
+        />
+        <IconButton
+          variant="ink"
+          shape="round"
+          type="submit"
+          label="Send"
+          icon={<ArrowUp />}
+          disabled={!ready}
+        />
+      </div>
+      {canPropose && (
+        <div className={styles.foot}>
           <Button
             variant="quiet"
             size="sm"
@@ -83,18 +93,8 @@ function MessageComposer({ view, scope, run, busy, canPropose, onSent }: Message
             <Pencil />
             Propose a change
           </Button>
-        ) : (
-          <span />
-        )}
-        <IconButton
-          variant="ink"
-          shape="round"
-          type="submit"
-          label="Send"
-          icon={<ArrowUp />}
-          disabled={!ready}
-        />
-      </div>
+        </div>
+      )}
     </form>
   );
 }

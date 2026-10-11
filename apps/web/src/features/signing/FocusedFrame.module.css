@@ -2,7 +2,7 @@
   display: grid;
   min-height: 100dvh;
   grid-template-rows: var(--ds-layout-header) 1fr;
-  background: var(--ds-surface-subtle);
+  background: var(--ds-canvas);
 }
 
 .bar {

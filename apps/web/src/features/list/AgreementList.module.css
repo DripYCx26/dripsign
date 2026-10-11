@@ -1,9 +1,6 @@
-.list {
-  display: grid;
-  gap: var(--ds-space-6);
-}
+/* One surface for the whole list; a group is a quiet subheader row above its rows. */
 
-.group {
+.list {
   display: grid;
   overflow: hidden;
   border: var(--ds-hairline);
@@ -15,10 +12,13 @@
   display: flex;
   align-items: baseline;
   gap: var(--ds-space-2);
-  padding: var(--ds-space-3) var(--ds-space-4);
+  padding: var(--ds-space-2) var(--ds-space-4);
   border-bottom: var(--ds-hairline);
-  font-size: var(--ds-text-md);
-  line-height: var(--ds-leading-md);
+  background: var(--ds-surface-subtle);
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-medium);
+  line-height: var(--ds-leading-sm);
 }
 
 .count {
@@ -34,7 +34,11 @@
   list-style: none;
 }
 
-/* The last row's rule would double the group's own border. */
+/* A group's last row ends on the next subheader or on the surface's own border. */
 .rows > li:last-child > a {
   border-bottom: 0;
+}
+
+.group + .group > .heading {
+  border-top: var(--ds-hairline);
 }

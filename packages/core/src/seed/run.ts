@@ -5,6 +5,7 @@ import type { Command, DocumentSource, NewAgreementInput } from "../schema.ts";
 import type { AgreementView, StaffActor } from "../types.ts";
 import {
   EQUIPMENT_LEASE,
+  LOGO_BRIEF,
   MUTUAL_NDA,
   NDA_OBLIGATIONS_ACCEPTED,
   NDA_TERM_RECIPIENT_ASK,
@@ -218,6 +219,25 @@ async function photographyLicense(
   );
 }
 
+/** In review with nothing proposed, so the thread offers "Propose a change". */
+async function logoBrief(script: Script, avery: StaffActor): Promise<void> {
+  const id = await startDraft(script, avery, LOGO_BRIEF, [
+    recipient(JORDAN, true),
+    recipient(TAYLOR, false),
+  ]);
+  await publishDraft(script, avery, id);
+  await script.step(
+    avery,
+    id,
+    message("Here is the brief. Tell us what you would like to change."),
+  );
+  await script.step(
+    await script.recipient(JORDAN),
+    id,
+    message("Looks close. I will read it through with the team this week."),
+  );
+}
+
 async function q4Retainer(script: Script, avery: StaffActor): Promise<void> {
   const id = await startDraft(script, avery, Q4_RETAINER, [
     recipient(JORDAN, true),
@@ -275,6 +295,7 @@ export async function runSeed(): Promise<boolean> {
     await startDraft(script, avery, WEBSITE_REDESIGN, [recipient(JORDAN, true)]);
     await mutualNda(script, avery);
     await photographyLicense(script, avery, sam);
+    await logoBrief(script, avery);
     await q4Retainer(script, avery);
     await officeSublease(script, avery);
     await equipmentLease(script, avery);

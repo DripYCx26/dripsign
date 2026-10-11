@@ -7,13 +7,13 @@ type TopBarProps = Readonly<{
   /** The places in a row; wrapped in a labelled `<nav>`. */
   nav?: ReactNode;
   navLabel?: string | undefined;
-  /** The signed-in person: role label and account menu. */
+  /** The signed-in person's account menu. */
   account?: ReactNode;
 }>;
 
 /**
- * The page's one banner: brand, navigation, account. 56 px high; below 640 the navigation moves
- * to its own row so nothing scrolls sideways.
+ * The page's one banner: brand, navigation, account. 56 px high; below 640 the navigation is
+ * hidden and the account menu carries its places, so the bar stays one row.
  */
 export function TopBar({ brand, nav, navLabel = "Primary", account }: TopBarProps) {
   return (

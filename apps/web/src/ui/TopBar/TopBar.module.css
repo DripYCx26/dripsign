@@ -1,5 +1,5 @@
-/* The header bar: header height, the nav between the brand and the account, and under 640 the
-   nav on a row of its own. */
+/* The header bar: header height, the nav between the brand and the account. Under 640 the nav is
+   hidden; the caller lists the same places in the account menu. */
 
 .bar {
   display: flex;
@@ -31,7 +31,6 @@
 
 @media (max-width: 639px) {
   .nav {
-    order: 1;
-    flex-basis: 100%;
+    display: none;
   }
 }

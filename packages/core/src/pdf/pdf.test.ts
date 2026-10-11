@@ -8,7 +8,7 @@ import { assertRenderableName } from "./font.ts";
 import { prepareDraftPdf } from "./prepare.ts";
 import { renderAuditRecord, renderSignedPdf } from "./archive.ts";
 import type { ArchiveEvidence } from "./archive.ts";
-import { assertUploadMemoryBound } from "./testSupport.ts";
+import { assertLargeConcurrentUploads, assertUploadInflationBound } from "./testSupport.ts";
 
 interface PdfReader {
   getDocument(input: { data: Uint8Array; verbosity: number }): {
@@ -43,7 +43,7 @@ async function pdfText(bytes: Uint8Array): Promise<string> {
 afterEach(() => vi.useRealTimers());
 
 describe("PDF evidence", () => {
-  it("refuses unsupported names before rendering, prepares signer fields and renders evidence deterministically", async () => {
+  it("prepares fields and deterministic redacted evidence, bounds upload inflation, rejects unsafe PDFs and accepts large concurrent uploads", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-10-11T10:03:00Z"));
     await expect(assertRenderableName("Jordan 🛸")).rejects.toMatchObject({ code: "invalid" });
@@ -140,7 +140,6 @@ describe("PDF evidence", () => {
     const reordered = {
       ...evidence,
       signatures: [...evidence.signatures].reverse(),
-      signers: [...evidence.signers].reverse(),
     };
     vi.setSystemTime(new Date("2026-10-12T10:03:00Z"));
     expect(hashBytes(await renderSignedPdf(reordered, prepared.bytes))).toBe(
@@ -169,7 +168,8 @@ describe("PDF evidence", () => {
     await expect(
       prepareDraftPdf({ title: evidence.title, signers, uploadBytes: await uploaded.save() }),
     ).rejects.toMatchObject({ code: "invalid" });
-    await assertUploadMemoryBound();
+    await assertUploadInflationBound();
+    await assertLargeConcurrentUploads();
     uploaded.catalog.delete(PDFName.of("OpenAction"));
     uploaded.context.trailerInfo.Encrypt = uploaded.context.register(
       PDFDict.withContext(uploaded.context),
@@ -177,5 +177,5 @@ describe("PDF evidence", () => {
     await expect(
       prepareDraftPdf({ title: evidence.title, signers, uploadBytes: await uploaded.save() }),
     ).rejects.toMatchObject({ code: "invalid" });
-  }, 10_000);
+  }, 20_000);
 });

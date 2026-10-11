@@ -5,6 +5,7 @@ import { z } from "zod";
 import { loadConfig } from "./config.ts";
 import { applySchema, closePool, resetSchema, schemaState, tx } from "./db.ts";
 import { emailSchema, personNameSchema, titleSchema } from "./schema.ts";
+import { upsertStaff } from "./domain/staff.ts";
 
 const USAGE = `Usage: cli <command>
 
@@ -96,14 +97,7 @@ async function addStaff(args: readonly string[]): Promise<void> {
     );
     const id = tenant.rows[0]?.id;
     if (id === undefined) throw new Error("Tenant upsert returned no row.");
-    await db.query(
-      `INSERT INTO dripsign.staff (tenant_id, email, name, role) VALUES ($1, $2, $3, $4)
-       ON CONFLICT (tenant_id, email)
-       DO UPDATE SET role = EXCLUDED.role,
-                     name = coalesce(EXCLUDED.name, dripsign.staff.name),
-                     revoked_at = NULL`,
-      [id, input.email, input.name ?? null, input.role],
-    );
+    await upsertStaff(db, id, input);
     return id;
   });
   console.log(`${input.email} is ${input.role} of ${input.tenant} (${tenantId}).`);

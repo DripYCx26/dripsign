@@ -71,8 +71,11 @@ export function ReviewStep({
           }
         />
       </div>
-      <Checkbox label="I’ve reviewed this document." checked={reviewed} onChange={onReviewed} />
-      <StepActions>
+      <StepActions
+        lead={
+          <Checkbox label="I’ve reviewed this document." checked={reviewed} onChange={onReviewed} />
+        }
+      >
         <Button variant="ink" size="lg" disabled={!reviewed} onClick={onContinue}>
           Continue to sign
         </Button>

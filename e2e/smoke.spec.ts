@@ -28,7 +28,7 @@ test("a staff member publishes, a recipient signs, and the signed PDF downloads"
   await page.goto("/staff");
   await page.getByRole("link", { name: "New agreement" }).first().click();
   await page.getByLabel("Title").fill(`E2E services ${String(Date.now())}`);
-  await page.getByLabel("Services agreement").check();
+  await page.getByRole("button", { name: "Services agreement" }).click();
   await page.getByLabel("Name").fill("Jordan Lee");
   await page.getByLabel("Email").fill("jordan@client.test");
   await expect(page.getByLabel("Required signer")).toBeChecked();
@@ -63,7 +63,7 @@ test("a staff member publishes, a recipient signs, and the signed PDF downloads"
   await expect(page.getByText("Your signature is recorded.")).toBeVisible();
 
   await page.goto(`/agreements/${agreementId}`);
-  const signedPdf = page.getByRole("link", { name: /Signed PDF/u });
+  const signedPdf = page.getByRole("link", { name: /signed PDF/i });
   await reloadUntilVisible(page, () => signedPdf.isVisible());
   const href = await signedPdf.getAttribute("href");
   expect(href).not.toBeNull();

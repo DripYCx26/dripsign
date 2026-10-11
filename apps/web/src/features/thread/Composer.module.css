@@ -11,7 +11,7 @@
   max-height: 50dvh;
   flex-direction: column;
   gap: var(--ds-space-1);
-  padding: var(--ds-space-2) var(--ds-space-3);
+  padding: var(--ds-space-1) var(--ds-space-1) var(--ds-space-1) var(--ds-space-3);
   border: var(--ds-hairline);
   border-radius: var(--ds-radius-panel);
   background: var(--ds-surface-raised);
@@ -22,16 +22,23 @@
   box-shadow: var(--ds-ring);
 }
 
-/* Height is set by useAutosize between this floor and ceiling; past the ceiling it scrolls. */
+/* The resting composer is this one row: the field grows, Send sits at its bottom right. */
+.row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--ds-space-2);
+}
+
+/* Height is set by useAutosize; past the ceiling the field scrolls. */
 .field {
-  width: 100%;
-  min-height: var(--ds-size-control-lg);
+  min-width: 0;
+  flex: 1 1 auto;
   max-height: 200px;
   resize: none;
   border: 0;
   border-radius: var(--ds-radius-control);
   background: transparent;
-  padding: var(--ds-space-3) 0;
+  padding: var(--ds-space-2) 0;
   color: var(--ds-text);
   line-height: var(--ds-leading-md);
   outline-color: transparent;
@@ -45,8 +52,7 @@
 .foot {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--ds-space-3);
+  margin-inline-start: calc(-1 * var(--ds-space-2));
 }
 
 .closed {

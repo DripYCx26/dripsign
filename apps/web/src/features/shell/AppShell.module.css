@@ -37,12 +37,6 @@
   color: var(--ds-text);
 }
 
-.role {
-  color: var(--ds-text-secondary);
-  font-size: var(--ds-text-sm);
-  line-height: var(--ds-leading-sm);
-}
-
 /* Off screen until it takes focus, then the first thing a keyboard user reaches. */
 .skip {
   position: absolute;

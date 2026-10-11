@@ -5,13 +5,12 @@ import { fileUrl } from "@/features/files.ts";
 import { Ellipsis, Menu } from "@/ui";
 import type { RunCommand } from "./commands.ts";
 import { menuItems, type MenuId } from "./menu.tsx";
-import { nextStep } from "./nextStep.ts";
+import type { NextStep } from "./nextStep.ts";
 import { PrimaryAction } from "./PrimaryAction.tsx";
 import type { Panel } from "./WorkspacePanels.tsx";
 
 type PrimaryProps = Readonly<{
-  view: AgreementView;
-  capacity: Capacity;
+  step: NextStep;
   run: RunCommand;
   busy: boolean;
   onPanel: (panel: Panel) => void;
@@ -22,10 +21,10 @@ type PrimaryProps = Readonly<{
  * The header's primary action, the one `nextStep` chose. Requesting signatures goes through its
  * confirmation dialog; other commands run at once.
  */
-export function WorkspacePrimary({ view, capacity, run, busy, onPanel, onReveal }: PrimaryProps) {
+export function WorkspacePrimary({ step, run, busy, onPanel, onReveal }: PrimaryProps) {
   return (
     <PrimaryAction
-      step={nextStep(capacity, view)}
+      step={step}
       busy={busy}
       onCommand={(command) => {
         if (command.kind === "request_signatures") onPanel("request");

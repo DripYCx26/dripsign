@@ -45,6 +45,12 @@
   margin-block-end: var(--ds-space-3);
 }
 
+/* The change sits flat in the card behind a thin rule, not in a card of its own. */
+.diff {
+  padding-inline-start: var(--ds-space-3);
+  border-inline-start: 2px solid var(--ds-border-strong);
+}
+
 .foot {
   display: flex;
   flex-wrap: wrap;
@@ -69,20 +75,27 @@
 /* A countered proposal folds into one indented row that opens to the card it was. */
 .superseded {
   display: grid;
-  gap: var(--ds-space-2);
+  gap: var(--ds-space-1);
   margin-inline-start: var(--ds-space-4);
 }
 
 .summary {
   display: flex;
-  min-height: var(--ds-size-control-sm);
+  min-height: var(--ds-size-control-md);
   align-items: center;
   gap: var(--ds-space-2);
 }
 
 .show {
-  color: var(--ds-accent);
-  text-decoration: underline;
+  display: inline-flex;
+  align-items: center;
+  color: var(--ds-text-secondary);
+}
+
+.show > svg {
+  width: var(--ds-size-icon);
+  height: var(--ds-size-icon);
+  stroke-width: var(--ds-icon-stroke);
 }
 
 .superseded[open] .show {

@@ -29,3 +29,14 @@
   display: flex;
   gap: var(--ds-space-1);
 }
+
+/* The text field's label stays for assistive technology; the placeholder says it by eye.
+   TextArea has no hideLabel prop, so this mirrors .ds-visually-hidden for its label. */
+.body label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

@@ -14,6 +14,14 @@
   list-style: none;
 }
 
+.table {
+  display: grid;
+}
+
+.head {
+  display: none;
+}
+
 .member {
   display: grid;
   align-items: center;
@@ -52,8 +60,19 @@
 }
 
 @media (min-width: 768px) {
+  .head,
   .member {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 5rem 8rem 5rem;
+  }
+
+  .head {
+    display: grid;
+    gap: var(--ds-space-4);
+    padding-bottom: var(--ds-space-2);
+    padding-inline: var(--ds-space-4);
+    color: var(--ds-text-secondary);
+    font-size: var(--ds-text-xs);
+    font-weight: var(--ds-weight-medium);
   }
 
   .member > button {

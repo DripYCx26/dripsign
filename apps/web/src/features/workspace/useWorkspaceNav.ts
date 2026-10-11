@@ -3,11 +3,13 @@ import { useProposalIntent } from "../thread/intent.ts";
 import { DOCUMENT_PANE_ID, PENDING_PROPOSAL_ID } from "./nextStep.ts";
 import type { WorkspaceTab } from "./tabs.ts";
 
-/** Keeps `?tab=` in the address without a navigation, so a reload or a shared link lands here. */
+/**
+ * Keeps `?tab=` in the address without a navigation, so a reload or a shared link lands here. Both
+ * values are written: the default for an address without one depends on the agreement's state.
+ */
 function writeTab(tab: WorkspaceTab): void {
   const url = new URL(window.location.href);
-  if (tab === "chat") url.searchParams.delete("tab");
-  else url.searchParams.set("tab", tab);
+  url.searchParams.set("tab", tab);
   window.history.replaceState(window.history.state, "", url);
 }
 

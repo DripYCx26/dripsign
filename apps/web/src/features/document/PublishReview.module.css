@@ -5,26 +5,47 @@
   gap: var(--ds-space-6);
 }
 
+/* One column: the PDF is what the reviewer came for, so it comes first. */
 @media (max-width: 1023px) {
   .review {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .pdf {
+    order: -1;
+  }
 }
 
-.left,
-.right {
+/* One card for the outline or the changes and the signature fields; the PDF fills the other column. */
+.left {
   display: grid;
-  gap: var(--ds-space-4);
   min-width: 0;
-}
-
-.card {
-  display: grid;
-  gap: var(--ds-space-3);
+  gap: var(--ds-space-4);
   padding: var(--ds-space-4);
   border: var(--ds-hairline);
   border-radius: var(--ds-radius-card);
   background: var(--ds-surface);
+}
+
+.part {
+  display: grid;
+  gap: var(--ds-space-3);
+}
+
+.part + .part {
+  padding-top: var(--ds-space-4);
+  border-top: var(--ds-hairline);
+}
+
+.pdf {
+  min-width: 0;
+}
+
+.outline {
+  display: grid;
+  gap: var(--ds-space-1);
+  margin: 0;
+  padding-left: var(--ds-space-5);
 }
 
 .muted {

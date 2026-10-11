@@ -1,5 +1,7 @@
+import type { TimelineItem } from "@dripsign/core/types";
 import { expect, it } from "vitest";
 import { isSendKey } from "./enterToSend.ts";
+import { threadItems } from "./model.ts";
 import { adoptIdentity, IDENTITY_STAMP, storageKey, type TextScope } from "./useStoredText.ts";
 
 const avery: TextScope = { email: "avery@northwind.test", capacity: "staff", agreementId: "a-1" };
@@ -47,4 +49,34 @@ it("drops the previous person's stored text when another identity takes over the
   storage.setItem(mine, "my draft");
   expect(adoptIdentity(storage, jordan)).toEqual([]);
   expect(storage.getItem(mine)).toBe("my draft");
+});
+
+it("shows milestones only, says You for the viewer's own signature and groups one minute", () => {
+  const row = (
+    at: string,
+    kind: TimelineItem["kind"],
+    detail: TimelineItem["detail"] = {},
+  ): TimelineItem => ({ at, kind, actor: null, subjectId: null, detail });
+  const items = threadItems({
+    messages: [],
+    proposals: [],
+    viewer: {
+      capacity: "recipient",
+      email: "jordan@client.test",
+      recipientId: "r-1",
+      isRequiredSigner: true,
+      hasSigned: true,
+    },
+    timeline: [
+      row("2026-10-11T10:00:00.000Z", "agreement_created"),
+      row("2026-10-11T10:00:10.000Z", "revision_published", { number: 2, sha256: "ab" }),
+      row("2026-10-11T10:05:00.000Z", "signature_recorded", { recipientId: "r-1", name: "Jordan" }),
+      row("2026-10-11T10:05:30.000Z", "signature_recorded", { recipientId: "r-2", name: "Morgan" }),
+      row("2026-10-11T10:05:30.000Z", "signing_completed"),
+    ],
+  });
+  expect(items.map((item) => (item.kind === "activity" ? item.lines : []))).toEqual([
+    ["Revision 2 published"],
+    ["You signed", "Morgan signed", "Everyone signed"],
+  ]);
 });
