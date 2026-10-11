@@ -1,0 +1,8 @@
+*.md
+tools/
+pnpm-lock.yaml
+apps/web/next-env.d.ts
+.next
+packages/core/schema/*.sql
+playwright-report
+test-results

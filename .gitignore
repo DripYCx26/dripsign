@@ -2,8 +2,12 @@ node_modules/
 .next/
 dist/
 coverage/
+*.tsbuildinfo
 .env
 .env.*
 !.env.example
-*.tsbuildinfo
+.data/
+playwright-report/
+test-results/
 .DS_Store
+*.log

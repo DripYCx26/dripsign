@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# The local and hosted gate. Stages: static, types, test, build, e2e. No argument runs
+# static types test build; e2e runs only when named.
+set -euo pipefail
+
+root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$root_dir"
+
+stage="${1:-default}"
+case "$stage" in
+  default | static | types | test | build | e2e) ;;
+  *)
+    echo "usage: tools/ci [static|types|test|build|e2e]" >&2
+    exit 2
+    ;;
+esac
+runs() { [ "$stage" = default ] || [ "$stage" = "$1" ]; }
+
+if runs static; then
+  echo "== static"
+  pnpm exec prettier --check .
+  pnpm exec eslint .
+  node tools/check-docs.mjs
+  node --test tools/*.test.mjs
+  git diff --check
+fi
+
+if runs types; then
+  echo "== types"
+  pnpm -r run typecheck
+fi
+
+if runs test; then
+  echo "== test"
+  # Hosted CI supplies its own Postgres service on the same port.
+  [ -n "${CI:-}" ] || docker compose up -d --wait postgres
+  pnpm exec vitest run
+fi
+
+if runs build; then
+  echo "== build"
+  pnpm --filter @dripsign/web build
+fi
+
+if [ "$stage" = e2e ]; then
+  echo "== e2e"
+  pnpm exec playwright test
+fi

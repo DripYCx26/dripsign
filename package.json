@@ -2,12 +2,37 @@
   "name": "dripsign",
   "private": true,
   "type": "module",
-  "engines": {
-    "node": "24.x"
-  },
   "packageManager": "pnpm@10.34.6",
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
-    "type-check": "pnpm -r type-check",
-    "build": "pnpm -r build"
+    "dev": "node tools/dev.mjs",
+    "seed": "pnpm --filter @dripsign/core cli seed",
+    "db:reset": "pnpm --filter @dripsign/core cli reset",
+    "test": "vitest run",
+    "e2e": "playwright test",
+    "ci": "tools/ci",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.63.0",
+    "@types/node": "24.12.0",
+    "eslint": "10.12.0",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.13.0",
+    "prettier": "3.9.10",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.71.1",
+    "vitest": "5.0.3"
+  },
+  "prettier": {
+    "printWidth": 100
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": []
   }
 }

@@ -1,102 +1,75 @@
 # Decisions
 
+Dated product and architecture decisions. A newer entry supersedes an older one where they
+conflict; superseded text is deleted rather than kept as history (Git holds it).
+
+## 2026-10-11: V1 architecture after the simplification review
+
+**Context.** A harsh three-lane review of the first build (data and jobs, web and auth, UI and
+docs) found one blocker and a pattern. The blocker: an archive job could end failed with no
+requeue, leaving a fully signed agreement in `signing` forever. The pattern: rules in several
+homes (validation limits in three places, staff identity in an env var and a table, duplicated
+bridge routes), a five-level store inheritance chain, reads taking row locks, and no way to run
+the product without AWS.
+
+**Council.** Two blind designs (Opus, Sonnet), judged by a fresh Sol instance. Selected: keep a
+Next-free `packages/core` beside `apps/web`, keep tenancy, implement the Dreach host contracts.
+Grafted from the other design: one command-receipt table as the only idempotency mechanism.
+
+**Decided.**
+- Two packages. `packages/core` holds schema, domain, PDF, adapters, worker and CLI;
+  `apps/web` holds pages, server actions and components. `packages/db`, `packages/ui` and
+  `apps/jobs` are gone.
+- One baseline schema edited in place until the first production deploy; no migration chain.
+- Identity is a verified email. Staff and recipient capacity are resolved per route on every
+  request, so one person can be both. Staff membership lives only in the `staff` table.
+- One policy function decides allowed actions for views and commands alike.
+- Reads take no row locks; document-shaping commands fence on the agreement version.
+- The last signature enqueues archival in the same transaction, and archival never becomes
+  terminal. A sweep re-enqueues any finalizing round that has no live job.
+- Only a required signer of the live round can close it by proposing a change.
+- Uploaded PDFs are parsed only in the worker.
+- AI suggestions are optional, staff-private, budgeted, and never triggered by recipients.
+- Local development needs Docker only: Postgres, Mailpit, file storage, and a dev sign-in that
+  runs the real code path and cannot start in production.
+- The Dreach integration uses Dreach's published contracts: an Ed25519 staff assertion posted to
+  `/api/bridge/session` and an Ed25519-signed executed event. The earlier HMAC request bridge is
+  removed. Both are off unless `DRIPSIGN_HOST` is set.
+
+**Rejected.** One package without tenancy (cheaper now, costly to reverse, and drops isolation
+the old schema already enforced). Cutting host integration (Dreach PD-25 keeps the bridge and
+webhook, and Dreach's half already exists). Jobs inside the web process (couples leases to hot
+reload and puts untrusted PDF parsing in web requests).
+
+**Residual risk.** Dreach DRE-201 is still marked proposed; if its contract changes, the host
+module changes with it. At-least-once email may duplicate a message after a crash. A permanent
+storage fault needs an operator; archival retries but cannot repair configuration.
+
+## 2026-10-11: V1 interface
+
+**Council.** Two blind designs (Opus, Sonnet), judged by a fresh Fable instance. Selected the
+design grounded in verified client defects (composer state lost on refresh, a new idempotency key
+on every retry, re-verification that signed people out). Grafted: workspace tab and revision in
+the URL.
+
+**Decided.** One app with role-prefixed routes; a status-driven primary action from one pure
+function; a reading view plus the exact PDF rendered with pdf.js and signature field markers; a
+focused review-and-sign flow with a live signature preview in the font the signed PDF embeds;
+re-verification as an inline code step; the visual language shared with Dreach under DripSign's
+own name.
+
 ## 2026-10-07: DripSign signs agreements itself
 
-Michael rejected DocuSeal as DripSign's signer. DripSign verifies the invited
-email, records a typed-name signature and explicit consent against one frozen
-PDF revision, then produces the signed PDF and audit record from those records.
-The final required signature closes negotiation immediately. Artifact creation
-may finish later; the agreement becomes signed only after both files are stored.
+DripSign verifies the invited email, records a typed-name signature and explicit consent against
+one frozen PDF revision, then produces the signed PDF and audit record from those records. The
+signed PDF is an electronic-signature rendition, not certificate-based PDF signing or independent
+timestamping. A KMS evidence seal and S3 Object Lock were rejected for launch: they add key and
+retention operations without an established pilot requirement.
 
-The shared chat sits left of the PDF on desktop. A recipient may propose a
-change while signing is still open. That action closes the unfinished signing
-round in the same transaction and keeps any earlier signatures as evidence of
-the closed round. A completed round requires a separate amendment. AI may draft
-a private candidate from a proposal. Staff must review the wording and PDF and
-explicitly publish a new immutable revision before anyone signs it. Uploaded
-PDFs require a staff-supplied replacement unless staff first adopts editable
-source. The public dreach.ai website is outside this change; DripSign uses its
-visual language without copying another product's name, assets, or copy.
+A recipient may propose a change while signing is open; that closes the unfinished round and keeps
+earlier signatures as evidence. A completed agreement needs a separate amendment. AI may draft a
+private candidate; staff review it and publish a new immutable revision before anyone signs.
+Uploaded PDFs are never rewritten; staff upload a replacement.
 
-The selected design uses database signature evidence and deterministic PDF
-archival. Names must be renderable in the signed PDF before a signature is
-accepted. The rejected alternative adds a KMS evidence seal and S3 Object Lock
-at launch; those add key and retention operations without an established pilot
-requirement. The signed PDF is an electronic-signature rendition, not a claim
-of certificate-based PDF signing or independent timestamping.
-
-This supersedes the DocuSeal submission, callback, signing URL, and provider
-reconciliation portions of the decision below. Existing provider rounds, if
-any, must be inventoried and preserved before release. Deployment, SES sending
-readiness, legal template review, and a controlled signing run remain release
-gates. After native signatures exist, rollback must retain native support.
-
-## 2026-10-07: One signing service with a host application bridge (historical provider plan)
-
-DripSign owns agreement documents, proposals, issued revisions, required
-signers, provider submissions, and archived evidence. Its standalone portal is
-available to invited recipients. A host application may mount the shared staff
-interface and call a narrow DripSign API through a server-side identity bridge.
-The bridge names the actor, tenant, resource, operation, request body, and
-expiry; DripSign verifies each request and checks its own authorization rules.
-
-For Dreach, the staff entry is `app.dreach.ai/sign` and the public site is
-`dripsign.com`. The public domain's DNS is pending. Production credentials,
-account identifiers, and deployment authority stay in private configuration.
-A private release manifest pins the DripSign image, shared interface package,
-API compatibility version, and Dreach image. The two runtimes must tolerate a
-partial release and support rollback against the same DripSign database.
-
-Accepting a change updates a private working draft. A separate staff publish
-action creates an immutable revision. An agreement is complete only when every
-required signer has signed that exact revision and the signed document and
-audit evidence have been archived.
-
-Only one proposal can await a response on a published revision. A counter
-supersedes it and gives the other side the next decision. Either side may
-accept wording proposed by the other side. Acceptance stages the change
-privately; staff preview and publish it. Ordinary messages never change the
-document. Stale proposals and versions are refused. An active signing round
-must be confirmed cancelled before the document changes. A completed
-agreement needs a separate amendment.
-
-Recipients verify their exact granted email. Every read, proposal, signature
-action, and download checks the current grant. Every DocuSeal signer also
-verifies an email code before accessing the signing document. DripSign sends
-the invitation; DocuSeal signature request emails remain disabled.
-A host bridge assertion binds
-the staff member, tenant, resource, operation, method, path, body hash,
-audience, nonce, and short expiry. DripSign consumes the nonce atomically,
-rechecks membership and scope, and uses a separate idempotency key for
-mutations. The host browser never receives the bridge signing secret.
-
-A published PDF includes its standard signature page and field positions, so
-staff can preview the exact bytes before inviting signatures. The original
-uploaded PDF is preserved separately. The published revision stores the field
-positions and signer set; the signing request cannot substitute either.
-
-A signing round freezes the revision hash and required signer identities. A
-provider creation timeout remains uncertain until reconciled; the app never
-blindly creates a second submission. Authenticated, deduplicated provider
-events and bounded reconciliation update signer progress. The signed document
-and audit record are archived before a generic executed event is queued for
-idempotent delivery to the host application.
-
-Uploaded PDFs remain immutable. A sender can replace one with a new reviewed
-PDF. Automatic clause edits require a separately adopted editable source;
-there is no claim that arbitrary PDFs can be rewritten faithfully.
-
-This replaces the proposed contract backend in the unreleased Dreach portal
-draft. Dreach retains its staff identity checks and a private deal mapping,
-and consumes an idempotent executed event. The signing service does not read
-Dreach's business tables.
-
-The rejected alternative was to publish the existing private portal as the
-DripSign product. That would leave DripSign dependent on Dreach's database,
-authentication, and release cycle. A second signing backend was also rejected
-because two writers could disagree about the operative revision or signature
-state.
-
-Residual risks are cross-service authorization, negotiation and signing races,
-provider uncertainty, and partial deployments. They require explicit state
-transitions and release checks before a live invitation is sent.
+Release gates outside this repository: deployment, SES production sending, legal review of the
+consent text and templates, and a controlled signing run.

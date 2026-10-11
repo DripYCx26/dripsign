@@ -1,0 +1,29 @@
+# Local services for `pnpm dev` and the database tests. No AWS.
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: dripsign
+      POSTGRES_PASSWORD: dripsign
+      POSTGRES_DB: dripsign
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - dripsign-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dripsign -d dripsign"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  mailpit:
+    image: axllent/mailpit:v1.29
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+volumes:
+  dripsign-pgdata:
