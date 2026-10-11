@@ -1,0 +1,285 @@
+/* DripSign visual system. The only source of colour, type, space, radius, depth and motion in
+   product code. Faces load through next/font in the root layout, which sets --ds-face-geist,
+   --ds-face-newsreader and --ds-face-geist-mono on <html>; without them each stack falls back to
+   system faces. Light first; dark follows prefers-color-scheme only (no toggle). The light block
+   also applies to [data-paper], so a document page stays light on a dark device. Sizes and
+   durations are design constants. */
+
+:root {
+  /* Faces: Geist for the interface, Newsreader for display, Geist Mono for evidence data. */
+  --ds-font:
+    var(--ds-face-geist, "Geist"), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --ds-font-display: var(--ds-face-newsreader, "Newsreader"), Georgia, "Times New Roman", serif;
+  --ds-mono:
+    var(--ds-face-geist-mono, "Geist Mono"), ui-monospace, "Cascadia Code", "SFMono-Regular", Menlo,
+    monospace;
+
+  /* Type scale, size with its line height: meta, cells, body, claims, dialog titles. */
+  --ds-text-xs: 12px;
+  --ds-leading-xs: 16px;
+  --ds-text-sm: 13px;
+  --ds-leading-sm: 18px;
+  --ds-text-md: 14px;
+  --ds-leading-md: 20px;
+  --ds-text-lg: 16px;
+  --ds-leading-lg: 24px;
+  --ds-text-xl: 20px;
+  --ds-leading-xl: 28px;
+
+  /* Display scale, Newsreader only: page titles, the employer on a packet, sign-in and first run. */
+  --ds-display-sm: 24px;
+  --ds-display-sm-leading: 30px;
+  --ds-display-md: 30px;
+  --ds-display-md-leading: 36px;
+  --ds-display-lg: 40px;
+  --ds-display-lg-leading: 46px;
+  --ds-tracking-display: -0.01em;
+
+  /* Weights: body, controls, emphasis, and the one weight display type is drawn at. */
+  --ds-weight-regular: 400;
+  --ds-weight-medium: 500;
+  --ds-weight-semibold: 600;
+  --ds-weight-display: 500;
+
+  /* Space, on a 4 px step with one 2 px half step for chip and bar gaps. */
+  --ds-space-half: 2px;
+  --ds-space-1: 4px;
+  --ds-space-2: 8px;
+  --ds-space-3: 12px;
+  --ds-space-4: 16px;
+  --ds-space-5: 20px;
+  --ds-space-6: 24px;
+  --ds-space-8: 32px;
+  --ds-space-10: 40px;
+  --ds-space-14: 56px;
+
+  /* Shape: evidence tags, controls, cards, sheets and dialogs, status pills. */
+  --ds-radius-tag: 4px;
+  --ds-radius-control: 6px;
+  --ds-radius-card: 10px;
+  --ds-radius-panel: 14px;
+  --ds-radius-pill: 999px;
+
+  /* Sizes: control heights, row heights (a list's, a table's, a compact table's), pointer targets
+     and icon boxes. */
+  --ds-size-control-sm: 28px;
+  --ds-size-control-md: 36px;
+  --ds-size-control-lg: 44px;
+  --ds-size-row-list: 64px;
+  --ds-size-row: 40px;
+  --ds-size-row-compact: 36px;
+  --ds-size-target-min: 24px;
+  --ds-size-icon-inline: 14px;
+  --ds-size-icon: 16px;
+  --ds-size-icon-tile: 20px;
+  --ds-icon-stroke: 1.75;
+
+  /* The sheet of paper an agreement is read and signed on: white in both themes. */
+  --ds-paper: #ffffff;
+
+  /* A list row's height and block padding. */
+  --ds-row-height: var(--ds-size-row-list);
+  --ds-row-pad: var(--ds-space-3);
+
+  /* Layout: the rail, the list pane, the reading width, the header and the narrow-screen drawer;
+     the document column, the focused signing flow, and the development banner. */
+  --ds-layout-rail: 216px;
+  --ds-layout-rail-collapsed: 56px;
+  --ds-layout-list: 400px;
+  --ds-layout-sheet-max: 760px;
+  --ds-layout-sheet-narrow: 440px;
+  --ds-layout-reading: 720px;
+  --ds-layout-entry: 400px;
+  --ds-layout-header: 56px;
+  --ds-layout-drawer: 640px;
+  --ds-layout-document-max: 880px;
+  --ds-layout-flow: 640px;
+  --ds-layout-dev-bar: 32px;
+
+  /* Motion that explains: a press, a control changing, a panel arriving, work in progress. */
+  --ds-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ds-ease-exit: cubic-bezier(0.5, 0, 0.75, 0);
+  --ds-motion-press: 80ms;
+  --ds-motion-quick: 140ms;
+  --ds-motion-panel: 220ms;
+  --ds-motion-loop: 1600ms;
+
+  /* Ready-made animations over the keyframes in base.css; use as `animation: var(--ds-anim-enter)`.
+     enter: a menu, notice or card arriving; leave: a notice going before its component removes it;
+     slide: the packet or a drawer arriving from the right; shimmer: a skeleton over --ds-skeleton;
+     pulse: the working dot only; spin: a saving icon. */
+  --ds-anim-enter: ds-enter var(--ds-motion-panel) var(--ds-ease-enter) both;
+  --ds-anim-leave: ds-leave var(--ds-motion-quick) var(--ds-ease-exit) both;
+  --ds-anim-slide: ds-slide var(--ds-motion-panel) var(--ds-ease-enter) both;
+  --ds-anim-shimmer: ds-shimmer var(--ds-motion-loop) linear infinite;
+  --ds-anim-pulse: ds-pulse var(--ds-motion-loop) ease-in-out infinite;
+  --ds-anim-spin: ds-spin calc(var(--ds-motion-loop) / 2) linear infinite;
+}
+
+/* Coarse pointers: every control reaches a 44 px target. */
+@media (pointer: coarse) {
+  :root {
+    --ds-size-control-sm: 44px;
+    --ds-size-control-md: 44px;
+    --ds-size-target-min: 44px;
+  }
+}
+
+/* Light theme: the default, and any [data-paper] subtree. */
+:root,
+[data-paper] {
+  color-scheme: light;
+
+  /* Surfaces, back to front: the page, panes and fields, floating layers, wells and tracks, scrim. */
+  --ds-canvas: #f5f4f0;
+  --ds-surface: #ffffff;
+  --ds-surface-raised: #ffffff;
+  --ds-surface-subtle: #edebe5;
+  --ds-scrim: rgb(22 23 27 / 32%);
+
+  /* Text in three steps; each passes 4.5:1 on every surface and on accent-soft. */
+  --ds-text: #16171b;
+  --ds-text-secondary: #52535b;
+  --ds-text-tertiary: #64656c;
+
+  /* Lines: a decorative hairline, and a field's edge at 3:1 on every surface. */
+  --ds-border: #e2dfd7;
+  --ds-border-strong: #858279;
+  --ds-hairline: 1px solid var(--ds-border);
+
+  /* Ink: the primary action and the operator chrome, with text and muted text on it. */
+  --ds-ink: #16171b;
+  --ds-ink-hover: #2e2f35;
+  --ds-on-ink: #ffffff;
+  --ds-on-ink-muted: #a3a29c;
+
+  /* One accent: selection, focus, links and New; never a domain state. */
+  --ds-accent: #0a6a7a;
+  --ds-accent-hover: #08566a;
+  --ds-accent-soft: #e0eff1;
+  --ds-on-accent: #ffffff;
+  --ds-focus: var(--ds-accent);
+  --ds-ring: 0 0 0 3px rgb(10 106 122 / 24%);
+
+  /* Tones, solid and soft, used only under [data-tone] and always with a word and an icon. */
+  --ds-confirm: #17703f;
+  --ds-confirm-soft: #e4f3e9;
+  --ds-attention: #8a5a00;
+  --ds-attention-soft: #faefd8;
+  --ds-stop: #b42335;
+  --ds-stop-soft: #fceaec;
+  --ds-quiet: #5b6270;
+  --ds-quiet-soft: #eceef1;
+
+  /* Lead status, solid (word, dot, edge) and soft (pill), used only under [data-status]. */
+  --ds-status-new: #0a6a7a;
+  --ds-status-new-soft: #e0eff1;
+  --ds-status-working: #2453b8;
+  --ds-status-working-soft: #e8eefb;
+  --ds-status-won: #17703f;
+  --ds-status-won-soft: #e4f3e9;
+  --ds-status-passed: #5e6068;
+  --ds-status-passed-soft: #ededeb;
+
+  /* Depth: hairlines carry cards; shadows only for a pressed knob, floating layers and dialogs. */
+  --ds-shadow-press: 0 1px 2px rgb(22 23 27 / 8%);
+  --ds-shadow-float: 0 12px 32px -12px rgb(22 23 27 / 20%), 0 0 0 1px rgb(22 23 27 / 6%);
+  --ds-shadow-modal: 0 24px 64px -16px rgb(22 23 27 / 28%), 0 0 0 1px rgb(22 23 27 / 6%);
+
+  /* The skeleton's band: pair with background-size: 200% 100% and --ds-anim-shimmer. */
+  --ds-skeleton: linear-gradient(
+    90deg,
+    var(--ds-surface-subtle) 30%,
+    var(--ds-border) 50%,
+    var(--ds-surface-subtle) 70%
+  );
+}
+
+/* Dark theme on a dark device; [data-paper] subtrees keep the light values above. The hairline,
+   focus and skeleton tokens are built from these, so they follow without a copy. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --ds-canvas: #0f1012;
+    --ds-surface: #16171a;
+    --ds-surface-raised: #1c1d21;
+    --ds-surface-subtle: #222328;
+    --ds-scrim: rgb(0 0 0 / 60%);
+    --ds-text: #edece8;
+    --ds-text-secondary: #abaaa4;
+    --ds-text-tertiary: #93928d;
+    --ds-border: #2b2c31;
+    --ds-border-strong: #6f6e6a;
+    --ds-ink: #edece8;
+    --ds-ink-hover: #d6d5d0;
+    --ds-on-ink: #121315;
+    --ds-on-ink-muted: #5a5b61;
+    --ds-accent: #5bc3d3;
+    --ds-accent-hover: #84d5e1;
+    --ds-accent-soft: #0e2a32;
+    --ds-on-accent: #0b1a1d;
+    --ds-ring: 0 0 0 3px rgb(91 195 211 / 32%);
+    --ds-confirm: #5dcb8a;
+    --ds-confirm-soft: #12291c;
+    --ds-attention: #e9b44c;
+    --ds-attention-soft: #2e2410;
+    --ds-stop: #ff8a97;
+    --ds-stop-soft: #3a161b;
+    --ds-quiet: #a6acb7;
+    --ds-quiet-soft: #24272c;
+    --ds-status-new: #5bc3d3;
+    --ds-status-new-soft: #0e2a32;
+    --ds-status-working: #8db0ff;
+    --ds-status-working-soft: #17233f;
+    --ds-status-won: #5dcb8a;
+    --ds-status-won-soft: #12291c;
+    --ds-status-passed: #a3a4ab;
+    --ds-status-passed-soft: #26272c;
+    --ds-shadow-press: 0 1px 2px rgb(0 0 0 / 50%);
+    --ds-shadow-float: 0 16px 40px -12px rgb(0 0 0 / 64%), 0 0 0 1px rgb(255 255 255 / 6%);
+    --ds-shadow-modal: 0 28px 72px -16px rgb(0 0 0 / 72%), 0 0 0 1px rgb(255 255 255 / 7%);
+  }
+}
+
+/* Reduced motion: every duration zero and every ready-made animation off. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ds-motion-press: 0ms;
+    --ds-motion-quick: 0ms;
+    --ds-motion-panel: 0ms;
+    --ds-motion-loop: 0ms;
+    --ds-anim-enter: none;
+    --ds-anim-leave: none;
+    --ds-anim-slide: none;
+    --ds-anim-shimmer: none;
+    --ds-anim-pulse: none;
+    --ds-anim-spin: none;
+  }
+}
+
+/* Agreement status, as a colour pair any element reads once it carries data-status. Never colour
+   alone: the Pill pairs each with a word and an icon. */
+[data-status="draft"] {
+  --ds-status-fg: var(--ds-quiet);
+  --ds-status-bg: var(--ds-quiet-soft);
+}
+
+[data-status="review"] {
+  --ds-status-fg: var(--ds-status-working);
+  --ds-status-bg: var(--ds-status-working-soft);
+}
+
+[data-status="signing"] {
+  --ds-status-fg: var(--ds-attention);
+  --ds-status-bg: var(--ds-attention-soft);
+}
+
+[data-status="signed"] {
+  --ds-status-fg: var(--ds-confirm);
+  --ds-status-bg: var(--ds-confirm-soft);
+}
+
+[data-status="void"] {
+  --ds-status-fg: var(--ds-status-passed);
+  --ds-status-bg: var(--ds-status-passed-soft);
+}

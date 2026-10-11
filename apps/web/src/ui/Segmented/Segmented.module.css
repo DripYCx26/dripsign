@@ -1,0 +1,73 @@
+/* Native radios drawn as a segmented control: a subtle well, each option a face over an invisible
+   radio; the chosen face is raised. Faces reach the control height (44 on a coarse pointer). */
+
+.group {
+  display: grid;
+  min-width: 0;
+  gap: var(--ds-space-1);
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.legend {
+  composes: label from "../TextField/TextField.module.css";
+  padding: 0;
+}
+
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-self: start;
+  gap: var(--ds-space-half);
+  border-radius: var(--ds-radius-control);
+  background: var(--ds-surface-subtle);
+  padding: var(--ds-space-half);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+}
+
+.option {
+  position: relative;
+  display: inline-grid;
+  cursor: pointer;
+}
+
+.input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+
+.face {
+  display: inline-flex;
+  min-height: calc(var(--ds-size-control-md) - var(--ds-space-half) * 2);
+  align-items: center;
+  border-radius: var(--ds-radius-tag);
+  padding: 0 var(--ds-space-3);
+  color: var(--ds-text-secondary);
+  transition: background-color var(--ds-motion-quick) var(--ds-ease-enter);
+}
+
+.option:hover .face {
+  color: var(--ds-text);
+}
+
+.input:checked + .face {
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-press);
+  color: var(--ds-text);
+  font-weight: var(--ds-weight-medium);
+}
+
+.input:focus-visible + .face {
+  outline: var(--ds-space-half) solid var(--ds-focus);
+  outline-offset: var(--ds-space-half);
+}
+
+.input:disabled + .face {
+  color: var(--ds-text-tertiary);
+  cursor: not-allowed;
+}

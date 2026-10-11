@@ -1,0 +1,68 @@
+/* The labelled field every text control shares: the label above, a bordered surface at 3:1 that
+   takes the focus ring, the hint and the error below. TextArea, Select, Segmented and CodeField
+   compose `.label` and `.input` from here. */
+
+.field {
+  display: grid;
+  min-width: 0;
+  gap: var(--ds-space-1);
+}
+
+.label {
+  color: var(--ds-text);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-medium);
+  line-height: var(--ds-leading-sm);
+}
+
+.input {
+  composes: tone from "../Tone/Tone.module.css";
+  min-width: 0;
+  min-height: var(--ds-size-control-md);
+  border: 1px solid var(--ds-border-strong);
+  border-radius: var(--ds-radius-control);
+  background: var(--ds-surface);
+  padding: 0 var(--ds-space-3);
+  color: var(--ds-text);
+  transition: border-color var(--ds-motion-quick) var(--ds-ease-enter);
+}
+
+.input[data-size="lg"] {
+  min-height: var(--ds-size-control-lg);
+  font-size: var(--ds-text-lg);
+}
+
+.input::placeholder {
+  color: var(--ds-text-tertiary);
+}
+
+/* The ring replaces the outline; a transparent outline survives forced-colours mode. */
+.input:focus-visible {
+  border-color: var(--ds-focus);
+  outline-color: transparent;
+  box-shadow: var(--ds-ring);
+}
+
+.input[data-tone="stop"] {
+  border-color: var(--tone-fg);
+}
+
+.input:disabled {
+  border-color: var(--ds-border);
+  background: var(--ds-surface-subtle);
+  color: var(--ds-text-tertiary);
+  cursor: not-allowed;
+}
+
+.hint {
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+}
+
+.error {
+  composes: tone from "../Tone/Tone.module.css";
+  color: var(--tone-fg);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+}

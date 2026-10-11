@@ -1,0 +1,22 @@
+/* The mark: the drop and line in the accent beside the display-face name; no margin of its own. */
+
+.mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-xl);
+  font-weight: var(--ds-weight-display);
+  letter-spacing: var(--ds-tracking-display);
+  line-height: var(--ds-leading-xl);
+}
+
+.glyph {
+  width: 1em;
+  height: 1em;
+  fill: none;
+  stroke: var(--ds-accent);
+  stroke-width: var(--ds-icon-stroke);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

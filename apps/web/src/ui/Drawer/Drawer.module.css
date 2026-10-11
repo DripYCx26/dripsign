@@ -1,0 +1,33 @@
+/* A full-height panel against the inline end, 440 or 640 wide, sliding in. */
+
+.drawer {
+  composes: panel from "../Modal/Modal.module.css";
+  inset: 0 0 0 auto;
+  width: min(100%, var(--ds-layout-sheet-narrow));
+  height: 100dvh;
+  margin: 0;
+  padding: var(--ds-space-6);
+  border-left: var(--ds-hairline);
+}
+
+.drawer[data-width="640"] {
+  width: min(100%, var(--ds-layout-drawer));
+}
+
+.drawer[open] {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--ds-space-4);
+  animation: var(--ds-anim-slide);
+}
+
+.body {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+@media (max-width: 639px) {
+  .drawer {
+    padding: var(--ds-space-4);
+  }
+}

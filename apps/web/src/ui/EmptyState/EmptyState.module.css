@@ -1,0 +1,9 @@
+/* An empty state: the sentence and the one action that fills the page; no illustration. */
+
+.empty {
+  display: grid;
+  justify-items: start;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-6) var(--ds-space-4);
+  color: var(--ds-text-secondary);
+}

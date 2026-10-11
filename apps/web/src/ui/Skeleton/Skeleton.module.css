@@ -1,0 +1,36 @@
+/* A loading placeholder at the height of what it stands for: a line at one of four widths; the
+   band shimmers unless motion is reduced. A row holds two lines at the list row height. */
+
+.skeleton {
+  display: block;
+  height: var(--ds-space-3);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-skeleton);
+  background-size: 200% 100%;
+  animation: var(--ds-anim-shimmer);
+}
+
+.skeleton[data-width="30"] {
+  width: 30%;
+}
+
+.skeleton[data-width="50"] {
+  width: 50%;
+}
+
+.skeleton[data-width="70"] {
+  width: 70%;
+}
+
+.skeleton[data-width="90"] {
+  width: 90%;
+}
+
+.row {
+  display: grid;
+  min-height: var(--ds-row-height);
+  align-content: center;
+  gap: var(--ds-space-2);
+  padding: var(--ds-row-pad) var(--ds-space-4);
+  border-bottom: var(--ds-hairline);
+}

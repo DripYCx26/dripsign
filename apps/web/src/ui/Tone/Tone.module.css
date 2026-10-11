@@ -1,0 +1,30 @@
+/* The one map from a tone or an agreement status to its colour pair. A component that colours by
+   tone or status composes `.tone`, sets data-tone or data-status, and reads --tone-fg and
+   --tone-bg; the colour tokens are never read outside these selectors. Info is the neutral
+   tone: the accent marks selection and links, never a state. */
+
+.tone[data-tone="info"] {
+  --tone-fg: var(--ds-quiet);
+  --tone-bg: var(--ds-quiet-soft);
+}
+
+.tone[data-tone="confirm"] {
+  --tone-fg: var(--ds-confirm);
+  --tone-bg: var(--ds-confirm-soft);
+}
+
+.tone[data-tone="attention"] {
+  --tone-fg: var(--ds-attention);
+  --tone-bg: var(--ds-attention-soft);
+}
+
+.tone[data-tone="stop"] {
+  --tone-fg: var(--ds-stop);
+  --tone-bg: var(--ds-stop-soft);
+}
+
+/* --ds-status-* come from tokens.css under the same [data-status] attribute. */
+.tone[data-status] {
+  --tone-fg: var(--ds-status-fg);
+  --tone-bg: var(--ds-status-bg);
+}

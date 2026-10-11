@@ -1,0 +1,35 @@
+/* The notice box: a soft tone well with the tone's icon and stacked words. The tone colours come
+   from Tone's one map, composed, through --tone-fg and --tone-bg. */
+
+.notice {
+  composes: tone from "../Tone/Tone.module.css";
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-3) var(--ds-space-4);
+  border-radius: var(--ds-radius-card);
+  background: var(--tone-bg);
+  color: var(--ds-text);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+  animation: var(--ds-anim-enter);
+}
+
+.icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--tone-fg);
+}
+
+.icon > svg {
+  width: var(--ds-size-icon);
+  height: var(--ds-size-icon);
+  stroke-width: var(--ds-icon-stroke);
+}
+
+.body {
+  display: grid;
+  min-width: 0;
+  justify-items: start;
+  gap: var(--ds-space-1);
+}

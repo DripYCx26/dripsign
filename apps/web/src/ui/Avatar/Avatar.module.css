@@ -1,0 +1,15 @@
+/* A person's avatar: initials in a 32 circle on subtle. */
+
+.avatar {
+  display: grid;
+  flex: none;
+  width: var(--ds-space-8);
+  height: var(--ds-space-8);
+  place-items: center;
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-subtle);
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-semibold);
+  line-height: var(--ds-leading-xs);
+}

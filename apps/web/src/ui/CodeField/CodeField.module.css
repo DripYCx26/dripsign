@@ -1,0 +1,17 @@
+/* Six single-digit boxes on the shared field surface, in the mono face. */
+
+.code {
+  display: inline-flex;
+  gap: var(--ds-space-2);
+}
+
+.cell {
+  composes: input from "../TextField/TextField.module.css";
+  width: var(--ds-size-control-lg);
+  min-height: var(--ds-size-control-lg);
+  padding: 0;
+  font-family: var(--ds-mono);
+  font-size: var(--ds-text-xl);
+  line-height: var(--ds-leading-xl);
+  text-align: center;
+}

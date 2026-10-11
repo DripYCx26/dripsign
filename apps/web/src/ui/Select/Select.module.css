@@ -1,0 +1,25 @@
+/* A native select drawn as the shared field: the platform arrow removed and the chevron drawn
+   over the right edge, where it takes no pointer. */
+
+.wrap {
+  position: relative;
+  display: grid;
+}
+
+.select {
+  composes: input from "../TextField/TextField.module.css";
+  appearance: none;
+  padding-right: calc(var(--ds-space-3) + var(--ds-size-icon) + var(--ds-space-2));
+}
+
+.chevron {
+  position: absolute;
+  top: 50%;
+  right: var(--ds-space-3);
+  width: var(--ds-size-icon);
+  height: var(--ds-size-icon);
+  translate: 0 -50%;
+  color: var(--ds-text-secondary);
+  pointer-events: none;
+  stroke-width: var(--ds-icon-stroke);
+}

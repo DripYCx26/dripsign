@@ -1,0 +1,35 @@
+/* The confirmation: the shared panel at the narrow sheet width, centred. */
+
+.dialog {
+  composes: panel from "../Modal/Modal.module.css";
+  width: min(100% - 2 * var(--ds-space-4), var(--ds-layout-sheet-narrow));
+  max-height: calc(100dvh - 2 * var(--ds-space-8));
+  margin: auto;
+  padding: var(--ds-space-6);
+  border-radius: var(--ds-radius-panel);
+}
+
+.dialog[open] {
+  display: grid;
+  gap: var(--ds-space-4);
+  animation: var(--ds-anim-enter);
+}
+
+.body {
+  display: grid;
+  gap: var(--ds-space-3);
+  color: var(--ds-text-secondary);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--ds-space-2);
+}
+
+@media (max-width: 639px) {
+  .dialog {
+    padding: var(--ds-space-4);
+  }
+}

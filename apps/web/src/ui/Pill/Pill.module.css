@@ -1,0 +1,27 @@
+/* The pill: a status's or tone's icon and word on its soft colour. Colours come from the tone map
+   in ../Tone/Tone.module.css. */
+
+.pill {
+  composes: tone from "../Tone/Tone.module.css";
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  border-radius: var(--ds-radius-pill);
+  background: var(--tone-bg);
+  padding: var(--ds-space-half) var(--ds-space-2);
+  color: var(--tone-fg);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-semibold);
+  line-height: var(--ds-leading-xs);
+  white-space: nowrap;
+}
+
+.icon {
+  display: inline-flex;
+}
+
+.icon > svg {
+  width: var(--ds-size-icon-inline);
+  height: var(--ds-size-icon-inline);
+  stroke-width: var(--ds-icon-stroke);
+}

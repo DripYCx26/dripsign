@@ -1,0 +1,73 @@
+/* An actions menu: an IconButton trigger and a raised card of items, each an optional icon and a
+   word. Menu.tsx positions the popover from the trigger: --menu-x is the edge it hangs from
+   (the trigger's end, its start when there is no room), --menu-y the trigger's bottom, or its
+   top with --menu-dir and --menu-ty set when the menu rises above. */
+
+.trigger {
+  composes: iconButton from "../IconButton/IconButton.module.css";
+}
+
+.popover {
+  inset: auto;
+  top: calc(var(--menu-y, 0px) + var(--ds-space-1) * var(--menu-dir, 1));
+  left: var(--menu-x, 0px);
+  min-width: max-content;
+  margin: 0;
+  padding: var(--ds-space-1);
+  translate: var(--menu-tx, -100%) var(--menu-ty, 0%);
+  border: 0;
+  border-radius: var(--ds-radius-card);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-float);
+  color: var(--ds-text);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+  transform-origin: top right;
+}
+
+.popover:popover-open {
+  display: grid;
+  animation: var(--ds-anim-enter);
+}
+
+.item {
+  composes: tone from "../Tone/Tone.module.css";
+  display: flex;
+  min-height: var(--ds-size-control-md);
+  align-items: center;
+  gap: var(--ds-space-2);
+  border: 0;
+  border-radius: var(--ds-radius-tag);
+  background: transparent;
+  padding: 0 var(--ds-space-3);
+  color: var(--ds-text);
+  text-align: start;
+  white-space: nowrap;
+}
+
+.item[data-tone="stop"] {
+  color: var(--tone-fg);
+}
+
+.item:enabled:hover,
+.item:focus-visible {
+  background: var(--ds-surface-subtle);
+}
+
+.item:focus-visible {
+  outline-offset: calc(-1 * var(--ds-space-half));
+}
+
+.item:disabled {
+  color: var(--ds-text-tertiary);
+}
+
+.icon {
+  display: inline-flex;
+}
+
+.icon > svg {
+  width: var(--ds-size-icon);
+  height: var(--ds-size-icon);
+  stroke-width: var(--ds-icon-stroke);
+}

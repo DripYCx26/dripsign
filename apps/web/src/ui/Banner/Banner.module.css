@@ -1,0 +1,33 @@
+/* A full-width strip: the tone well of Notice without its radius, a hairline beneath, the action
+   at the end of the line and wrapping under the words on a narrow screen. */
+
+.banner {
+  composes: tone from "../Tone/Tone.module.css";
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2) var(--ds-space-3);
+  padding: var(--ds-space-2) var(--ds-space-4);
+  border-bottom: var(--ds-hairline);
+  background: var(--tone-bg);
+  color: var(--ds-text);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+}
+
+.icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--tone-fg);
+}
+
+.icon > svg {
+  width: var(--ds-size-icon);
+  height: var(--ds-size-icon);
+  stroke-width: var(--ds-icon-stroke);
+}
+
+.body {
+  flex: 1 1 auto;
+  min-width: 0;
+}

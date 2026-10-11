@@ -1,0 +1,69 @@
+/* A switch: the real checkbox lies over a track and knob. On is the accent, as a checked
+   checkbox is; the knob moves by transform only. */
+
+.switch {
+  display: inline-flex;
+  min-height: var(--ds-size-control-md);
+  align-items: center;
+  gap: var(--ds-space-2);
+  cursor: pointer;
+}
+
+.control {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+}
+
+.input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+
+.track {
+  display: block;
+  width: calc(var(--ds-space-10) - var(--ds-space-half) * 2);
+  height: var(--ds-size-icon-tile);
+  padding: var(--ds-space-half);
+  border: 1px solid var(--ds-border-strong);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-subtle);
+  transition:
+    background-color var(--ds-motion-quick) var(--ds-ease-enter),
+    border-color var(--ds-motion-quick) var(--ds-ease-enter);
+}
+
+.track::before {
+  display: block;
+  width: calc(var(--ds-size-icon-tile) - var(--ds-space-half) * 2 - 2px);
+  height: calc(var(--ds-size-icon-tile) - var(--ds-space-half) * 2 - 2px);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-text-secondary);
+  content: "";
+  transition:
+    transform var(--ds-motion-quick) var(--ds-ease-enter),
+    background-color var(--ds-motion-quick) var(--ds-ease-enter);
+}
+
+.input:checked + .track {
+  border-color: var(--ds-accent);
+  background: var(--ds-accent);
+}
+
+.input:checked + .track::before {
+  background: var(--ds-on-accent);
+  transform: translateX(var(--ds-space-4));
+}
+
+.input:focus-visible + .track {
+  outline: var(--ds-space-half) solid var(--ds-focus);
+  outline-offset: var(--ds-space-half);
+}
+
+.input:disabled + .track {
+  border-color: var(--ds-border);
+  opacity: 0.6;
+}

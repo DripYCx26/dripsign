@@ -1,0 +1,21 @@
+/* A multi-line field: the shared field surface two controls tall, and its count under it. */
+
+.area {
+  composes: input from "../TextField/TextField.module.css";
+  min-height: calc(var(--ds-size-control-lg) * 2);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  resize: vertical;
+}
+
+.count {
+  justify-self: end;
+  color: var(--ds-text-tertiary);
+  font-size: var(--ds-text-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--ds-leading-xs);
+}
+
+.count[data-full] {
+  color: var(--ds-text);
+  font-weight: var(--ds-weight-medium);
+}

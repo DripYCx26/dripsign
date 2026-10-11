@@ -1,0 +1,126 @@
+/* The button every action uses: ink leads a screen, secondary and quiet follow, danger removes.
+   Variant and size are data attributes, so IconButton and the Menu trigger compose `.button` and
+   share every state below. */
+
+.button {
+  composes: tone from "../Tone/Tone.module.css";
+  display: inline-flex;
+  min-height: var(--ds-size-control-md);
+  align-items: center;
+  justify-content: center;
+  gap: var(--ds-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--ds-radius-control);
+  background: transparent;
+  padding: 0 var(--ds-space-4);
+  color: var(--ds-text);
+  font-size: var(--ds-text-md);
+  font-weight: var(--ds-weight-medium);
+  line-height: var(--ds-leading-md);
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background-color var(--ds-motion-quick) var(--ds-ease-enter),
+    border-color var(--ds-motion-quick) var(--ds-ease-enter),
+    scale var(--ds-motion-press) var(--ds-ease-enter);
+}
+
+.button > svg {
+  flex: none;
+  width: var(--ds-size-icon);
+  height: var(--ds-size-icon);
+  stroke-width: var(--ds-icon-stroke);
+}
+
+.button:enabled:active {
+  scale: 0.98;
+}
+
+.button[data-size="sm"] {
+  min-height: var(--ds-size-control-sm);
+  padding: 0 var(--ds-space-3);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+}
+
+.button[data-size="lg"] {
+  min-height: var(--ds-size-control-lg);
+  padding: 0 var(--ds-space-5);
+}
+
+.button[data-variant="ink"] {
+  background: var(--ds-ink);
+  color: var(--ds-on-ink);
+}
+
+.button[data-variant="ink"]:enabled:hover {
+  background: var(--ds-ink-hover);
+  color: var(--ds-on-ink);
+}
+
+.button[data-variant="secondary"] {
+  border-color: var(--ds-border-strong);
+  background: var(--ds-surface);
+}
+
+.button[data-variant="quiet"] {
+  color: var(--ds-text-secondary);
+}
+
+.button[data-variant="secondary"]:enabled:hover,
+.button[data-variant="quiet"]:enabled:hover {
+  background: var(--ds-surface-subtle);
+  color: var(--ds-text);
+}
+
+/* An action that reads as a link: the accent, underlined, no box; the target keeps its height. */
+.button[data-variant="link"] {
+  padding-inline: 0;
+  color: var(--ds-accent);
+  text-decoration: underline;
+  text-underline-offset: var(--ds-space-half);
+}
+
+.button[data-variant="link"]:enabled:hover {
+  color: var(--ds-accent-hover);
+}
+
+.button[data-variant="danger"] {
+  background: var(--tone-bg);
+  color: var(--tone-fg);
+}
+
+.button[data-variant="danger"]:enabled:hover {
+  border-color: var(--tone-fg);
+}
+
+/* A toggle that is on: selected on accent soft with the accent edge, kept under the pointer. */
+.button[aria-pressed="true"],
+.button[aria-pressed="true"]:enabled:hover {
+  border-color: var(--ds-accent);
+  background: var(--ds-accent-soft);
+  color: var(--ds-text);
+}
+
+.button:disabled {
+  border-color: var(--ds-border);
+  background: var(--ds-surface-subtle);
+  color: var(--ds-text-tertiary);
+  cursor: not-allowed;
+}
+
+/* A boxless action stays boxless when it cannot act: never heavier than when it can. */
+.button[data-variant="quiet"]:disabled,
+.button[data-variant="link"]:disabled {
+  border-color: transparent;
+  background: transparent;
+}
+
+.button[aria-busy="true"] {
+  cursor: progress;
+  opacity: 0.8;
+}
+
+.spinner {
+  animation: var(--ds-anim-spin);
+}

@@ -1,0 +1,16 @@
+/* A square Button holding one glyph. Every state comes from ../Button/Button.module.css; this
+   module only makes the box square at each size. */
+
+.iconButton {
+  composes: button from "../Button/Button.module.css";
+}
+
+.iconButton[data-size="md"] {
+  width: var(--ds-size-control-md);
+  padding: 0;
+}
+
+.iconButton[data-size="sm"] {
+  width: var(--ds-size-control-sm);
+  padding: 0;
+}

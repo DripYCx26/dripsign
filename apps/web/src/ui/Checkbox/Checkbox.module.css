@@ -1,0 +1,65 @@
+/* A native checkbox drawn as the 20 box: the real input lies over the box, invisible, so it keeps
+   its click, keyboard, form and screen-reader behaviour; the box beside it draws checked, focus
+   and disabled. The label row reaches the control height, 44 on a coarse pointer. */
+
+.checkbox {
+  display: inline-flex;
+  min-height: var(--ds-size-control-md);
+  align-items: center;
+  gap: var(--ds-space-2);
+  cursor: pointer;
+}
+
+.control {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+}
+
+.input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+
+.box {
+  display: grid;
+  width: var(--ds-size-icon-tile);
+  height: var(--ds-size-icon-tile);
+  place-items: center;
+  border: 1px solid var(--ds-border-strong);
+  border-radius: var(--ds-radius-tag);
+  background: var(--ds-surface);
+  color: transparent;
+  transition:
+    background-color var(--ds-motion-quick) var(--ds-ease-enter),
+    border-color var(--ds-motion-quick) var(--ds-ease-enter);
+}
+
+.box > svg {
+  width: var(--ds-size-icon-inline);
+  height: var(--ds-size-icon-inline);
+  stroke-width: var(--ds-icon-stroke);
+}
+
+.input:checked + .box {
+  border-color: var(--ds-accent);
+  background: var(--ds-accent);
+  color: var(--ds-on-accent);
+}
+
+.input:focus-visible + .box {
+  outline: var(--ds-space-half) solid var(--ds-focus);
+  outline-offset: var(--ds-space-half);
+}
+
+.input:disabled + .box {
+  border-color: var(--ds-border);
+  background: var(--ds-surface-subtle);
+}
+
+.input:disabled:checked + .box {
+  color: var(--ds-text-tertiary);
+}

@@ -1,0 +1,26 @@
+/* The raised panel Dialog and Drawer share, over the scrim. The global reset zeroes every margin,
+   so the panels place themselves; the head keeps the title and Close together. */
+
+.panel {
+  max-width: none;
+  max-height: none;
+  border: 0;
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-modal);
+  color: var(--ds-text);
+}
+
+.panel::backdrop {
+  background: var(--ds-scrim);
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ds-space-3);
+}
+
+.title {
+  min-width: 0;
+}

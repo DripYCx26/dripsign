@@ -1,0 +1,37 @@
+/* The header bar: header height, the nav between the brand and the account, and under 640 the
+   nav on a row of its own. */
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2) var(--ds-space-4);
+  min-height: var(--ds-layout-header);
+  padding: var(--ds-space-2) var(--ds-space-4);
+  border-bottom: var(--ds-hairline);
+  background: var(--ds-surface);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+}
+
+.nav {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.account {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  margin-inline-start: auto;
+}
+
+@media (max-width: 639px) {
+  .nav {
+    order: 1;
+    flex-basis: 100%;
+  }
+}

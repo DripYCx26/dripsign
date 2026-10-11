@@ -1,0 +1,166 @@
+/* The global baseline, loaded once after tokens.css in the root layout: a modern reset, the body
+   drawn from the tokens, the focus ring, the display headings, and the keyframes behind
+   --ds-anim-*. Everything else is a component's CSS module. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100dvh;
+  background: var(--ds-canvas);
+  color: var(--ds-text);
+  font-family: var(--ds-font);
+  font-size: var(--ds-text-md);
+  font-weight: var(--ds-weight-regular);
+  line-height: var(--ds-leading-md);
+  -webkit-font-smoothing: antialiased;
+}
+
+img,
+svg,
+video,
+canvas {
+  display: block;
+  max-width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  color: inherit;
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+a {
+  color: var(--ds-accent);
+  text-underline-offset: var(--ds-space-half);
+}
+
+a:hover {
+  color: var(--ds-accent-hover);
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+/* One h1 per page, in the display face; h2 and h3 are interface headings. */
+h1 {
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-display-sm);
+  font-weight: var(--ds-weight-display);
+  letter-spacing: var(--ds-tracking-display);
+  line-height: var(--ds-display-sm-leading);
+}
+
+h2 {
+  font-size: var(--ds-text-xl);
+  font-weight: var(--ds-weight-semibold);
+  line-height: var(--ds-leading-xl);
+}
+
+h3 {
+  font-size: var(--ds-text-lg);
+  font-weight: var(--ds-weight-semibold);
+  line-height: var(--ds-leading-lg);
+}
+
+:focus-visible {
+  outline: var(--ds-space-half) solid var(--ds-focus);
+  outline-offset: var(--ds-space-half);
+}
+
+.ds-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* A document page: the tokens re-declare light for this subtree (tokens.css), and the sheet is
+   white whatever the device prefers. */
+[data-paper] {
+  background: var(--ds-paper);
+  color: var(--ds-text);
+  color-scheme: light;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+@keyframes ds-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes ds-leave {
+  to {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes ds-slide {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+
+@keyframes ds-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@keyframes ds-pulse {
+  50% {
+    opacity: 0.4;
+    transform: scale(0.8);
+  }
+}
+
+@keyframes ds-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

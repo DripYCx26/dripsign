@@ -1,0 +1,8 @@
+/* An evidence time: the mono face, tabular figures, never broken across lines. */
+
+.absolute {
+  font-family: var(--ds-mono);
+  font-size: 0.95em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
