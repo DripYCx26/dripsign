@@ -10,8 +10,46 @@
   color: var(--ds-text);
 }
 
+/* A panel and its scrim enter and exit as transitions: display and overlay keep the closing
+   dialog in the top layer until it has faded. The panel's own offset (Dialog rises, Drawer
+   slides) is set where it is drawn, from --panel-from. */
+.panel {
+  opacity: 0;
+  translate: var(--panel-from, 0 var(--ds-space-2));
+  transition:
+    opacity var(--ds-motion-panel) var(--ds-ease-enter),
+    translate var(--ds-motion-panel) var(--ds-ease-enter),
+    display var(--ds-motion-panel) allow-discrete,
+    overlay var(--ds-motion-panel) allow-discrete;
+}
+
+.panel[open] {
+  opacity: 1;
+  translate: 0 0;
+}
+
 .panel::backdrop {
   background: var(--ds-scrim);
+  opacity: 0;
+  transition:
+    opacity var(--ds-motion-panel) var(--ds-ease-enter),
+    display var(--ds-motion-panel) allow-discrete,
+    overlay var(--ds-motion-panel) allow-discrete;
+}
+
+.panel[open]::backdrop {
+  opacity: 1;
+}
+
+@starting-style {
+  .panel[open] {
+    opacity: 0;
+    translate: var(--panel-from, 0 var(--ds-space-2));
+  }
+
+  .panel[open]::backdrop {
+    opacity: 0;
+  }
 }
 
 .head {

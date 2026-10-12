@@ -2,6 +2,7 @@
 
 .drawer {
   composes: panel from "../Modal/Modal.module.css";
+  --panel-from: var(--ds-space-6) 0;
   inset: 0 0 0 auto;
   width: min(100%, var(--ds-layout-sheet-narrow));
   height: 100dvh;
@@ -18,7 +19,6 @@
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: var(--ds-space-4);
-  animation: var(--ds-anim-slide);
 }
 
 .body {

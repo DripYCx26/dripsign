@@ -121,10 +121,20 @@ h3 {
   }
 }
 
-@keyframes ds-slide {
+@keyframes ds-rise {
   from {
     opacity: 0;
-    transform: translateX(var(--ds-space-3));
+    transform: translateY(var(--ds-space-2));
+  }
+}
+
+@keyframes ds-shine {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: 0 0;
   }
 }
 

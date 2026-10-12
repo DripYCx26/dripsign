@@ -1,9 +1,11 @@
 "use client";
 
+import type { Theme } from "@dripsign/core/schema";
 import type { SessionView } from "@dripsign/core/types";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { selectTenant, signOut } from "@/server/actions/auth.ts";
+import { setTheme } from "@/server/actions/theme.ts";
 import { Avatar, Check, LogOut, Menu, User, Users } from "@/ui";
 import styles from "./AccountMenu.module.css";
 import { currentHref, type NavLink } from "./navLinks.ts";
@@ -21,9 +23,19 @@ type AccountMenuProps = Readonly<{
   bothHomes: boolean;
   tenants: SessionView["staffTenants"];
   selectedTenantId: string | null;
+  /** The saved choice, or `system` when the device decides. */
+  theme: ThemeChoice;
 }>;
 
-type ItemId = "home:staff" | "home:recipient" | "signout" | `tenant:${string}` | `link:${string}`;
+type ThemeChoice = Theme | "system";
+
+type ItemId =
+  | "home:staff"
+  | "home:recipient"
+  | "signout"
+  | `tenant:${string}`
+  | `link:${string}`
+  | `theme:${ThemeChoice}`;
 
 type Item = Readonly<{
   id: ItemId;
@@ -31,13 +43,33 @@ type Item = Readonly<{
   icon?: ReactNode;
   disabled?: boolean;
   narrowOnly?: boolean;
+  group?: string;
 }>;
 
 const TENANT_PREFIX = "tenant:";
 const LINK_PREFIX = "link:";
+const THEME_PREFIX = "theme:";
+
+const THEMES: readonly Readonly<{ choice: ThemeChoice; label: string }>[] = [
+  { choice: "system", label: "System" },
+  { choice: "light", label: "Light" },
+  { choice: "dark", label: "Dark" },
+  { choice: "night", label: "Night" },
+];
+
+/** The four themes first, the chosen one checked and disabled like the tenant switcher's. */
+function themeItems(theme: ThemeChoice): Item[] {
+  return THEMES.map(({ choice, label }) => ({
+    id: `${THEME_PREFIX}${choice}`,
+    label,
+    group: "Theme",
+    disabled: choice === theme,
+    ...(choice === theme ? { icon: <Check /> } : {}),
+  }));
+}
 
 function menuItems(
-  { home, bothHomes, links, tenants, selectedTenantId }: AccountMenuProps,
+  { home, bothHomes, links, tenants, selectedTenantId, theme }: AccountMenuProps,
   pathname: string,
 ): Item[] {
   const current = currentHref(links, pathname);
@@ -70,10 +102,25 @@ function menuItems(
           };
         })
       : [];
-  return [...places, ...homes, ...switcher, { id: "signout", label: "Sign out", icon: <LogOut /> }];
+  return [
+    ...themeItems(theme),
+    ...places,
+    ...homes,
+    ...switcher,
+    { id: "signout", label: "Sign out", icon: <LogOut /> },
+  ];
 }
 
-/** The account's popover: the other home, the tenants to switch between, and sign out. */
+/** The server action behind an item that is not a navigation. */
+function commandFor(id: ItemId) {
+  const chosen = THEMES.find(({ choice }) => id === `${THEME_PREFIX}${choice}`)?.choice;
+  if (chosen !== undefined) return setTheme({ theme: chosen });
+  if (id.startsWith(TENANT_PREFIX))
+    return selectTenant({ tenantId: id.slice(TENANT_PREFIX.length) });
+  return signOut();
+}
+
+/** The account's popover: the theme, the other home, the tenants to switch between, and sign out. */
 export function AccountMenu(props: AccountMenuProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -89,11 +136,7 @@ export function AccountMenu(props: AccountMenuProps) {
       router.push(id === "home:staff" ? "/staff" : "/");
       return;
     }
-    const result = await settle<unknown>(
-      id.startsWith(TENANT_PREFIX)
-        ? selectTenant({ tenantId: id.slice(TENANT_PREFIX.length) })
-        : signOut(),
-    );
+    const result = await settle<unknown>(commandFor(id));
     if (!result.ok) {
       setFailure(result.message);
       return;

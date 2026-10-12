@@ -6,9 +6,9 @@ import styles from "./SectionDiff.module.css";
 
 /** Only whole sections that appear or vanish are marked; edited words mark themselves. */
 const WHOLE: Readonly<
-  Record<"added" | "removed", Readonly<{ word: string; tone: "confirm" | "stop"; icon: ReactNode }>>
+  Record<"added" | "removed", Readonly<{ word: string; tone: "info" | "stop"; icon: ReactNode }>>
 > = {
-  added: { word: "Added", tone: "confirm", icon: <Plus /> },
+  added: { word: "Added", tone: "info", icon: <Plus /> },
   removed: { word: "Removed", tone: "stop", icon: <Trash2 /> },
 };
 

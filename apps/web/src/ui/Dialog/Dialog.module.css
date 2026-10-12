@@ -12,7 +12,6 @@
 .dialog[open] {
   display: grid;
   gap: var(--ds-space-4);
-  animation: var(--ds-anim-enter);
 }
 
 .body {

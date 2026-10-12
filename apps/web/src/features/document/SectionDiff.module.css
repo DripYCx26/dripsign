@@ -50,10 +50,10 @@
 
 /* Colour plus a line style, so a change survives without colour. */
 .ins {
-  background: var(--ds-confirm-soft);
+  background: var(--ds-accent-soft);
   color: var(--ds-text);
   text-decoration: underline;
-  text-decoration-color: var(--ds-confirm);
+  text-decoration-color: var(--ds-accent);
   text-underline-offset: var(--ds-space-half);
 }
 

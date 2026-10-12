@@ -57,11 +57,11 @@ function StateMark(props: MarkProps) {
     case "accepted":
       if (proposal.publishedInRevision !== null) {
         return (
-          <Pill tone="confirm">{`Published in revision ${String(proposal.publishedInRevision)}`}</Pill>
+          <Pill tone="info">{`Published in revision ${String(proposal.publishedInRevision)}`}</Pill>
         );
       }
       // Recipients never learn about private drafts, so their side of "accepted" stops there.
-      return <Pill tone="confirm">{capacity === "staff" ? "In draft" : "Accepted"}</Pill>;
+      return <Pill tone="info">{capacity === "staff" ? "In draft" : "Accepted"}</Pill>;
     case "withdrawn":
       return <Pill tone="info">Withdrawn</Pill>;
   }

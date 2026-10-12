@@ -23,11 +23,29 @@
   font-size: var(--ds-text-sm);
   line-height: var(--ds-leading-sm);
   transform-origin: top right;
+
+  /* Enter and exit are one transition: display and overlay hold the popover on screen while it
+     fades out. */
+  opacity: 0;
+  scale: 0.96;
+  transition:
+    opacity var(--ds-motion-quick) var(--ds-ease-enter),
+    scale var(--ds-motion-quick) var(--ds-ease-enter),
+    display var(--ds-motion-quick) allow-discrete,
+    overlay var(--ds-motion-quick) allow-discrete;
 }
 
 .popover:popover-open {
   display: grid;
-  animation: var(--ds-anim-enter);
+  opacity: 1;
+  scale: 1;
+}
+
+@starting-style {
+  .popover:popover-open {
+    opacity: 0;
+    scale: 0.96;
+  }
 }
 
 .item {
@@ -57,6 +75,23 @@
   color: var(--ds-text-tertiary);
   font-size: var(--ds-text-xs);
   line-height: var(--ds-leading-xs);
+}
+
+/* A labelled run of items (the theme choices), set off from what follows. */
+.group {
+  display: grid;
+  padding-bottom: var(--ds-space-1);
+  border-bottom: var(--ds-hairline);
+  margin-bottom: var(--ds-space-1);
+}
+
+.groupLabel {
+  padding: var(--ds-space-2) var(--ds-space-3) var(--ds-space-1);
+  color: var(--ds-text-tertiary);
+  font-size: var(--ds-text-xs);
+  letter-spacing: var(--ds-tracking-caps);
+  line-height: var(--ds-leading-xs);
+  text-transform: uppercase;
 }
 
 .item[data-tone="stop"] {

@@ -1,11 +1,12 @@
 /* The one map from a tone or an agreement status to its colour pair. A component that colours by
    tone or status composes `.tone`, sets data-tone or data-status, and reads --tone-fg and
-   --tone-bg; the colour tokens are never read outside these selectors. Info is the neutral
-   tone: the accent marks selection and links, never a state. */
+   --tone-bg; the colour tokens are never read outside these selectors. Info is the steel accent
+   ("Published in revision 3", an insertion). Confirm is teal and means verified: a signature, a
+   verified email. */
 
 .tone[data-tone="info"] {
-  --tone-fg: var(--ds-quiet);
-  --tone-bg: var(--ds-quiet-soft);
+  --tone-fg: var(--ds-accent);
+  --tone-bg: var(--ds-accent-soft);
 }
 
 .tone[data-tone="confirm"] {

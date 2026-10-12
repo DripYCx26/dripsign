@@ -32,6 +32,8 @@
   min-height: calc(var(--ds-space-6) * 2);
   padding: var(--ds-row-pad) var(--ds-space-4);
   border-bottom: var(--ds-hairline);
+  animation: var(--ds-anim-rise);
+  animation-delay: calc(var(--ds-motion-stagger) * min(var(--rise-index, 0), 8));
 }
 
 .member:last-child {

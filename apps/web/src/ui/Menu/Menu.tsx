@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Fragment,
   useId,
   useRef,
   useState,
@@ -19,6 +20,8 @@ type MenuItemData<I extends string> = Readonly<{
   disabled?: boolean | undefined;
   /** Listed only below 640 px, for what a wider screen shows elsewhere (the top bar's links). */
   narrowOnly?: boolean | undefined;
+  /** Consecutive items with the same group sit together under that label ("Theme"). */
+  group?: string | undefined;
 }>;
 
 type MenuProps<I extends string> = Readonly<{
@@ -111,6 +114,43 @@ function useMenuBehaviour() {
   return { trigger, popover, open, place, onToggle, onMenuKey, onTriggerKey };
 }
 
+function MenuRow<I extends string>({
+  item,
+  onPick,
+}: Readonly<{ item: MenuItemData<I>; onPick: (id: I) => void }>) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      className={styles.item}
+      data-tone={item.danger === true ? "stop" : undefined}
+      data-narrow-only={item.narrowOnly === true ? "" : undefined}
+      disabled={item.disabled === true}
+      onClick={() => {
+        onPick(item.id);
+      }}
+    >
+      {item.icon !== undefined && (
+        <span className={styles.icon} aria-hidden="true">
+          {item.icon}
+        </span>
+      )}
+      {item.label}
+    </button>
+  );
+}
+
+/** Consecutive items that share a group label, in order; items without one run together. */
+function groupsOf<I extends string>(items: readonly MenuItemData<I>[]) {
+  const runs: { label: string | undefined; members: MenuItemData<I>[] }[] = [];
+  for (const item of items) {
+    const last = runs.at(-1);
+    if (last !== undefined && last.label === item.group) last.members.push(item);
+    else runs.push({ label: item.group, members: [item] });
+  }
+  return runs;
+}
+
 /**
  * A short list of actions behind an icon button. The browser's popover API owns open, Escape,
  * click-outside and focus return; this adds the menu keys: ArrowDown on the trigger opens, the
@@ -128,6 +168,19 @@ export function Menu<I extends string>({
 }: MenuProps<I>) {
   const id = useId();
   const { trigger, popover, open, place, onToggle, onMenuKey, onTriggerKey } = useMenuBehaviour();
+
+  function row(item: MenuItemData<I>) {
+    return (
+      <MenuRow
+        key={item.id}
+        item={item}
+        onPick={(picked) => {
+          popover.current?.hidePopover();
+          onAction(picked);
+        }}
+      />
+    );
+  }
 
   return (
     <>
@@ -163,28 +216,18 @@ export function Menu<I extends string>({
             {caption}
           </div>
         )}
-        {items.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            role="menuitem"
-            className={styles.item}
-            data-tone={item.danger === true ? "stop" : undefined}
-            data-narrow-only={item.narrowOnly === true ? "" : undefined}
-            disabled={item.disabled === true}
-            onClick={() => {
-              popover.current?.hidePopover();
-              onAction(item.id);
-            }}
-          >
-            {item.icon !== undefined && (
-              <span className={styles.icon} aria-hidden="true">
-                {item.icon}
+        {groupsOf(items).map(({ label, members }) =>
+          label === undefined ? (
+            <Fragment key={members[0]?.id}>{members.map(row)}</Fragment>
+          ) : (
+            <div key={label} role="group" aria-label={label} className={styles.group}>
+              <span aria-hidden="true" className={styles.groupLabel}>
+                {label}
               </span>
-            )}
-            {item.label}
-          </button>
-        ))}
+              {members.map(row)}
+            </div>
+          ),
+        )}
       </div>
     </>
   );

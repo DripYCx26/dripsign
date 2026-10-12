@@ -1,5 +1,6 @@
 /* Native radios drawn as a segmented control: a subtle well, each option a face over an invisible
-   radio; the chosen face is raised. Faces reach the control height (44 on a coarse pointer). */
+   radio; a raised thumb slides to the chosen face. Faces reach the control height (44 on a coarse
+   pointer). */
 
 .group {
   display: grid;
@@ -15,17 +16,66 @@
   padding: 0;
 }
 
+/* Equal faces in one row, so one thumb can slide between them: its width is a share of the well
+   and its offset is the chosen face's index (--seg-at), found with :has() since the radios are
+   native and may be uncontrolled. Up to seven faces. */
 .segmented {
-  display: inline-flex;
-  flex-wrap: wrap;
+  --seg-at: 0;
+  position: relative;
+  display: inline-grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
   justify-self: start;
   gap: var(--ds-space-half);
   border-radius: var(--ds-radius-control);
   background: var(--ds-surface-subtle);
-  box-shadow: inset 0 0 0 1px var(--ds-border);
+  box-shadow: inset 0 0 0 1px var(--ds-accent-wash);
   padding: var(--ds-space-half);
   font-size: var(--ds-text-sm);
   line-height: var(--ds-leading-sm);
+}
+
+.segmented::before {
+  position: absolute;
+  inset-block: var(--ds-space-half);
+  inset-inline-start: var(--ds-space-half);
+  width: calc((100% - var(--ds-space-half) * (var(--seg-count) + 1)) / var(--seg-count));
+  border-radius: var(--ds-radius-tag);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-press);
+  content: "";
+  translate: calc(var(--seg-at) * (100% + var(--ds-space-half)));
+  transition:
+    translate var(--ds-motion-quick) var(--ds-ease-enter),
+    opacity var(--ds-motion-quick) var(--ds-ease-enter);
+}
+
+.segmented:not(:has(.input:checked))::before {
+  opacity: 0;
+}
+
+.segmented:has(.option:nth-child(2) > .input:checked) {
+  --seg-at: 1;
+}
+
+.segmented:has(.option:nth-child(3) > .input:checked) {
+  --seg-at: 2;
+}
+
+.segmented:has(.option:nth-child(4) > .input:checked) {
+  --seg-at: 3;
+}
+
+.segmented:has(.option:nth-child(5) > .input:checked) {
+  --seg-at: 4;
+}
+
+.segmented:has(.option:nth-child(6) > .input:checked) {
+  --seg-at: 5;
+}
+
+.segmented:has(.option:nth-child(7) > .input:checked) {
+  --seg-at: 6;
 }
 
 .segmented[data-size="sm"] .face {
@@ -35,7 +85,7 @@
 
 .option {
   position: relative;
-  display: inline-grid;
+  display: grid;
   cursor: pointer;
 }
 
@@ -51,10 +101,11 @@
   display: inline-flex;
   min-height: calc(var(--ds-size-control-md) - var(--ds-space-half) * 2);
   align-items: center;
+  justify-content: center;
   border-radius: var(--ds-radius-tag);
   padding: 0 var(--ds-space-3);
   color: var(--ds-text-secondary);
-  transition: background-color var(--ds-motion-quick) var(--ds-ease-enter);
+  transition: color var(--ds-motion-quick) var(--ds-ease-enter);
 }
 
 .option:hover .face {
@@ -62,8 +113,6 @@
 }
 
 .input:checked + .face {
-  background: var(--ds-surface-raised);
-  box-shadow: var(--ds-shadow-press);
   color: var(--ds-text);
   font-weight: var(--ds-weight-medium);
 }

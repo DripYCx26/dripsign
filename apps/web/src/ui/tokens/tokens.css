@@ -1,9 +1,9 @@
 /* DripSign visual system. The only source of colour, type, space, radius, depth and motion in
    product code. Faces load through next/font in the root layout, which sets --ds-face-geist,
    --ds-face-newsreader and --ds-face-geist-mono on <html>; without them each stack falls back to
-   system faces. Light first; dark follows prefers-color-scheme only (no toggle). The reading
-   sheet follows the theme; only the PDF page (--ds-pdf-page) stays white. Sizes and durations are
-   design constants. */
+   system faces. Three themes (Drip Light, Drip Dark, Drip Night) chosen by <html data-theme>;
+   absent, the device decides between Light and Dark. The reading sheet follows the theme; only
+   the PDF page (--ds-pdf-page) stays white. Sizes and durations are design constants. */
 
 :root {
   /* Faces: Geist for the interface, Newsreader for display, Geist Mono for evidence data. */
@@ -108,19 +108,27 @@
   --ds-layout-dev-bar: 28px;
   --ds-layout-form-side: 360px;
 
-  /* Motion that explains: a press, a control changing, a panel arriving, work in progress. */
+  /* Motion that explains: a press, a control changing, a panel arriving, work in progress. Controls
+     stay at or under 200 ms; panels, the rise of list rows and the shine are slower. */
   --ds-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
   --ds-motion-press: 80ms;
   --ds-motion-quick: 140ms;
   --ds-motion-panel: 220ms;
+  --ds-motion-rise: 480ms;
+  --ds-motion-stagger: 40ms;
+  --ds-motion-shine: 1400ms;
   --ds-motion-loop: 1600ms;
+  --ds-lift: -1px;
 
   /* Ready-made animations over the keyframes in base.css; use as `animation: var(--ds-anim-enter)`.
-     enter: a menu, notice or card arriving; slide: the packet or a drawer arriving from the right;
-     shimmer: a skeleton over --ds-skeleton; spin: a saving icon. */
+     enter: a notice or card arriving;
+     rise: a list row on first paint, delayed by --ds-motion-stagger times its --rise-index;
+     shimmer: a skeleton over --ds-skeleton; shine: a highlight crossing a pending button;
+     spin: a saving icon. */
   --ds-anim-enter: ds-enter var(--ds-motion-panel) var(--ds-ease-enter) both;
-  --ds-anim-slide: ds-slide var(--ds-motion-panel) var(--ds-ease-enter) both;
+  --ds-anim-rise: ds-rise var(--ds-motion-rise) var(--ds-ease-enter) both;
   --ds-anim-shimmer: ds-shimmer var(--ds-motion-loop) linear infinite;
+  --ds-anim-shine: ds-shine var(--ds-motion-shine) ease-in-out infinite;
   --ds-anim-spin: ds-spin calc(var(--ds-motion-loop) / 2) linear infinite;
 }
 
@@ -133,65 +141,75 @@
   }
 }
 
-/* Light theme: the default. */
+/* Themes. One block carries Light and Dark through light-dark(); with no data-theme the device
+   decides. Drip Night is a second dark palette written out in full below. Surfaces back to front:
+   the page, the desk behind sheets, panes and fields, floating layers, wells and tracks, scrim.
+   Native controls and scrollbars follow color-scheme. */
 :root {
-  color-scheme: light;
-
-  /* Surfaces, back to front: the page, the desk behind sheets, panes and fields, floating layers,
-     wells and tracks, scrim. */
-  --ds-canvas: #f6f5f1;
-  --ds-desk: #eeece6;
-  --ds-surface: #ffffff;
-  --ds-surface-raised: #ffffff;
-  --ds-surface-subtle: #f0eee9;
-  --ds-scrim: rgb(20 21 25 / 36%);
+  color-scheme: light dark;
+  --ds-canvas: light-dark(#faf9f7, #171613);
+  --ds-desk: light-dark(#f1efe9, #121110);
+  --ds-surface: light-dark(#ffffff, #1d1c18);
+  --ds-surface-raised: light-dark(#ffffff, #242320);
+  --ds-surface-subtle: light-dark(#f1efe9, #2a2924);
+  --ds-scrim: light-dark(rgb(35 33 28 / 40%), rgb(0 0 0 / 64%));
 
   /* Text in three steps; each passes 4.5:1 on every surface and on accent-soft. */
-  --ds-text: #141518;
-  --ds-text-secondary: #55565e;
-  --ds-text-tertiary: #64656c;
+  --ds-text: light-dark(#23211c, #efece5);
+  --ds-text-secondary: light-dark(#57544b, #b5b1a6);
+  --ds-text-tertiary: light-dark(#5f5c54, #9d998f);
 
   /* Lines: a decorative hairline, and a field's edge at 3:1 on every surface. */
-  --ds-border: #e4e1d9;
-  --ds-border-strong: #8a877e;
+  --ds-border: light-dark(#e7e4dd, #34322c);
+  --ds-border-strong: light-dark(#86837a, #7a776d);
   --ds-hairline: 1px solid var(--ds-border);
 
-  /* One accent: the primary action, selection, focus, links and the mark; never a domain state. */
-  --ds-accent: #0a6a7a;
-  --ds-accent-hover: #085968;
-  --ds-accent-soft: #e3f1f3;
-  --ds-on-accent: #ffffff;
+  /* One accent, steel blue: the primary action, selection, focus, links, the mark and the info
+     tone. Wash edges a selected section and the segmented well. Teal is --ds-confirm alone. */
+  --ds-accent: light-dark(#3c5f8c, #8fb0d8);
+  --ds-accent-hover: light-dark(#33527a, #a9c4e4);
+  --ds-accent-soft: light-dark(#eef3f8, #22304a);
+  --ds-accent-wash: light-dark(#bccbdc, #3a4f6c);
+  --ds-on-accent: light-dark(#ffffff, #0e1a2b);
   --ds-focus: var(--ds-accent);
-  --ds-ring: 0 0 0 3px rgb(10 106 122 / 28%);
+  --ds-ring: 0 0 0 3px light-dark(rgb(60 95 140 / 30%), rgb(143 176 216 / 36%));
 
-  /* Tones, solid and soft, used only under [data-tone] and always with a word and an icon. */
-  --ds-confirm: #17703f;
-  --ds-confirm-soft: #e4f3e9;
-  --ds-attention: #8a5a00;
-  --ds-attention-soft: #faefd8;
-  --ds-stop: #b42335;
-  --ds-stop-soft: #fceaec;
-  --ds-quiet: #5b6270;
-  --ds-quiet-soft: #eceef1;
+  /* Tones, solid and soft, used only under [data-tone] and always with a word and an icon.
+     Confirm is teal and means verified evidence: a signature, a verified email. */
+  --ds-confirm: light-dark(#00796d, #4fc7b2);
+  --ds-confirm-soft: light-dark(#e6f7f4, #0f2b27);
+  --ds-attention: light-dark(#7a5a10, #e2b64a);
+  --ds-attention-soft: light-dark(#fcefbe, #2f2611);
+  --ds-stop: light-dark(#8f3d2f, #f59a85);
+  --ds-stop-soft: light-dark(#fff1ed, #3b1e18);
+  --ds-quiet: light-dark(#57544b, #aba79c);
+  --ds-quiet-soft: light-dark(#f0eee8, #2a2924);
 
-  /* In review: the one status that is not a tone. Used only under [data-status]. */
-  --ds-review: #2453b8;
-  --ds-review-soft: #e8eefb;
+  /* In review: the one status that is not a tone, a slate greyer than the accent so it never
+     reads as a button. Used only under [data-status]. */
+  --ds-review: light-dark(#50677f, #a3b7cd);
+  --ds-review-soft: light-dark(#f1f4f7, #212a37);
 
   /* The reading sheet and its edge ring; the PDF page is the artifact and never themed. */
-  --ds-paper: #ffffff;
-  --ds-paper-edge: rgb(20 21 25 / 8%);
+  --ds-paper: light-dark(#ffffff, #1f1e1a);
+  --ds-paper-edge: light-dark(rgb(35 33 28 / 8%), rgb(255 255 255 / 7%));
   --ds-pdf-page: #ffffff;
 
   /* A lead action that cannot act: its own fill, faded. */
   --ds-opacity-disabled: 0.5;
 
   /* Depth in three levels: 1 a card or the sheet, 2 a floating layer, 3 a dialog; press is a knob. */
-  --ds-shadow-press: 0 1px 2px rgb(20 21 25 / 8%);
+  --ds-shadow-press: 0 1px 2px light-dark(rgb(35 33 28 / 8%), rgb(0 0 0 / 50%));
   --ds-shadow-card:
-    0 0 0 1px rgb(20 21 25 / 6%), 0 1px 2px rgb(20 21 25 / 5%), 0 8px 24px -16px rgb(20 21 25 / 16%);
-  --ds-shadow-float: 0 12px 32px -12px rgb(20 21 25 / 22%), 0 0 0 1px rgb(20 21 25 / 6%);
-  --ds-shadow-modal: 0 24px 64px -16px rgb(20 21 25 / 28%), 0 0 0 1px rgb(20 21 25 / 6%);
+    0 0 0 1px light-dark(rgb(35 33 28 / 6%), rgb(255 255 255 / 6%)),
+    0 1px 2px light-dark(rgb(35 33 28 / 5%), rgb(0 0 0 / 0%)),
+    0 8px 24px -16px light-dark(rgb(35 33 28 / 16%), rgb(0 0 0 / 60%));
+  --ds-shadow-float:
+    0 12px 32px -12px light-dark(rgb(35 33 28 / 22%), rgb(0 0 0 / 66%)),
+    0 0 0 1px light-dark(rgb(35 33 28 / 6%), rgb(255 255 255 / 7%));
+  --ds-shadow-modal:
+    0 24px 64px -16px light-dark(rgb(35 33 28 / 28%), rgb(0 0 0 / 72%)),
+    0 0 0 1px light-dark(rgb(35 33 28 / 6%), rgb(255 255 255 / 7%));
 
   /* The skeleton's band: pair with background-size: 200% 100% and --ds-anim-shimmer. */
   --ds-skeleton: linear-gradient(
@@ -200,46 +218,56 @@
     var(--ds-border) 50%,
     var(--ds-surface-subtle) 70%
   );
+
+  /* The moving highlight of work in progress, over an accent fill and over a plain face. */
+  --ds-shine-on-accent: color-mix(in srgb, var(--ds-on-accent) 30%, transparent);
+  --ds-shine: color-mix(in srgb, var(--ds-accent) 16%, transparent);
 }
 
-/* Dark theme on a dark device. The hairline, focus and skeleton tokens are built from these, so
-   they follow without a copy. */
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --ds-canvas: #101113;
-    --ds-desk: #0a0b0d;
-    --ds-surface: #17181b;
-    --ds-surface-raised: #1d1e22;
-    --ds-surface-subtle: #24252a;
-    --ds-scrim: rgb(0 0 0 / 64%);
-    --ds-text: #ecebe6;
-    --ds-text-secondary: #a9a8a2;
-    --ds-text-tertiary: #8f8e89;
-    --ds-border: #2a2b30;
-    --ds-border-strong: #6d6c68;
-    --ds-accent: #58c1d1;
-    --ds-accent-hover: #80d3df;
-    --ds-accent-soft: #0f2a31;
-    --ds-on-accent: #07191d;
-    --ds-ring: 0 0 0 3px rgb(88 193 209 / 34%);
-    --ds-confirm: #5dcb8a;
-    --ds-confirm-soft: #12291c;
-    --ds-attention: #e9b44c;
-    --ds-attention-soft: #2e2410;
-    --ds-stop: #ff8a97;
-    --ds-stop-soft: #3a161b;
-    --ds-quiet: #a6acb7;
-    --ds-quiet-soft: #24272c;
-    --ds-review: #8db0ff;
-    --ds-review-soft: #17233f;
-    --ds-paper: #1b1c20;
-    --ds-paper-edge: rgb(255 255 255 / 7%);
-    --ds-shadow-press: 0 1px 2px rgb(0 0 0 / 50%);
-    --ds-shadow-card: 0 0 0 1px rgb(255 255 255 / 6%), 0 8px 24px -16px rgb(0 0 0 / 60%);
-    --ds-shadow-float: 0 16px 40px -12px rgb(0 0 0 / 66%), 0 0 0 1px rgb(255 255 255 / 7%);
-    --ds-shadow-modal: 0 28px 72px -16px rgb(0 0 0 / 72%), 0 0 0 1px rgb(255 255 255 / 7%);
-  }
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+/* Drip Night: a cool steel-indigo night. The same words and roles, surfaces carrying the blue. */
+:root[data-theme="night"] {
+  color-scheme: dark;
+  --ds-canvas: #0f1420;
+  --ds-desk: #0a0e18;
+  --ds-surface: #151b2a;
+  --ds-surface-raised: #1b2233;
+  --ds-surface-subtle: #212a3b;
+  --ds-scrim: rgb(3 6 14 / 66%);
+  --ds-text: #e9edf4;
+  --ds-text-secondary: #adb7c8;
+  --ds-text-tertiary: #95a0b3;
+  --ds-border: #283247;
+  --ds-border-strong: #707c97;
+  --ds-accent: #8fb7ea;
+  --ds-accent-hover: #aacaf2;
+  --ds-accent-soft: #1b2d4b;
+  --ds-accent-wash: #34527a;
+  --ds-on-accent: #0b1628;
+  --ds-ring: 0 0 0 3px rgb(143 183 234 / 38%);
+  --ds-confirm: #45cbb4;
+  --ds-confirm-soft: #0e2c2a;
+  --ds-attention: #e6b957;
+  --ds-attention-soft: #302612;
+  --ds-stop: #f79c8a;
+  --ds-stop-soft: #3b1d1e;
+  --ds-quiet: #a4adbf;
+  --ds-quiet-soft: #232c3e;
+  --ds-review: #b4c6dd;
+  --ds-review-soft: #1e2a3f;
+  --ds-paper: #171e2d;
+  --ds-paper-edge: rgb(255 255 255 / 8%);
+  --ds-shadow-press: 0 1px 2px rgb(0 0 0 / 55%);
+  --ds-shadow-card: 0 0 0 1px rgb(255 255 255 / 7%), 0 8px 24px -16px rgb(0 0 0 / 65%);
+  --ds-shadow-float: 0 16px 40px -12px rgb(0 0 0 / 70%), 0 0 0 1px rgb(255 255 255 / 8%);
+  --ds-shadow-modal: 0 28px 72px -16px rgb(0 0 0 / 76%), 0 0 0 1px rgb(255 255 255 / 8%);
 }
 
 /* Reduced motion: every duration zero and every ready-made animation off. */
@@ -248,10 +276,15 @@
     --ds-motion-press: 0ms;
     --ds-motion-quick: 0ms;
     --ds-motion-panel: 0ms;
+    --ds-motion-rise: 0ms;
+    --ds-motion-stagger: 0ms;
+    --ds-motion-shine: 0ms;
     --ds-motion-loop: 0ms;
+    --ds-lift: 0px;
     --ds-anim-enter: none;
-    --ds-anim-slide: none;
+    --ds-anim-rise: none;
     --ds-anim-shimmer: none;
+    --ds-anim-shine: none;
     --ds-anim-spin: none;
   }
 }

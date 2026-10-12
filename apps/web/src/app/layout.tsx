@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Newsreader } from "next/font/google";
 import { Suspense, type ReactNode } from "react";
 import { DevBanner } from "@/features/shell/DevBanner.tsx";
+import { readTheme } from "@/features/shell/theme.ts";
 
 const geist = Geist({ subsets: ["latin"], display: "swap", variable: "--ds-face-geist" });
 const newsreader = Newsreader({
@@ -25,9 +26,10 @@ export const metadata: Metadata = {
 
 const FACES = [geist, newsreader, geistMono].map((face) => face.variable).join(" ");
 
-export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
+/** The theme comes from a cookie, so the server paints it and nothing flashes; absent is the device's. */
+export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en" className={FACES}>
+    <html lang="en" className={FACES} data-theme={await readTheme()}>
       <body>
         <Suspense fallback={null}>
           <DevBanner />

@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import styles from "./Segmented.module.css";
 
 type SegmentedProps<V extends string> = Readonly<{
@@ -33,7 +34,11 @@ export function Segmented<V extends string>({
   return (
     <fieldset className={styles.group} role="radiogroup" disabled={disabled}>
       <legend className={hideLabel ? "ds-visually-hidden" : styles.legend}>{label}</legend>
-      <span className={styles.segmented} data-size={size}>
+      <span
+        className={styles.segmented}
+        data-size={size}
+        style={{ "--seg-count": options.length } as CSSProperties}
+      >
         {options.map((option) => (
           <label key={option.value} className={styles.option}>
             <input

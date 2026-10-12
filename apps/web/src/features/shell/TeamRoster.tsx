@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { revokeStaff } from "@/server/actions/staff.ts";
 import { Button, Dialog, Moment, Notice, Pill } from "@/ui";
 import { AddStaffForm } from "./AddStaffForm.tsx";
@@ -10,6 +10,43 @@ import { settle } from "./settle.ts";
 import styles from "./TeamRoster.module.css";
 
 type Props = Readonly<{ members: readonly RosterMember[]; selfEmail: string }>;
+
+type MemberRowProps = Readonly<{
+  member: RosterMember;
+  /** Position in the list, which staggers the rise on first paint. */
+  index: number;
+  removable: boolean;
+  onRemove: (member: RosterMember) => void;
+}>;
+
+function MemberRow({ member, index, removable, onRemove }: MemberRowProps) {
+  return (
+    <li className={styles.member} style={{ "--rise-index": index } as CSSProperties}>
+      <p className={styles.name}>{member.name ?? "—"}</p>
+      <p className={styles.detail}>{member.email}</p>
+      <p className={styles.meta}>
+        <span>
+          <Pill tone="info">{member.role === "admin" ? "Admin" : "Member"}</Pill>
+        </span>
+        <span>
+          <Moment value={member.addedAt} format="relative" />
+        </span>
+      </p>
+      {removable && (
+        <Button
+          variant="quiet"
+          tone="danger"
+          size="sm"
+          onClick={() => {
+            onRemove(member);
+          }}
+        >
+          Remove
+        </Button>
+      )}
+    </li>
+  );
+}
 
 /** The people with access to this workspace: remove one (never yourself), or add one. */
 export function TeamRoster({ members, selfEmail }: Props) {
@@ -43,31 +80,14 @@ export function TeamRoster({ members, selfEmail }: Props) {
           <span>Added</span>
         </div>
         <ul className={styles.members}>
-          {members.map((member) => (
-            <li key={member.email} className={styles.member}>
-              <p className={styles.name}>{member.name ?? "—"}</p>
-              <p className={styles.detail}>{member.email}</p>
-              <p className={styles.meta}>
-                <span>
-                  <Pill tone="info">{member.role === "admin" ? "Admin" : "Member"}</Pill>
-                </span>
-                <span>
-                  <Moment value={member.addedAt} format="relative" />
-                </span>
-              </p>
-              {member.email !== selfEmail && (
-                <Button
-                  variant="quiet"
-                  tone="danger"
-                  size="sm"
-                  onClick={() => {
-                    setRevoking(member);
-                  }}
-                >
-                  Remove
-                </Button>
-              )}
-            </li>
+          {members.map((member, index) => (
+            <MemberRow
+              key={member.email}
+              member={member}
+              index={index}
+              removable={member.email !== selfEmail}
+              onRemove={setRevoking}
+            />
           ))}
         </ul>
       </div>
