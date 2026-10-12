@@ -46,7 +46,7 @@ function inCommand(
 ): Promise<void> {
   return tx(async (db) => {
     const access = await resolveAccess(db, actor, agreementId);
-    const locked = await lockAgreement(db, actor.tenantId, agreementId, null);
+    const locked = await lockAgreement(db, actor.tenantId, agreementId);
     const agreement = { ...locked, draft: { ...locked.draft, source: terms } };
     const state = await loadState(db, agreement, actor);
     await run({ db, actor, agreement, access, state });

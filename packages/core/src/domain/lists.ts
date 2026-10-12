@@ -1,5 +1,6 @@
 // The staff dashboard and the recipient inbox: one bounded query each, newest activity first. Each
 // row carries the policy's allowed actions, so a list names the same next step as the workspace.
+// Activity is shared: staff's private draft edits on a published agreement don't reorder rows.
 import { loadConfig } from "../config.ts";
 import { readTx } from "../db.ts";
 import { DomainError, notFound } from "../errors.ts";

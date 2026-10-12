@@ -300,14 +300,14 @@ it("negotiates, publishes, collects every signature and archives the signed agre
     updatedAt,
   });
   await acceptPending(seen);
-  expect((await loadAgreementView(staff, id)).draft?.source).toEqual(
-    terms("Nine months.", "$120 a month."),
-  );
-  view = await publish(staff, id);
+  const accepted = await loadAgreementView(staff, id);
+  expect(accepted.draft?.source).toEqual(terms("Nine months.", "$120 a month."));
+  await publish(staff, id);
   // Identical terms saved after a publish prepare again: the PDF prints the number it publishes as.
+  // Neither the worker's preparation write nor the publish moved the draft fence.
   view = await run(staff, id, {
     kind: "save_draft",
-    expectedDraftVersion: must(view.agreement.draftVersion),
+    expectedDraftVersion: must(accepted.agreement.draftVersion),
     source: terms("Nine months.", "$120 a month."),
   });
   expect(view.agreement.preparation?.status).not.toBe("ready");
@@ -497,6 +497,8 @@ it("renames from the terms, fences, replays, rechecks authority, keeps the last 
   const renamed = await run(staff, id, rename);
   expect(renamed.agreement.title).toBe("Renamed agreement");
   await expect(run(staff, id, rename)).rejects.toMatchObject({ code: "conflict" });
+  // A recipient's staff-only command is unseen whatever it expects: no oracle on the draft fence.
+  await expect(run(jordanActor, id, rename)).rejects.toMatchObject({ code: "not_found" });
   // The draft's title stays private: recipients, their inbox, mail and files keep the published one.
   const taylor = person("Taylor Kim", false);
   const expectedVersion = renamed.agreement.version;
@@ -525,10 +527,9 @@ it("renames from the terms, fences, replays, rechecks authority, keeps the last 
   );
   const failed = await loadAgreementView(staff, id);
   expect(failed.agreement.preparation).toEqual({ status: "failed", error: refused.message });
-  await run(staff, id, {
-    kind: "retry_preparation",
-    expectedDraftVersion: must(failed.agreement.draftVersion),
-  });
+  await run(staff, id, { kind: "retry_preparation" });
+  // A retry changes no terms, so an editor opened before it still saves.
+  await run(staff, id, { ...rename, expectedDraftVersion: must(failed.agreement.draftVersion) });
   const view = await publish(staff, id);
   const proposal: Command = {
     kind: "propose",

@@ -7,7 +7,7 @@ import type { StoredObject } from "../adapters/storage.ts";
 import type { Db } from "../db.ts";
 import { DomainError } from "../errors.ts";
 import { enqueue } from "../jobs/outbox.ts";
-import { draftSchema, signingFieldSchema } from "../schema.ts";
+import { canonicalJson, draftSchema, signingFieldSchema } from "../schema.ts";
 import type {
   CommandOf,
   DocumentSource,
@@ -125,8 +125,8 @@ async function enqueuePreparation(
 
 /**
  * The agreement title is the draft's, for staff; recipients and mail read the published one. A
- * staged write moves the draft fence; the worker's preparation result does not, so an open editor
- * stays current. Once published, no draft write moves the list order recipients see.
+ * staged write (changed terms) moves the draft fence; the worker's preparation result does not, so
+ * an open editor stays current. Once published, no draft write moves the list order recipients see.
  */
 async function writeDraft(
   db: Db,
@@ -153,8 +153,8 @@ async function writeDraft(
 }
 
 /**
- * Writes the next draft and moves the draft fence, so a staff tab holding the earlier draft is
- * refused; enqueues preparation when the preparation fence moved.
+ * Writes the next draft; every change to the terms moves the draft fence, so a staff tab holding
+ * the earlier terms is refused. Enqueues preparation when the preparation fence moved.
  */
 export async function stageDraft(
   db: Db,
@@ -172,7 +172,8 @@ export async function stageDraft(
     signers: change.signers,
     revision: await nextRevisionNumber(db, agreement.tenantId, agreement.id),
   });
-  await writeDraft(db, agreement, draft, { dirty: change.dirty, staged: true });
+  const staged = canonicalJson(change.source) !== canonicalJson(agreement.draft.source);
+  await writeDraft(db, agreement, draft, { dirty: change.dirty, staged });
   if (fence !== null) await enqueuePreparation(db, agreement, fence);
 }
 

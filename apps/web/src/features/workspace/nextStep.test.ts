@@ -102,11 +102,7 @@ const ROWS: readonly (readonly [string, Capacity, Scenario, NextStep])[] = [
     "staff: preparation failed",
     "staff",
     { status: "draft", preparation: "failed", revision: null, allowed: ["retry_preparation"] },
-    {
-      label: "Retry preparation",
-      kind: "command",
-      command: { kind: "retry_preparation", expectedDraftVersion: 7 },
-    },
+    { label: "Retry preparation", kind: "command", command: { kind: "retry_preparation" } },
   ],
   [
     "staff: ready, never published",

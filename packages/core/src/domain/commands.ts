@@ -1,5 +1,5 @@
-// Every mutation runs here in one transaction: resolve access, take the receipt, lock (and fence)
-// the agreement, recheck the grant and the policy, apply, enqueue effects.
+// Every mutation runs here in one transaction: resolve access, take the receipt, lock the
+// agreement, recheck the grant and the policy, check the fence, apply, enqueue effects.
 import { tx } from "../db.ts";
 import { assertRenderableName } from "../pdf/font.ts";
 import { commandSchema, newAgreementInputSchema } from "../schema.ts";
@@ -13,6 +13,7 @@ import { addRecipient, removeRecipient, resendInvite, setSigner } from "./recipi
 import { publish, retryPreparation, saveDraft } from "./revisions.ts";
 import { cancelSignatures, requestSignatures, sign } from "./signing.ts";
 import {
+  checkFence,
   lockAgreement,
   lockGrant,
   loadState,
@@ -71,10 +72,10 @@ function fenceOf(command: Command): Fence | null {
 }
 
 /**
- * Runs one command under its receipt: take the receipt, lock and fence the agreement, recheck the
- * grant and allowedActions, apply, enqueue effects. Capacity is `actor.capacity`. A replay changes
- * nothing and the answer is a fresh view load that resolves access again, so only a new command
- * needs `lockGrant`.
+ * Runs one command under its receipt: take the receipt, lock the agreement, recheck the grant and
+ * allowedActions, check the fence, apply, enqueue effects. Capacity is `actor.capacity`. A replay
+ * changes nothing and the answer is a fresh view load that resolves access again, so only a new
+ * command needs `lockGrant`.
  */
 export async function executeCommand(
   actor: Actor,
@@ -99,10 +100,11 @@ export async function executeCommand(
         payload: parsed,
       },
       async () => {
-        const agreement = await lockAgreement(db, access.tenantId, agreementId, fenceOf(parsed));
+        const agreement = await lockAgreement(db, access.tenantId, agreementId);
         await lockGrant(db, actor, { tenantId: access.tenantId, agreementId });
         const state = await loadState(db, agreement, actor);
         requireAction(state, actor.capacity, parsed.kind);
+        await checkFence(db, agreement, fenceOf(parsed));
         await dispatch({ db, actor, access, agreement, state }, parsed.kind, parsed);
         return true;
       },

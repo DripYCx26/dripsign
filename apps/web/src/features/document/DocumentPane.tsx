@@ -124,20 +124,18 @@ function Strip({ view, target, run, busy }: TargetProps) {
     return <Banner live="polite">Preparing PDF…</Banner>;
   }
   if (status !== "failed") return null;
-  const expectedDraftVersion = view.agreement.draftVersion;
   return (
     <Banner
       tone="stop"
       live="alert"
       action={
-        expectedDraftVersion !== null &&
         view.allowedActions.includes("retry_preparation") && (
           <Button
             variant="secondary"
             size="sm"
             loading={busy}
             onClick={() => {
-              void run({ kind: "retry_preparation", expectedDraftVersion }, "retry_preparation");
+              void run({ kind: "retry_preparation" }, "retry_preparation");
             }}
           >
             Retry

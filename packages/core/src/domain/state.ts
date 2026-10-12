@@ -63,7 +63,7 @@ export interface CommandContext {
   readonly db: Db;
   readonly actor: Actor;
   readonly access: Access;
-  /** Locked for the transaction, as the lock (and any version fence) returned it. */
+  /** Locked for the transaction, as read before the shared fence moved its version. */
   readonly agreement: AgreementRow;
   readonly state: AgreementState;
 }
@@ -165,39 +165,43 @@ export interface Fence {
   readonly expected: number;
 }
 
-/**
- * Locks the agreement row; with a fence, a stale expected version is a conflict. The shared fence
- * moves the version and the list order on; the draft fence is only checked here, because staging
- * the draft moves it (see `stageDraft`).
- */
 export async function lockAgreement(
   db: Db,
   tenantId: string,
   agreementId: string,
-  fence: Fence | null,
 ): Promise<AgreementRow> {
-  if (fence === null) {
-    const locked = await db.query<AgreementRow>(
-      `SELECT ${AGREEMENT_COLUMNS} FROM dripsign.agreement
-       WHERE tenant_id = $1 AND id = $2 FOR UPDATE`,
-      [tenantId, agreementId],
-    );
-    const row = locked.rows[0];
-    if (row === undefined) throw notFound();
-    return row;
-  }
-  const fenced = await db.query<AgreementRow>(
-    fence.on === "shared"
-      ? `UPDATE dripsign.agreement SET version = version + 1, updated_at = now()
-         WHERE tenant_id = $1 AND id = $2 AND version = $3
-         RETURNING ${AGREEMENT_COLUMNS}`
-      : `SELECT ${AGREEMENT_COLUMNS} FROM dripsign.agreement
-         WHERE tenant_id = $1 AND id = $2 AND draft_version = $3 FOR UPDATE`,
-    [tenantId, agreementId, fence.expected],
+  const locked = await db.query<AgreementRow>(
+    `SELECT ${AGREEMENT_COLUMNS} FROM dripsign.agreement
+     WHERE tenant_id = $1 AND id = $2 FOR UPDATE`,
+    [tenantId, agreementId],
   );
-  const row = fenced.rows[0];
-  if (row === undefined) throw conflict();
+  const row = locked.rows[0];
+  if (row === undefined) throw notFound();
   return row;
+}
+
+/**
+ * A stale expected version is a conflict. Runs after `requireAction`, so a recipient's staff-only
+ * command never learns the private draft version. The shared fence moves the version and the list
+ * order on; the draft fence is only checked here, because every change to the terms moves it (see
+ * `stageDraft`).
+ */
+export async function checkFence(
+  db: Db,
+  agreement: AgreementRow,
+  fence: Fence | null,
+): Promise<void> {
+  if (fence === null) return;
+  if (fence.on === "draft") {
+    if (agreement.draftVersion !== fence.expected) throw conflict();
+    return;
+  }
+  const moved = await db.query(
+    `UPDATE dripsign.agreement SET version = version + 1, updated_at = now()
+     WHERE tenant_id = $1 AND id = $2 AND version = $3`,
+    [agreement.tenantId, agreement.id, fence.expected],
+  );
+  if (moved.rowCount !== 1) throw conflict();
 }
 
 export async function readAgreement(

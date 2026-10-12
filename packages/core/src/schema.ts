@@ -248,7 +248,7 @@ export const commandSchema = z.discriminatedUnion("kind", [
     source: documentSourceSchema,
   }),
   z.strictObject({ kind: z.literal("publish"), ...fenced, reviewedSha256: sha256Schema }),
-  z.strictObject({ kind: z.literal("retry_preparation"), ...draftFenced }),
+  z.strictObject({ kind: z.literal("retry_preparation") }),
   z.strictObject({
     kind: z.literal("add_recipient"),
     ...fenced,
