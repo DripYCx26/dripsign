@@ -42,6 +42,7 @@ CREATE TABLE dripsign.agreement (
   tenant_id uuid NOT NULL REFERENCES dripsign.tenant (id),
   -- Globally unique as well: recipient URLs carry only the agreement id.
   id uuid NOT NULL UNIQUE,
+  -- The live draft title, private to staff: recipients read the current revision's title.
   title text NOT NULL CHECK (length(title) BETWEEN 1 AND 200),
   status text NOT NULL DEFAULT 'draft'
     CHECK (status IN ('draft', 'negotiating', 'signing', 'signed', 'void')),
