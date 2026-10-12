@@ -107,17 +107,20 @@ h3 {
   transition: scale var(--ds-motion-press) var(--ds-ease-enter);
 }
 
-:where(
-  :is(
-      a[href],
-      button,
-      summary,
-      [role="menuitem"],
-      [role="tab"],
-      label:has(> input[type="radio"]:not(:disabled))
-    ):not(:disabled, [aria-disabled="true"]):active
-) {
-  scale: var(--ds-press);
+/* Only with motion allowed, so a component's own `--ds-press` cannot bring it back. */
+@media (prefers-reduced-motion: no-preference) {
+  :where(
+    :is(
+        a[href],
+        button,
+        summary,
+        [role="menuitem"],
+        [role="tab"],
+        label:has(> input[type="radio"]:not(:disabled))
+      ):not(:disabled, [aria-disabled="true"]):active
+  ) {
+    scale: var(--ds-press);
+  }
 }
 
 .ds-visually-hidden {
