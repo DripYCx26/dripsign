@@ -40,7 +40,7 @@ export function useUnloadGuard(active: boolean): void {
     const pushSentinel = () => {
       window.history.pushState({ ...state, [SENTINEL]: true }, "", href);
     };
-    // One approved step back passes unasked; the guard stays armed in case there is nowhere to go.
+    // The guard's own step back passes unasked; the rest stays armed in case there is nowhere to go.
     let approved = false;
     const guardBack = (event: PopStateEvent) => {
       if (approved) {
@@ -59,7 +59,7 @@ export function useUnloadGuard(active: boolean): void {
       pushSentinel();
     };
     const guard = (event: BeforeUnloadEvent) => {
-      if (!approved) event.preventDefault();
+      event.preventDefault();
     };
     pushSentinel();
     window.addEventListener("popstate", guardBack, true);
