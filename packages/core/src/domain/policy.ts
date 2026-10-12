@@ -15,6 +15,8 @@ export interface PolicySnapshot {
   readonly round: "active" | "finalizing" | null;
   readonly aiEnabled: boolean;
   readonly readyAiSuggestions: number;
+  /** A turn is still queued: the next one waits so its history includes this reply. */
+  readonly aiTurnPending: boolean;
 }
 
 export interface PolicyViewer {
@@ -132,7 +134,7 @@ function addDraftActions(snapshot: PolicySnapshot, allowed: Set<AgreementAction>
   ) {
     allowed.add("publish");
   }
-  if (snapshot.aiEnabled) allowed.add("ask_ai");
+  if (snapshot.aiEnabled && !snapshot.aiTurnPending) allowed.add("ask_ai");
   if (snapshot.readyAiSuggestions > 0) allowed.add("apply_ai");
 }
 

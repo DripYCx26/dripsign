@@ -13,6 +13,7 @@ const negotiating: PolicySnapshot = {
   round: null,
   aiEnabled: true,
   readyAiSuggestions: 0,
+  aiTurnPending: false,
 };
 const signing: PolicySnapshot = { ...negotiating, status: "signing", round: "active" };
 const observer: PolicyViewer = {
@@ -33,6 +34,18 @@ interface Row {
 }
 
 const rows: readonly Row[] = [
+  {
+    rule: "a queued assistant turn holds the next one until it settles",
+    snapshot: { ...negotiating, aiTurnPending: true },
+    capacity: "staff",
+    excludes: ["ask_ai"],
+  },
+  {
+    rule: "with no queued turn staff may ask the assistant",
+    snapshot: negotiating,
+    capacity: "staff",
+    includes: ["ask_ai"],
+  },
   {
     rule: "staff publish needs unpublished draft changes",
     snapshot: { ...negotiating, publicationNeeded: true },

@@ -34,7 +34,8 @@ export function AssistantComposer({ view, turns, run, busy }: AssistantComposerP
   const text = stored ?? "";
   const field = useAutosize(text);
   const refining = composerMode(turns, false) === "draft";
-  const ready = text.trim() !== "" && !busy;
+  // Typing stays open while a turn is queued; sending waits for the policy to allow the next one.
+  const ready = text.trim() !== "" && !busy && view.allowedActions.includes("ask_ai");
 
   async function send() {
     if (!ready) return;

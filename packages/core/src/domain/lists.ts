@@ -32,6 +32,9 @@ const POLICY_COLUMNS = `a.status, a.draft_dirty AS "draftDirty",
   (SELECT count(*)::int FROM dripsign.ai_suggestion i
    WHERE i.tenant_id = a.tenant_id AND i.agreement_id = a.id AND i.status = 'ready'
      AND i.mode = 'draft') AS "readyAi",
+  EXISTS (SELECT 1 FROM dripsign.ai_suggestion i
+          WHERE i.tenant_id = a.tenant_id AND i.agreement_id = a.id AND i.status = 'queued')
+    AS "aiTurnPending",
   p.by AS "pendingBy", p.email AS "pendingEmail", g.status AS "roundStatus"`;
 
 const PENDING_PROPOSAL = `LEFT JOIN LATERAL (
@@ -69,6 +72,7 @@ interface PolicyRow {
   preparation: PreparationStatus;
   draftSigners: number;
   readyAi: number;
+  aiTurnPending: boolean;
   pendingBy: Capacity | null;
   pendingEmail: string | null;
   roundStatus: RoundStatus | null;
@@ -86,6 +90,7 @@ function policySnapshot(row: PolicyRow): PolicySnapshot {
     round: round === "active" || round === "finalizing" ? round : null,
     aiEnabled: loadConfig().ai !== null,
     readyAiSuggestions: row.readyAi,
+    aiTurnPending: row.aiTurnPending,
   };
 }
 

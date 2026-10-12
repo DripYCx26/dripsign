@@ -71,6 +71,8 @@ export function AssistantThread({ view, run, busy, preview, notice }: AssistantT
   const candidateId = candidateOf(view.aiSuggestions)?.id ?? null;
   const canAsk = view.allowedActions.includes("ask_ai");
   const newest = turns.at(-1);
+  // A queued turn withholds ask_ai, but the composer stays so staff can type the next request.
+  const composing = canAsk || turns.some((turn) => turn.status === "queued");
   const list = useRef<HTMLOListElement>(null);
   useScrollToNewest(list, newest === undefined ? "" : `${newest.id}:${newest.status}`);
 
@@ -103,7 +105,7 @@ export function AssistantThread({ view, run, busy, preview, notice }: AssistantT
         </ol>
       )}
       {notice}
-      {canAsk && <AssistantComposer view={view} turns={turns} run={run} busy={busy} />}
+      {composing && <AssistantComposer view={view} turns={turns} run={run} busy={busy} />}
     </div>
   );
 }

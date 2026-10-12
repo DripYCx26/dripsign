@@ -208,6 +208,7 @@ interface StateRow {
   round: LiveRound | null;
   signers: LiveSigner[];
   readyAi: number;
+  aiTurnPending: boolean;
   viewerId: string | null;
   viewerIsRoundSigner: boolean;
   viewerHasSigned: boolean;
@@ -240,6 +241,9 @@ export async function loadState(
        (SELECT count(*)::int FROM dripsign.ai_suggestion
         WHERE tenant_id = $1 AND agreement_id = $2 AND status = 'ready' AND mode = 'draft')
          AS "readyAi",
+       EXISTS (SELECT 1 FROM dripsign.ai_suggestion
+               WHERE tenant_id = $1 AND agreement_id = $2 AND status = 'queued')
+         AS "aiTurnPending",
        (SELECT id FROM viewer) AS "viewerId",
        EXISTS (SELECT 1 FROM dripsign.round_signer rs JOIN live_round g ON g.id = rs.round_id
                WHERE rs.tenant_id = $1 AND rs.recipient_id = (SELECT id FROM viewer))
@@ -275,6 +279,7 @@ export async function loadState(
       round: row.round?.status ?? null,
       aiEnabled: loadConfig().ai !== null,
       readyAiSuggestions: row.readyAi,
+      aiTurnPending: row.aiTurnPending,
     },
   };
 }
