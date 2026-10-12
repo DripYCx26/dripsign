@@ -1,24 +1,28 @@
 .facts {
   display: grid;
   margin: 0;
-  gap: var(--ds-space-3);
-  border: var(--ds-hairline);
+  gap: var(--ds-space-4);
   border-radius: var(--ds-radius-card);
-  background: var(--ds-surface);
-  padding: var(--ds-space-4);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-card);
+  padding: var(--ds-space-4) var(--ds-space-6);
 }
 
 .facts > div {
   display: flex;
   flex-wrap: wrap;
+  align-items: baseline;
   justify-content: space-between;
   gap: var(--ds-space-2);
 }
 
 .facts dt {
-  color: var(--ds-text-secondary);
-  font-size: var(--ds-text-sm);
-  line-height: var(--ds-leading-sm);
+  color: var(--ds-text-tertiary);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-medium);
+  letter-spacing: var(--ds-tracking-caps);
+  line-height: var(--ds-leading-xs);
+  text-transform: uppercase;
 }
 
 .facts dd {

@@ -8,3 +8,8 @@
   font-size: var(--ds-text-lg);
   line-height: var(--ds-leading-lg);
 }
+
+.address {
+  color: var(--ds-text);
+  font-weight: var(--ds-weight-medium);
+}

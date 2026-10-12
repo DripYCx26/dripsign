@@ -1,5 +1,6 @@
 "use client";
 
+import type { SignatureFace } from "@dripsign/core/pdf/font";
 import { LIMITS } from "@dripsign/core/schema";
 import { Button, Checkbox, Notice, TextField } from "@/ui";
 import { SignaturePreview } from "./SignaturePreview.tsx";
@@ -13,6 +14,8 @@ type SignStepProps = Readonly<{
   grantName: string;
   name: string;
   nameError: string | undefined;
+  /** The face the signed PDF will draw the name in, from the server's name check. */
+  nameFace: SignatureFace;
   agreed: boolean;
   pending: boolean;
   /** Reviewed, agreed, named, and the document is still the one that was reviewed. */
@@ -54,7 +57,10 @@ export function SignStep(props: SignStepProps) {
             if (canSign) props.onSign();
           }}
         >
-          <p className={styles.consent}>{props.consent}</p>
+          <div className={styles.consent}>
+            <p className={styles.label}>Consent</p>
+            <p>{props.consent}</p>
+          </div>
           <Checkbox
             label="I agree to sign electronically."
             checked={agreed}
@@ -64,13 +70,14 @@ export function SignStep(props: SignStepProps) {
             label="Full name"
             name="typedName"
             autoComplete="name"
+            size="lg"
             placeholder={grantName}
             value={name}
             maxLength={LIMITS.typedName}
             error={nameError}
             onChange={props.onName}
           />
-          <SignaturePreview name={name.trim()} />
+          <SignaturePreview name={name.trim()} face={props.nameFace} />
           {failure !== null && (
             <Notice tone="stop" live="alert">
               {failure}

@@ -1,19 +1,25 @@
+/* The signature as evidence, drawn like the sheet's signature block and the PDF's signature box. */
 .preview {
   display: grid;
   margin: 0;
-  gap: var(--ds-space-1);
+  gap: var(--ds-space-2);
+  border-radius: var(--ds-radius-card);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-card);
+  padding: var(--ds-space-6) var(--ds-space-6) var(--ds-space-4);
 }
 
 .ink {
   display: flex;
-  height: var(--ds-size-signature-ink);
+  min-height: var(--ds-display-md-leading);
   align-items: flex-end;
-  border-bottom: var(--ds-hairline);
-  overflow: hidden;
+  border-bottom: 1px solid var(--ds-border-strong);
   padding-bottom: var(--ds-space-1);
   color: var(--ds-text);
-  font-family: var(--ds-font-signature, var(--ds-font-display));
+  font-family: var(--ds-font-display);
   font-size: var(--ds-display-md);
+  font-style: italic;
+  letter-spacing: var(--ds-tracking-display);
   line-height: var(--ds-display-md-leading);
   overflow-wrap: anywhere;
 }
@@ -21,6 +27,15 @@
 .ink[data-long] {
   font-size: var(--ds-display-sm);
   line-height: var(--ds-display-sm-leading);
+}
+
+/* Past Newsreader's glyphs the PDF draws Noto Sans; the preview says so in the interface sans. */
+.ink[data-face="plain"] {
+  font-family: var(--ds-font);
+  font-size: var(--ds-text-xl);
+  font-style: normal;
+  letter-spacing: normal;
+  line-height: var(--ds-display-md-leading);
 }
 
 .caption {

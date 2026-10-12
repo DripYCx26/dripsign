@@ -10,7 +10,7 @@ import {
   uuidSchema,
 } from "../schema.ts";
 import type { DocumentSource, SigningField } from "../schema.ts";
-import { assertTextRenderable, embedSignatureFont, SIGNATURE_BOX, wrapPdfText } from "./font.ts";
+import { assertTextRenderable, embedFont, SIGNATURE_BOX, wrapPdfText } from "./font.ts";
 import { MAX_PREPARED_PAGES, metadata, pageNumbers, PAPER, savePdf, textWriter } from "./render.ts";
 
 const signerSchema = z.strictObject({ id: uuidSchema, name: personNameSchema, email: emailSchema });
@@ -39,9 +39,9 @@ export async function prepareDraftPdf(input: PreparationInput): Promise<Prepared
     throw new DomainError("invalid", "The required signers are invalid.");
   }
   const document = await PDFDocument.create({ updateMetadata: false });
-  const font = await embedSignatureFont(document);
+  const font = await embedFont(document, "plain");
   const write = textWriter(document, font, LIMITS.pdfPages);
-  write(title, 22, 24);
+  write(title, 24, 24);
   for (const [index, section] of source.sections.entries()) {
     write(`${String(index + 1)}. ${section.heading}`, 14, 12);
     for (const paragraph of section.paragraphs) write(paragraph, 11, 12);
@@ -78,13 +78,12 @@ function appendSignaturePages(
       ["signature", 54, SIGNATURE_BOX.width],
       ["date", 420, 138],
     ] as const) {
-      page.drawRectangle({
-        x,
-        y: bottom,
-        width,
-        height: SIGNATURE_BOX.height,
-        borderWidth: 0.5,
-        borderColor: rgb(0.5, 0.55, 0.6),
+      // A signing line, not a box: the signed PDF writes the name above it.
+      page.drawLine({
+        start: { x, y: bottom },
+        end: { x: x + width, y: bottom },
+        thickness: 0.75,
+        color: rgb(0.33, 0.34, 0.37),
       });
       page.drawText(type === "signature" ? "Signature" : "Date (UTC)", {
         x,

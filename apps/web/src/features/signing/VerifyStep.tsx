@@ -64,7 +64,11 @@ export function VerifyStep({ email, autoFocus, onVerified }: VerifyStepProps) {
 
   return (
     <StepFrame title="Confirm it’s you." autoFocus={autoFocus}>
-      {!sent && <p className={styles.note}>We’ll send a code to {email}.</p>}
+      {!sent && (
+        <p className={styles.note}>
+          We’ll send a code to <span className={styles.address}>{email}</span>.
+        </p>
+      )}
       {message !== null && (
         <Notice tone="stop" live="alert">
           {message}
@@ -73,7 +77,7 @@ export function VerifyStep({ email, autoFocus, onVerified }: VerifyStepProps) {
       {sent ? (
         <div className={styles.entry}>
           <Notice tone="info" live="polite">
-            Code sent to {email}. It expires in 10 minutes.
+            Code sent to <span className={styles.address}>{email}</span>. It expires in 10 minutes.
           </Notice>
           <CodeField
             key={codeKey}

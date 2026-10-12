@@ -56,6 +56,7 @@ export function SignFlow({ agreementId, initialView, needsVerification }: SignFl
           grantName={grantName}
           name={flow.name}
           nameError={flow.nameError}
+          nameFace={flow.nameFace}
           agreed={flow.agreed}
           pending={flow.pending}
           canSign={flow.canSign}

@@ -65,12 +65,12 @@ function useSignerInput() {
   const [reviewed, setReviewed] = useState<Reviewed | null>(null);
   const [agreed, setAgreed] = useState(false);
   const [name, setName] = useState("");
-  const nameError = useNameCheck(name);
+  const { message: nameError, face: nameFace } = useNameCheck(name);
   const reset = () => {
     setReviewed(null);
     setAgreed(false);
   };
-  return { reviewed, setReviewed, agreed, setAgreed, name, setName, nameError, reset };
+  return { reviewed, setReviewed, agreed, setAgreed, name, setName, nameError, nameFace, reset };
 }
 
 /**
@@ -90,7 +90,7 @@ export function useSignFlow(
   );
   const [stage, setStage] = useState<Stage>(needsVerification ? "verify" : "review");
   const [moved, setMoved] = useState(false);
-  const { reviewed, setReviewed, agreed, setAgreed, name, setName, nameError, reset } =
+  const { reviewed, setReviewed, agreed, setAgreed, name, setName, nameError, nameFace, reset } =
     useSignerInput();
   const flow = derive({ view, errorCode: error?.code ?? null, stage, reviewed });
   const trimmed = name.trim();
@@ -122,6 +122,7 @@ export function useSignFlow(
     canSign,
     pending,
     nameError,
+    nameFace,
     name,
     agreed,
     reviewed: reviewed !== null && !flow.stale,

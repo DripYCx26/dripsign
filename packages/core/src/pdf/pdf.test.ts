@@ -18,24 +18,29 @@ interface PdfReader {
   };
 }
 
-async function pdfText(bytes: Uint8Array): Promise<string> {
+/** Every text run in the PDF with the id of the font resource it is drawn in. */
+async function pdfRuns(bytes: Uint8Array): Promise<{ str: string; font: string }[]> {
   const require = createRequire(new URL("../../../../package.json", import.meta.url));
   const reader = (await import(require.resolve("pdfjs-dist/legacy/build/pdf.mjs"))) as PdfReader;
   const task = reader.getDocument({ data: bytes.slice(), verbosity: 0 });
   const document = await task.promise;
   try {
-    const lines: string[] = [];
+    const runs: { str: string; font: string }[] = [];
     for (let page = 1; page <= document.numPages; page++) {
       const content = await (await document.getPage(page)).getTextContent();
       for (const item of content.items) {
-        if (typeof item === "object" && item !== null && "str" in item)
-          lines.push(String(item.str));
+        if (typeof item === "object" && item !== null && "str" in item && "fontName" in item)
+          runs.push({ str: String(item.str), font: String(item.fontName) });
       }
     }
-    return lines.join("\n");
+    return runs;
   } finally {
     await task.destroy();
   }
+}
+
+async function pdfText(bytes: Uint8Array): Promise<string> {
+  return (await pdfRuns(bytes)).map((run) => run.str).join("\n");
 }
 
 afterEach(() => vi.useRealTimers());
@@ -45,7 +50,10 @@ describe("PDF evidence", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-10-11T10:03:00Z"));
     await expect(assertRenderableName("Jordan 🛸")).rejects.toMatchObject({ code: "invalid" });
-    const signers = ["Jordan Lee", "Morgan Diaz"].map((name, index) => ({
+    // The preview's verdict: Newsreader Italic for a Latin name, Noto Sans past its glyphs.
+    await expect(assertRenderableName(" Jordan Lee ")).resolves.toBe("script");
+    await expect(assertRenderableName("Мария Иванова")).resolves.toBe("plain");
+    const signers = ["Jordan Lee", "Мария Иванова"].map((name, index) => ({
       id: randomUUID(),
       name,
       email: `signer${String(index)}@example.test`,
@@ -114,6 +122,15 @@ describe("PDF evidence", () => {
       for (const text of [revisionText, signedText, auditText])
         expect(text).not.toContain(signer.email);
     }
+    // Each signature is drawn in the face the preflight named: Newsreader Italic for the Latin
+    // name, and for the Cyrillic one the same Noto Sans as the evidence line under it.
+    const evidenceLine = "Signed 2026-10-11 10:01:00 UTC · Email verified";
+    const signedRuns = await pdfRuns(firstSigned);
+    const fontOf = (str: string) => signedRuns.filter((run) => run.str === str).at(-1)?.font;
+    expect(new TextDecoder("latin1").decode(firstSigned)).toContain("/Newsreader16pt-Italic");
+    expect(fontOf(evidenceLine)).toBeDefined();
+    expect(fontOf("Jordan Lee")).not.toBe(fontOf(evidenceLine));
+    expect(fontOf("Мария Иванова")).toBe(fontOf(evidenceLine));
     expect(auditText).toContain("s***@example.test");
     expect(auditText).toContain("IP address: 127.0.0.1");
     const renamed = {

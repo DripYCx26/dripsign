@@ -12,6 +12,8 @@ type StepFrameProps = Readonly<{
   autoFocus: boolean;
   /** The step needs the full column (the document); the others sit in a narrower one. */
   wide?: boolean;
+  /** An outcome's glyph before the title, which then reads at display size: the signed receipt. */
+  icon?: ReactNode;
   children: ReactNode;
 }>;
 
@@ -21,6 +23,7 @@ export function StepFrame({
   hideTitle = false,
   autoFocus,
   wide = false,
+  icon,
   children,
 }: StepFrameProps) {
   const heading = useRef<HTMLHeadingElement>(null);
@@ -30,7 +33,17 @@ export function StepFrame({
   }, []);
   return (
     <section className={styles.step} data-wide={wide || undefined}>
-      <h2 ref={heading} tabIndex={-1} className={hideTitle ? "ds-visually-hidden" : styles.title}>
+      <h2
+        ref={heading}
+        tabIndex={-1}
+        className={hideTitle ? "ds-visually-hidden" : styles.title}
+        data-outcome={icon !== undefined || undefined}
+      >
+        {icon !== undefined && (
+          <span className={styles.icon} aria-hidden="true">
+            {icon}
+          </span>
+        )}
         {title}
       </h2>
       {children}

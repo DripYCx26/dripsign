@@ -5,7 +5,8 @@ import { hashBytes } from "../adapters/storage.ts";
 import { DomainError } from "../errors.ts";
 import { LIMITS, signingFieldSchema } from "../schema.ts";
 import type { SigningField } from "../schema.ts";
-import { embedSignatureFont, fitSignatureText } from "./font.ts";
+import { embedFont, fitSignatureText, signatureFaceOf } from "./font.ts";
+import type { SignatureFace } from "./font.ts";
 import { MAX_PREPARED_PAGES, metadata, pageNumbers, savePdf, textWriter } from "./render.ts";
 
 export interface ArchiveEvidence {
@@ -138,18 +139,49 @@ function validDimension(value: number): boolean {
   return Number.isFinite(value) && value >= 1 && value <= 14_400;
 }
 
-function drawField(document: PDFDocument, field: SigningField, value: string, font: PDFFont): void {
+type Typeface = Readonly<{ font: PDFFont; face: SignatureFace }>;
+
+function drawField(
+  document: PDFDocument,
+  field: SigningField,
+  value: string,
+  { font, face }: Typeface,
+): void {
   const page = document.getPage(field.page - 1);
   const { width, height } = page.getSize();
-  const fitted = fitSignatureText(value, font, field.width * width, field.height * height);
+  const box = { width: field.width * width, height: field.height * height };
+  const fitted = fitSignatureText(value, font, box, face);
+  // Set on the signing line: the last line's descenders clear the rule at the box's foot.
+  const descent =
+    font.heightAtSize(fitted.size, { descender: true }) -
+    font.heightAtSize(fitted.size, { descender: false });
+  const baseline = height * (1 - field.y - field.height) + 4 + descent;
   fitted.lines.forEach((line, index) => {
     page.drawText(line, {
       x: field.x * width + 4,
-      y: height * (1 - field.y) - 4 - fitted.lineHeight * (index + 1),
+      y: baseline + fitted.lineHeight * (fitted.lines.length - 1 - index),
       size: fitted.size,
       font,
       color: rgb(0.1, 0.1, 0.1),
     });
+  });
+}
+
+/** Under the signature's caption: when it was signed, and that a fresh email code preceded it. */
+function drawEvidenceLine(
+  document: PDFDocument,
+  field: SigningField,
+  signedAt: string,
+  font: PDFFont,
+): void {
+  const page = document.getPage(field.page - 1);
+  const { width, height } = page.getSize();
+  page.drawText(`Signed ${signedAt.slice(0, 19).replace("T", " ")} UTC · Email verified`, {
+    x: field.x * width,
+    y: height * (1 - field.y - field.height) - 32,
+    size: 9,
+    font,
+    color: rgb(0.33, 0.34, 0.37),
   });
 }
 
@@ -171,18 +203,23 @@ export async function renderSignedPdf(
   if (document.isEncrypted || document.getPageCount() > MAX_PREPARED_PAGES)
     throw new DomainError("invalid", "The revision PDF is invalid.");
   const fields = validateFields(evidence, document);
-  const font = await embedSignatureFont(document);
+  const font = await embedFont(document, "plain");
+  const plain: Typeface = { font, face: "plain" };
+  // Embedded only when a signature uses it, so the face appears in the signature box alone.
+  let script: Promise<PDFFont> | undefined;
   for (const field of fields) {
     const signature = sorted.find((item) => item.recipientId === field.recipientId);
     if (!signature) throw new DomainError("invalid", "A required signature is missing.");
-    drawField(
-      document,
-      field,
-      field.type === "signature"
-        ? signature.typedName
-        : new Date(signature.signedAt).toISOString().slice(0, 10),
-      font,
-    );
+    const signedAt = new Date(signature.signedAt).toISOString();
+    if (field.type === "date") {
+      drawField(document, field, signedAt.slice(0, 10), plain);
+      continue;
+    }
+    const face = await signatureFaceOf(signature.typedName);
+    const typeface =
+      face === "script" ? { font: await (script ??= embedFont(document, face)), face } : plain;
+    drawField(document, field, signature.typedName, typeface);
+    drawEvidenceLine(document, field, signedAt, font);
   }
   for (const page of document.getPages()) {
     page.drawText("Signed electronically with DripSign", { x: 54, y: 18, font, size: 7 });
@@ -214,7 +251,7 @@ function auditText(value: string | null, font: PDFFont): string {
 export async function renderAuditRecord(evidence: ArchiveEvidence): Promise<Uint8Array> {
   const sorted = signatures(evidence);
   const document = await PDFDocument.create({ updateMetadata: false });
-  const font = await embedSignatureFont(document);
+  const font = await embedFont(document, "plain");
   const write = textWriter(document, font, MAX_PREPARED_PAGES);
   write("Signing audit record", 22, 20);
   write(evidence.title, 16);

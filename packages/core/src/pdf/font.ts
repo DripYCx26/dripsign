@@ -1,5 +1,6 @@
-// One font for signature text in the PDF and the on-screen preview; the name preflight and the
-// renderer share these glyphs, widths and fit rules so a recorded signature always renders.
+// The PDF's two faces: Noto Sans for all text, and Newsreader Italic for a typed signature whose
+// every glyph it has. The name preflight and the renderer share these glyphs, widths and fit rules
+// so a recorded signature always renders, in the face the preview showed.
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,10 +12,16 @@ import { typedNameSchema } from "../schema.ts";
 
 // A path from `import.meta.url`, not `new URL(..., import.meta.url)`: Next's bundler rewrites that
 // form into a `/_next/static/media/` asset URL that `readFile` cannot open in a server action.
-const SIGNATURE_FONT_PATH = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../../assets/NotoSans-Regular.ttf",
-);
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+/** `script` is Newsreader Italic, `plain` is Noto Sans. */
+export type SignatureFace = "script" | "plain";
+
+// One literal path per face, so the bundler traces the two files and nothing else.
+const READ_FONT: Readonly<Record<SignatureFace, () => Promise<Uint8Array>>> = {
+  script: () => readFile(path.join(HERE, "../../assets/Newsreader-Italic.ttf")),
+  plain: () => readFile(path.join(HERE, "../../assets/NotoSans-Regular.ttf")),
+};
 
 /** The signature box drawn on the signature page, in PDF points. */
 export const SIGNATURE_BOX = { width: 330, height: 46 } as const;
@@ -23,32 +30,32 @@ export const NAME_NOT_RENDERABLE_MESSAGE =
   "This name can’t be shown in the signed PDF. Remove unusual characters or shorten it.";
 
 const PADDING = 8;
-const MAX_SIZE = 16;
+const MAX_SIZE: Readonly<Record<SignatureFace, number>> = { script: 20, plain: 16 };
 const MIN_SIZE = 6;
 
-let fontBytes: Promise<Uint8Array> | undefined;
-let preflightFont: Promise<PDFFont> | undefined;
-
-function loadSignatureFontBytes(): Promise<Uint8Array> {
-  fontBytes ??= readFile(SIGNATURE_FONT_PATH);
-  return fontBytes;
-}
+const fontBytes = new Map<SignatureFace, Promise<Uint8Array>>();
+let preflightFonts: Promise<Readonly<Record<SignatureFace, PDFFont>>> | undefined;
 
 /** Embeds the full font (no subsetting) so every glyph the preflight accepted is present. */
-export async function embedSignatureFont(document: PDFDocument): Promise<PDFFont> {
+export async function embedFont(document: PDFDocument, face: SignatureFace): Promise<PDFFont> {
+  let bytes = fontBytes.get(face);
+  if (!bytes) {
+    bytes = READ_FONT[face]();
+    fontBytes.set(face, bytes);
+  }
   document.registerFontkit(fontkit);
-  return document.embedFont(await loadSignatureFontBytes(), { subset: false });
+  return document.embedFont(await bytes, { subset: false });
+}
+
+function covers(font: PDFFont, value: string): boolean {
+  const supported = new Set(font.getCharacterSet());
+  return Array.from(value).every(
+    (character) => character === "\n" || supported.has(character.codePointAt(0) ?? -1),
+  );
 }
 
 export function assertTextRenderable(value: string, font: PDFFont): void {
-  const supported = new Set(font.getCharacterSet());
-  for (const character of value) {
-    if (character === "\n") continue;
-    const codePoint = character.codePointAt(0);
-    if (codePoint === undefined || !supported.has(codePoint)) {
-      throw new DomainError("invalid", NAME_NOT_RENDERABLE_MESSAGE);
-    }
-  }
+  if (!covers(font, value)) throw new DomainError("invalid", NAME_NOT_RENDERABLE_MESSAGE);
 }
 
 export function wrapPdfText(
@@ -90,17 +97,17 @@ export interface FittedText {
   readonly lines: readonly string[];
 }
 
-/** Largest size from 16pt down to 6pt at which the text fits the padded box. */
+/** Largest size from the face's maximum (20pt script, 16pt plain) down to 6pt that fits the box. */
 export function fitSignatureText(
   value: string,
   font: PDFFont,
-  width: number,
-  height: number,
+  box: Readonly<{ width: number; height: number }>,
+  face: SignatureFace = "plain",
 ): FittedText {
   assertTextRenderable(value, font);
-  const boxWidth = width - PADDING;
-  const boxHeight = height - PADDING;
-  for (let size = MAX_SIZE; size >= MIN_SIZE; size--) {
+  const boxWidth = box.width - PADDING;
+  const boxHeight = box.height - PADDING;
+  for (let size = MAX_SIZE[face]; size >= MIN_SIZE; size--) {
     const lines = wrapPdfText(value, font, size, boxWidth);
     const lineHeight = Math.max(font.heightAtSize(size, { descender: true }), size * 1.2);
     const fitsWidth = lines.every((line) => font.widthOfTextAtSize(line, size) <= boxWidth);
@@ -109,21 +116,26 @@ export function fitSignatureText(
   throw new DomainError("invalid", NAME_NOT_RENDERABLE_MESSAGE);
 }
 
-/** Server-side gate for a typed signature name; resolves to the trimmed name that will be stored. */
-export async function assertRenderableName(name: string): Promise<string> {
+/** Newsreader Italic when it has every glyph of the name, else Noto Sans: what the PDF draws. */
+export async function signatureFaceOf(name: string): Promise<SignatureFace> {
+  return covers((await getPreflightFonts()).script, name) ? "script" : "plain";
+}
+
+/** Server-side gate for a typed signature name; resolves to the face the signed PDF draws it in. */
+export async function assertRenderableName(name: string): Promise<SignatureFace> {
   const parsed = typedNameSchema.safeParse(name);
   if (!parsed.success) throw new DomainError("invalid", NAME_NOT_RENDERABLE_MESSAGE);
-  fitSignatureText(
-    parsed.data,
-    await getPreflightFont(),
-    SIGNATURE_BOX.width,
-    SIGNATURE_BOX.height,
-  );
-  return parsed.data;
+  const face = await signatureFaceOf(parsed.data);
+  const fonts = await getPreflightFonts();
+  fitSignatureText(parsed.data, fonts[face], SIGNATURE_BOX, face);
+  return face;
 }
 
 // Metrics only: the cached document is never saved.
-function getPreflightFont(): Promise<PDFFont> {
-  preflightFont ??= PDFDocument.create({ updateMetadata: false }).then(embedSignatureFont);
-  return preflightFont;
+function getPreflightFonts(): Promise<Readonly<Record<SignatureFace, PDFFont>>> {
+  preflightFonts ??= PDFDocument.create({ updateMetadata: false }).then(async (document) => ({
+    script: await embedFont(document, "script"),
+    plain: await embedFont(document, "plain"),
+  }));
+  return preflightFonts;
 }

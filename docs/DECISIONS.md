@@ -3,6 +3,19 @@
 Dated product and architecture decisions. A newer entry supersedes an older one where they
 conflict; superseded text is deleted rather than kept as history (Git holds it).
 
+## 2026-10-11: Web and PDF share the signature face
+
+A typed signature is drawn in Newsreader Italic on the web (the sign preview and the reading
+sheet) and in the signed PDF, which embeds that face for the signature box alone and only when a
+signature uses it. When Newsreader lacks a glyph of the name, every surface falls back to the
+plain face (Noto Sans in the PDF); the server's name check returns the face, so the preview, the
+sheet and the PDF agree. The PDF body stays Noto Sans: its glyph coverage decides which terms are
+renderable, an evidence property, so web and PDF match in structure and signature, not in body
+face. Under the signature the PDF prints the signing time and "Email verified", never an address.
+
+Rejected: a handwriting face (a novelty beside a serif contract, Latin only); Newsreader for the
+PDF body (it would refuse terms that render today).
+
 ## 2026-10-11: V1 removes uploaded PDFs and completion export
 
 V1 removes uploaded PDFs and completion export; staff write terms in the app; host completion

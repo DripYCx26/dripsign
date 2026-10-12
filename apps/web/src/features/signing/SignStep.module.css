@@ -1,15 +1,28 @@
 .form {
   display: grid;
-  gap: var(--ds-space-5);
+  gap: var(--ds-space-6);
 }
 
-/* The consent is evidence: set apart as a well and read at body size, verbatim. */
+/* The consent is evidence: a raised card with an accent rule, read at body size, verbatim. */
 .consent {
-  border: var(--ds-hairline);
+  display: grid;
+  gap: var(--ds-space-2);
   border-radius: var(--ds-radius-card);
-  background: var(--ds-surface);
-  padding: var(--ds-space-4);
+  background: var(--ds-surface-raised);
+  box-shadow:
+    inset var(--ds-space-1) 0 0 var(--ds-accent),
+    var(--ds-shadow-card);
+  padding: var(--ds-space-4) var(--ds-space-6);
   color: var(--ds-text);
   font-size: var(--ds-text-lg);
   line-height: var(--ds-leading-lg);
+}
+
+.label {
+  color: var(--ds-text-tertiary);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-medium);
+  letter-spacing: var(--ds-tracking-caps);
+  line-height: var(--ds-leading-xs);
+  text-transform: uppercase;
 }

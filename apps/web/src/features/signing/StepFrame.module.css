@@ -2,7 +2,7 @@
   display: grid;
   width: min(var(--ds-layout-reading), 100%);
   justify-self: center;
-  gap: var(--ds-space-5);
+  gap: var(--ds-space-6);
 }
 
 .step[data-wide] {
@@ -14,21 +14,43 @@
   outline: none;
 }
 
+.title[data-outcome] {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-3);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-display-sm);
+  font-weight: var(--ds-weight-display);
+  letter-spacing: var(--ds-tracking-display);
+  line-height: var(--ds-display-sm-leading);
+}
+
+.icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--ds-confirm);
+}
+
+.icon > svg {
+  width: var(--ds-space-6);
+  height: var(--ds-space-6);
+}
+
 /* Pinned to the foot of the screen under a long document, like the publish action. */
 .actions {
   position: sticky;
   bottom: 0;
   z-index: 1;
   display: flex;
+  min-height: calc(var(--ds-size-control-lg) + var(--ds-space-5));
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--ds-space-3) var(--ds-space-4);
-  padding: var(--ds-space-3) var(--ds-space-4);
-  border: var(--ds-hairline);
   border-radius: var(--ds-radius-card);
-  background: var(--ds-surface);
+  background: var(--ds-surface-raised);
   box-shadow: var(--ds-shadow-float);
+  padding: var(--ds-space-2) var(--ds-space-4);
 }
 
 .buttons {
