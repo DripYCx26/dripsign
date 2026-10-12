@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Copy, IconButton } from "@/ui";
-import styles from "./CopyHash.module.css";
 
 const NOTICE_MS = 2500;
 const SHORT_LENGTH = 12;
@@ -15,7 +14,7 @@ const ANNOUNCE: Readonly<Record<Outcome, string>> = {
   failed: "Couldn’t copy.",
 };
 
-/** The first 12 characters of a SHA-256 in mono, and a button that copies all 64. */
+/** A fact for a `<dl>`: the first 12 characters of a SHA-256 in mono, and a button that copies all 64. */
 export function CopyHash({ sha256, label }: Readonly<{ sha256: string; label: string }>) {
   const [outcome, setOutcome] = useState<Outcome>("idle");
   const timer = useRef<number | undefined>(undefined);
@@ -41,22 +40,22 @@ export function CopyHash({ sha256, label }: Readonly<{ sha256: string; label: st
   }
 
   return (
-    <div className={styles.hash}>
-      <span className={styles.label}>{label}</span>
-      <code className={styles.value} title={sha256}>
-        {sha256.slice(0, SHORT_LENGTH)}
-      </code>
-      <IconButton
-        label="Copy full SHA-256"
-        icon={<Copy aria-hidden="true" />}
-        size="sm"
-        onClick={() => {
-          void copy();
-        }}
-      />
-      <span className="ds-visually-hidden" role="status">
-        {ANNOUNCE[outcome]}
-      </span>
+    <div>
+      <dt>{label}</dt>
+      <dd>
+        <code title={sha256}>{sha256.slice(0, SHORT_LENGTH)}</code>
+        <IconButton
+          label="Copy full SHA-256"
+          icon={<Copy aria-hidden="true" />}
+          size="sm"
+          onClick={() => {
+            void copy();
+          }}
+        />
+        <span className="ds-visually-hidden" role="status">
+          {ANNOUNCE[outcome]}
+        </span>
+      </dd>
     </div>
   );
 }

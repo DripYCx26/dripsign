@@ -197,15 +197,6 @@
     var(--ds-border) 50%,
     var(--ds-surface-subtle) 70%
   );
-
-  /* lane1 alias: remove in lane 2/3 */
-  --ds-ink: var(--ds-accent);
-  /* lane1 alias: remove in lane 2/3 */
-  --ds-on-ink: var(--ds-on-accent);
-  /* lane1 alias: remove in lane 2/3 */
-  --ds-shadow-paper: var(--ds-shadow-card);
-  /* lane1 alias: remove in lane 2/3 */
-  --ds-size-signature-ink: var(--ds-display-md-leading);
 }
 
 /* Dark theme on a dark device. The hairline, focus and skeleton tokens are built from these, so

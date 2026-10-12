@@ -1,8 +1,9 @@
 "use client";
 
 import type { AgreementView, Capacity } from "@dripsign/core/types";
+import Link from "next/link";
 import type { ReactNode } from "react";
-import { Pill, Segmented } from "@/ui";
+import { Mark, Pill, Segmented } from "@/ui";
 import { BackButton } from "./BackButton.tsx";
 import type { RunCommand } from "./commands.ts";
 import styles from "./WorkspaceHeader.module.css";
@@ -21,6 +22,8 @@ type WorkspaceHeaderProps = Readonly<{
   tab: WorkspaceTab;
   onTab: (tab: WorkspaceTab) => void;
   onPanel: (panel: Panel) => void;
+  /** The account menu: the bar's last control. */
+  account: ReactNode;
   /** The document's revision, view and draft controls; null when there is no document. */
   documentControls: ReactNode;
 }>;
@@ -33,11 +36,11 @@ const TABS = [
 ] as const;
 
 /**
- * The workspace head, one 56 px row: back, the title in the display face with its status, the
- * step's chip and, on a void agreement, why; then the document's controls, the primary action and
- * the menu. Under 1024 px the Chat | Document switch (only when there is a rail to switch to),
- * the document controls and the primary action share a second row, and there is none when they
- * are all absent. Each control is rendered once and placed by CSS.
+ * The workspace's only bar, one 56 px row: the mark (home), back, the title in the display face
+ * with its status, the step's chip and, on a void agreement, why; then the document's controls,
+ * the primary action, the menu and the account. Under 1024 px the Chat | Document switch (only
+ * when there is a rail to switch to), the document controls and the primary action share a second
+ * row, and there is none when they are all absent. Each control is rendered once and placed by CSS.
  */
 export function WorkspaceHeader({
   view,
@@ -48,6 +51,7 @@ export function WorkspaceHeader({
   tab,
   onTab,
   onPanel,
+  account,
   documentControls,
 }: WorkspaceHeaderProps) {
   const { title, status, voidReason } = view.agreement;
@@ -55,9 +59,10 @@ export function WorkspaceHeader({
   const secondRow = rail !== "none" || step.label !== "" || documentControls !== null;
   return (
     <header className={styles.header} data-tab={tab} data-second-row={secondRow ? "" : undefined}>
-      <div className={styles.back}>
-        <BackButton label="Back to agreements" href={HOME[capacity]} />
-      </div>
+      <Link href={HOME[capacity]} className={styles.brand}>
+        <Mark compact />
+      </Link>
+      <BackButton label="Back to agreements" href={HOME[capacity]} />
       <div className={styles.title}>
         <h1>{title}</h1>
         <Pill status={pillStatus(status)} />
@@ -82,13 +87,18 @@ export function WorkspaceHeader({
           />
         </div>
       )}
-      {documentControls !== null && <div className={styles.document}>{documentControls}</div>}
+      {documentControls !== null && (
+        <div className={styles.document} data-divided={step.label !== "" ? "" : undefined}>
+          {documentControls}
+        </div>
+      )}
       <div className={styles.primary}>
         <WorkspacePrimary step={step} run={run} busy={busy} onPanel={onPanel} />
       </div>
       <div className={styles.menu}>
         <WorkspaceMenu view={view} capacity={capacity} onPanel={onPanel} />
       </div>
+      <div className={styles.account}>{account}</div>
     </header>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import type { AgreementView, Capacity } from "@dripsign/core/types";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useCommand } from "@/features/command/useCommand.ts";
 import { DocumentControls } from "@/features/document/DocumentControls.tsx";
 import { useDocumentState } from "@/features/document/useDocumentState.ts";
@@ -17,6 +17,8 @@ import styles from "./WorkspaceShell.module.css";
 type WorkspaceShellProps = Readonly<{
   agreementId: string;
   capacity: Capacity;
+  /** The account menu, drawn at the end of this workspace's own bar. */
+  account: ReactNode;
   initialView: AgreementView;
   initialTab: WorkspaceTab | undefined;
   rev: number | undefined;
@@ -33,7 +35,7 @@ function isWaitingOnWorker(view: AgreementView): boolean {
 }
 
 /**
- * The workspace both capacities share: the header, the thread rail beside the document, and
+ * The workspace both capacities share: the bar, the thread rail beside the document, and
  * staff's drawers. It holds the one `useCommand` for the agreement, so a single command is in
  * flight at a time and the view stays the source of everything shown, and the one poll that keeps
  * the view moving while the worker prepares a PDF or answers the assistant.
@@ -41,6 +43,7 @@ function isWaitingOnWorker(view: AgreementView): boolean {
 export function WorkspaceShell({
   agreementId,
   capacity,
+  account,
   initialView,
   initialTab,
   rev,
@@ -83,6 +86,7 @@ export function WorkspaceShell({
         busy={pending}
         rail={rail}
         tab={tab}
+        account={account}
         onTab={nav.selectTab}
         onPanel={open}
         documentControls={

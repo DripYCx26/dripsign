@@ -81,7 +81,7 @@ export function PublishReview({ view }: Readonly<{ view: AgreementView }>) {
           <SectionDiff before={previous.source} after={draft.source} />
         </section>
       )}
-      <section aria-label="The PDF that will be published">
+      <section className={styles.desk} aria-label="The PDF that will be published">
         <PdfView
           src={fileUrl(view.agreement.id, "draft", { as: "staff" })}
           sha256={document.sha256}

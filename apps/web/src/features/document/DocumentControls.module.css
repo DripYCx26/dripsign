@@ -2,28 +2,29 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--ds-space-2) var(--ds-space-3);
-}
-
-.revision {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-}
-
-/* The chevron button's own padding is pulled in so the label and glyph sit one 4 px step apart. */
-.revision > button {
-  margin-inline-start: calc(
-    var(--ds-space-1) - (var(--ds-size-control-md) - var(--ds-size-icon)) / 2
-  );
+  gap: var(--ds-space-2);
 }
 
 .label {
-  color: var(--ds-text);
-  font-size: var(--ds-text-md);
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
   font-weight: var(--ds-weight-medium);
-  line-height: var(--ds-leading-md);
+  line-height: var(--ds-leading-sm);
   white-space: nowrap;
+}
+
+/* The menu's trigger is an icon button; here it is a quiet 32 px button of words and a chevron.
+   The attribute raises the selector over the icon button's square size. */
+.revision > button[data-size] {
+  width: auto;
+  min-height: var(--ds-size-control-sm);
+  gap: var(--ds-space-1);
+  padding: 0 var(--ds-space-2) 0 var(--ds-space-3);
+}
+
+/* Inside the button the words take its colour, so hover darkens them with the chevron. */
+.revision .label {
+  color: inherit;
 }
 
 .blank {

@@ -8,9 +8,16 @@
   display: grid;
   gap: var(--ds-space-3);
   padding: var(--ds-space-4);
-  border: var(--ds-hairline);
   border-radius: var(--ds-radius-card);
-  background: var(--ds-surface);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-card);
+}
+
+/* The pages lie on the desk, as in the workspace. */
+.desk {
+  padding: var(--ds-space-6);
+  border-radius: var(--ds-radius-panel);
+  background: var(--ds-desk);
 }
 
 .signers {

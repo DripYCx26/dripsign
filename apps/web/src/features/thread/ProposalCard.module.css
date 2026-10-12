@@ -1,16 +1,19 @@
-/* A proposal card: raised, hairline, an attention edge while it waits on the viewer. */
+/* A proposal card: raised, an attention edge while it waits on the viewer. The edge is an inset
+   shadow, so the corner radius survives. */
 
 .card {
   display: grid;
   gap: var(--ds-space-3);
   padding: var(--ds-space-4);
-  border: var(--ds-hairline);
   border-radius: var(--ds-radius-panel);
   background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-card);
 }
 
 .card[data-turn="you"] {
-  border-inline-start: var(--ds-space-1) solid var(--ds-attention);
+  box-shadow:
+    inset var(--ds-space-1) 0 0 var(--ds-attention),
+    var(--ds-shadow-card);
 }
 
 .head {

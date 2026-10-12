@@ -1,33 +1,77 @@
-/* The sheet is [data-paper]: light-theme text on paper, off-white on a dark device. */
+/* The typeset sheet: paper on the desk, a title block, sections numbered by a CSS counter in a
+   hanging gutter, and a signature block. It follows the theme (light paper, a dark page on a dark
+   device); the PDF tab is the white artifact. Numbers count headed sections only. */
+
 .sheet {
-  padding: clamp(var(--ds-space-5), 5vw, calc(var(--ds-space-14) + var(--ds-space-4)));
-  border: var(--ds-hairline);
-  border-radius: var(--ds-radius-card);
+  max-width: calc(66ch + var(--ds-space-14) * 3);
+  margin-inline: auto;
+  padding: calc(var(--ds-space-14) + var(--ds-space-4))
+    clamp(var(--ds-space-5), 8%, calc(var(--ds-space-14) + var(--ds-space-8)))
+    calc(var(--ds-space-14) + var(--ds-space-8));
+  border-radius: var(--ds-radius-sheet);
   background: var(--ds-paper);
-  box-shadow: var(--ds-shadow-paper);
+  box-shadow:
+    var(--ds-shadow-card),
+    0 0 0 1px var(--ds-paper-edge);
   color: var(--ds-text);
   font-family: var(--ds-font-display);
   font-size: var(--ds-text-read);
   line-height: var(--ds-leading-read);
+  counter-reset: section;
+  /* The hanging gutter: section numbers sit in it, paragraphs start after it. */
+  --sheet-gutter: var(--ds-space-10);
 }
 
-/* The sheet fills the pane; the text keeps a measure a reader can follow, centred on it. */
+.sheet[data-void] {
+  border-top: 1px solid var(--ds-quiet);
+  color: var(--ds-text-secondary);
+}
+
+/* The sheet is as wide as a page; the text keeps a measure a reader can follow, centred on it. */
 .sheet > * {
-  max-width: var(--ds-layout-reading);
+  max-width: 66ch;
   margin-inline: auto;
 }
 
+.titleBlock {
+  display: grid;
+  gap: var(--ds-space-3);
+  padding-bottom: var(--ds-space-6);
+  margin-bottom: var(--ds-space-8);
+  border-bottom: var(--ds-hairline);
+}
+
 .title {
-  margin-bottom: var(--ds-space-6);
-  font-size: var(--ds-display-sm);
-  line-height: var(--ds-display-sm-leading);
+  font-size: var(--ds-display-lg);
+  font-weight: var(--ds-weight-display);
+  letter-spacing: var(--ds-tracking-display);
+  line-height: var(--ds-display-lg-leading);
+  text-wrap: balance;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-1) var(--ds-space-4);
+  color: var(--ds-text-tertiary);
+  font-family: var(--ds-font);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-medium);
+  letter-spacing: var(--ds-tracking-caps);
+  line-height: var(--ds-leading-xs);
+  text-transform: uppercase;
+}
+
+.tag {
+  color: var(--ds-quiet);
+  font-weight: var(--ds-weight-semibold);
 }
 
 /* The suggestion sits in a second column at the heading's line, so the heading never runs under
    it; the paragraphs below take the full width. */
 .section {
-  margin-bottom: var(--ds-space-6);
-  scroll-margin-top: var(--ds-space-4);
+  margin-bottom: var(--ds-space-8);
+  scroll-margin-top: var(--ds-space-6);
 }
 
 .section[data-suggestable] {
@@ -60,26 +104,48 @@
 }
 
 .heading {
+  display: grid;
+  grid-template-columns: var(--sheet-gutter) minmax(0, 1fr);
   margin-bottom: var(--ds-space-2);
   font-family: var(--ds-font-display);
-  font-size: var(--ds-text-read);
-  font-weight: var(--ds-weight-semibold);
-  line-height: var(--ds-leading-read);
+  font-size: var(--ds-text-xl);
+  font-weight: var(--ds-weight-display);
+  letter-spacing: -0.005em;
+  line-height: var(--ds-leading-xl);
+  counter-increment: section;
+}
+
+.heading::before {
+  content: counter(section) ".";
+  color: var(--ds-text-tertiary);
+  font-variant-numeric: tabular-nums;
 }
 
 .paragraph {
   margin-bottom: var(--ds-space-3);
+  padding-inline-start: var(--sheet-gutter);
   white-space: pre-line;
   overflow-wrap: anywhere;
 }
 
 .signatures {
-  margin-top: var(--ds-space-10);
+  padding-top: var(--ds-space-6);
+  margin-top: var(--ds-space-14);
+  border-top: var(--ds-hairline);
+}
+
+.signaturesHeading {
+  margin-bottom: var(--ds-space-6);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-xl);
+  font-weight: var(--ds-weight-display);
+  line-height: var(--ds-leading-xl);
 }
 
 .signers {
   display: grid;
-  gap: var(--ds-space-6);
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--ds-space-8) var(--ds-space-10);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -87,29 +153,68 @@
 
 .signer {
   display: grid;
-  gap: var(--ds-space-1);
+  min-width: 0;
   max-width: var(--ds-layout-sheet-narrow);
+  gap: var(--ds-space-2);
+  align-content: end;
 }
 
-.line {
-  height: var(--ds-space-8);
-  border-bottom: 1px solid var(--ds-text-secondary);
+/* A signer yet to sign: the rule is drawn and the name stands under it. */
+.rule {
+  min-height: calc(var(--ds-display-md-leading) + var(--ds-space-1));
+  border-bottom: 1px solid var(--ds-border-strong);
 }
 
+.pending {
+  color: var(--ds-text-secondary);
+  font-family: var(--ds-font);
+  font-size: var(--ds-text-md);
+  line-height: var(--ds-leading-md);
+}
+
+/* A signed signer: the typed name in the italic over the rule. */
 .ink {
   display: flex;
-  min-height: var(--ds-space-8);
+  min-height: calc(var(--ds-display-md-leading) + var(--ds-space-1));
   align-items: flex-end;
-  border-bottom: 1px solid var(--ds-text-secondary);
-  font-family: var(--ds-font-signature, var(--ds-font-display));
-  font-size: var(--ds-display-sm);
-  line-height: var(--ds-display-sm-leading);
+  padding-bottom: var(--ds-space-1);
+  border-bottom: 1px solid var(--ds-border-strong);
+  font-size: var(--ds-display-md);
+  font-style: italic;
+  letter-spacing: var(--ds-tracking-display);
+  line-height: var(--ds-display-md-leading);
   overflow-wrap: anywhere;
 }
 
-/* The signing time reads in the sheet's face, not the evidence mono; the digits stay aligned. */
-.signed time {
-  font-family: inherit;
-  font-size: inherit;
-  font-variant-numeric: tabular-nums;
+.evidence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-1) var(--ds-space-3);
+  color: var(--ds-text-secondary);
+  font-family: var(--ds-font);
+  font-size: var(--ds-text-xs);
+  line-height: var(--ds-leading-xs);
+}
+
+.verified {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  color: var(--ds-confirm);
+  font-weight: var(--ds-weight-medium);
+}
+
+.verified > svg {
+  width: var(--ds-size-icon-inline);
+  height: var(--ds-size-icon-inline);
+  stroke-width: var(--ds-icon-stroke);
+}
+
+@media (max-width: 639px) {
+  .sheet {
+    --sheet-gutter: var(--ds-space-8);
+
+    padding-block: var(--ds-space-10);
+  }
 }

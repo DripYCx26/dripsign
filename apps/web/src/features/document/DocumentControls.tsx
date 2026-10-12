@@ -10,30 +10,33 @@ const MODES = [
   { value: "pdf", label: "PDF" },
 ] as const;
 
-/** The revision shown, with a menu to choose another when there is another to choose. */
+/** The revision shown, as a quiet button that opens the others when there is another to choose. */
 function RevisionMenu({ doc }: Readonly<{ doc: DocumentState }>) {
   const choose = useRevisionParam();
   const { options, value, defaultValue, draft } = doc;
   const label = options.find((option) => option.value === value)?.label ?? "";
+  if (options.length < 2) return <span className={styles.label}>{label}</span>;
   return (
     <div className={styles.revision}>
-      <span className={styles.label}>{label}</span>
-      {options.length > 1 && (
-        <Menu
-          label="Choose revision"
-          icon={<ChevronDown aria-hidden="true" />}
-          // Hold the revision still for as long as the draft is being edited.
-          disabled={draft.edit !== null}
-          items={options.map((option) => ({
-            id: option.value,
-            label: option.label,
-            icon: option.value === value ? <Check /> : <span className={styles.blank} />,
-          }))}
-          onAction={(next) => {
-            choose(next === defaultValue ? null : next);
-          }}
-        />
-      )}
+      <Menu
+        label={`${label}, choose revision`}
+        icon={
+          <>
+            <span className={styles.label}>{label}</span>
+            <ChevronDown aria-hidden="true" />
+          </>
+        }
+        // Hold the revision still for as long as the draft is being edited.
+        disabled={draft.edit !== null}
+        items={options.map((option) => ({
+          id: option.value,
+          label: option.label,
+          icon: option.value === value ? <Check /> : <span className={styles.blank} />,
+        }))}
+        onAction={(next) => {
+          choose(next === defaultValue ? null : next);
+        }}
+      />
     </div>
   );
 }

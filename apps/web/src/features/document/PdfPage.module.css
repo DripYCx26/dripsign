@@ -1,10 +1,12 @@
-/* Each page is a white sheet in both themes; the placeholder keeps the page's shape so the
-   scroll position does not jump as canvases come and go. */
+/* Each page is the artifact: white in both themes, never the themed sheet. The placeholder keeps
+   the page's shape so the scroll position does not jump as canvases come and go. */
 .slot {
   position: relative;
   width: 100%;
-  border: var(--ds-hairline);
-  background: var(--ds-paper);
+  overflow: clip;
+  border-radius: var(--ds-radius-sheet);
+  background: var(--ds-pdf-page);
+  box-shadow: var(--ds-shadow-card);
 }
 
 .canvas {

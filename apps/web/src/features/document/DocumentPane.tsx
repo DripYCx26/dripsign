@@ -7,7 +7,7 @@ import { Banner, Button, EmptyState } from "@/ui";
 import styles from "./DocumentPane.module.css";
 import { DraftForm } from "./DraftForm.tsx";
 import { PdfView } from "./PdfView.tsx";
-import { ReadingView } from "./ReadingView.tsx";
+import { ReadingView, type ReadingMeta } from "./ReadingView.tsx";
 import {
   peopleFor,
   targetFields,
@@ -31,6 +31,18 @@ function pdfSrc(view: AgreementView, capacity: Capacity, target: DocumentTarget)
   if (target.kind === "draft") return fileUrl(id, "draft", { as: "staff" });
   if (target.isCurrent) return fileUrl(id, "current", { as: capacity });
   return fileUrl(id, "revision", { rev: target.revision.number, as: capacity });
+}
+
+function readingMeta(view: AgreementView, target: DocumentTarget): ReadingMeta {
+  const revision = target.kind === "revision" ? target.revision : null;
+  const completed = view.completedRound;
+  return {
+    org: view.orgName,
+    revision: revision?.number ?? null,
+    publishedAt: revision?.publishedAt ?? null,
+    signedAt: revision !== null && completed?.revisionId === revision.id ? completed.endedAt : null,
+    voided: view.agreement.status === "void",
+  };
 }
 
 /** The one line above the document when it is an older revision or the draft's PDF is not ready. */
@@ -116,6 +128,7 @@ function Body({ view, capacity, target, mode, pdfOpened, suggestable }: BodyProp
   const reading = (
     <ReadingView
       source={source}
+      meta={readingMeta(view, target)}
       signers={signersWithSignatures(view, target)}
       suggestable={suggestable}
     />

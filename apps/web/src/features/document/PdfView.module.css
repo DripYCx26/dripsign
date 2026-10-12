@@ -8,27 +8,66 @@
    text stays legible and the sheets scroll sideways inside this box, under the toolbar. */
 .pages {
   display: grid;
-  gap: var(--ds-space-4);
+  gap: var(--ds-space-6);
   overflow-x: auto;
+}
+
+/* The facts of the file as one card: caps labels over mono values, the way out to the PDF at the
+   end, and the caller's note under a hairline. */
+.card {
+  display: grid;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-3) var(--ds-space-4);
+  border-radius: var(--ds-radius-card);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-card);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+}
+
+.card > :not(:first-child) {
+  padding-top: var(--ds-space-2);
+  border-top: var(--ds-hairline);
 }
 
 .bar {
   display: flex;
-  min-height: var(--ds-size-row);
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--ds-space-2) var(--ds-space-4);
-  color: var(--ds-text-secondary);
-  font-size: var(--ds-text-sm);
+  gap: var(--ds-space-2) var(--ds-space-6);
 }
 
 .facts {
   display: flex;
   min-width: 0;
   flex-wrap: wrap;
+  align-items: start;
+  gap: var(--ds-space-2) var(--ds-space-8);
+  margin: 0;
+}
+
+.facts > div {
+  display: grid;
+  gap: var(--ds-space-half);
+}
+
+.facts dt {
+  color: var(--ds-text-tertiary);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-medium);
+  letter-spacing: var(--ds-tracking-caps);
+  line-height: var(--ds-leading-xs);
+  text-transform: uppercase;
+}
+
+.facts dd {
+  display: flex;
+  min-height: var(--ds-size-control-sm);
   align-items: center;
-  gap: var(--ds-space-2) var(--ds-space-4);
+  gap: var(--ds-space-1);
+  margin: 0;
+  font-family: var(--ds-mono);
 }
 
 /* A quiet button, not a link: secondary ink, a box on hover, no underline. */
@@ -37,11 +76,13 @@
   min-height: var(--ds-size-control-sm);
   align-items: center;
   gap: var(--ds-space-1);
+  margin-inline-start: auto;
   border-radius: var(--ds-radius-control);
   padding: 0 var(--ds-space-2);
   color: var(--ds-text-secondary);
   font-weight: var(--ds-weight-medium);
   text-decoration: none;
+  transition: background-color var(--ds-motion-quick) var(--ds-ease-enter);
 }
 
 .open:hover {

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { accountMenuFor } from "@/features/shell/accountMenuFor.tsx";
 import { AppShell } from "@/features/shell/AppShell.tsx";
 import { loadWorkspaceView } from "@/features/workspace/loadView.ts";
 import { parseRevision, parseTab } from "@/features/workspace/tabs.ts";
@@ -19,13 +20,14 @@ export default async function RecipientAgreementPage({ params, searchParams }: P
   const { actor, session } = await requireRecipient(id);
   const view = await loadWorkspaceView(actor, id);
   return (
-    <AppShell session={session} home="recipient">
+    <AppShell session={session} home="recipient" bar={view === null ? undefined : false}>
       {view === null ? (
         <Unavailable email={session.email} />
       ) : (
         <WorkspaceShell
           agreementId={id}
           capacity="recipient"
+          account={accountMenuFor(session, "recipient")}
           initialView={view}
           initialTab={parseTab(query.tab)}
           rev={parseRevision(query.rev)}

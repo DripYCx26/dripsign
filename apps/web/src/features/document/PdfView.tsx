@@ -18,11 +18,11 @@ type PdfViewProps = Readonly<{
   viewerRecipientId: string | null;
   /** Names for the markers of other people's fields. */
   people?: readonly FieldMarkerPerson[] | undefined;
-  /** Facts that lead the toolbar row ("SHA-256 abf2da6bcf01"). */
+  /** Facts that lead the card, each a `<div><dt>…</dt><dd>…</dd></div>`. */
   lead?: ReactNode;
-  /** A control at the end of the toolbar row. */
+  /** A control at the end of the card's row. */
   actions?: ReactNode;
-  /** A quiet line under the toolbar row. */
+  /** A quiet block under the card's row. */
   note?: ReactNode;
 }>;
 
@@ -37,22 +37,31 @@ type ToolbarProps = Readonly<{
   pages: number | null;
   lead: ReactNode;
   actions: ReactNode;
+  note: ReactNode;
 }>;
 
-/** One 40 px row: what is known of the file, a button to open it, and the caller's control. */
-function Toolbar({ src, pages, lead, actions }: ToolbarProps) {
+/** One card of what is known of the file, a button to open it, the caller's control and note. */
+function Toolbar({ src, pages, lead, actions, note }: ToolbarProps) {
   return (
-    <div className={styles.bar}>
-      <div className={styles.facts}>
-        {lead}
-        {pages !== null && <span>{`${String(pages)} ${pages === 1 ? "page" : "pages"}`}</span>}
+    <div className={styles.card}>
+      <div className={styles.bar}>
+        <dl className={styles.facts}>
+          {lead}
+          {pages !== null && (
+            <div>
+              <dt>Pages</dt>
+              <dd>{pages}</dd>
+            </div>
+          )}
+        </dl>
         <a href={src} target="_blank" rel="noreferrer" className={styles.open}>
           Open PDF
           <ExternalLink aria-hidden="true" />
           <span className="ds-visually-hidden"> (opens in a new tab)</span>
         </a>
+        {actions}
       </div>
-      {actions}
+      {note}
     </div>
   );
 }
@@ -106,8 +115,7 @@ function PdfDocument({
   const pages = loaded.status === "ready" ? loaded.doc.numPages : null;
   return (
     <div className={styles.view}>
-      <Toolbar src={src} pages={pages} lead={lead} actions={actions} />
-      {note}
+      <Toolbar src={src} pages={pages} lead={lead} actions={actions} note={note} />
       {loaded.status === "error" && (
         <Notice tone="stop" live="alert">
           This PDF couldn’t be shown here.

@@ -21,7 +21,7 @@ export default async function SignInPage({ searchParams }: Props) {
     <EntryFrame title="Sign in to DripSign">
       <SignInFlow />
       {(await devLoginEnabled()) && (
-        <ButtonLink href="/dev/sign-in" variant="quiet" size="sm">
+        <ButtonLink href="/dev/sign-in" variant="link" size="sm">
           Development: skip the email code
         </ButtonLink>
       )}

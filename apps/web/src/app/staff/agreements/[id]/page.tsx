@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { accountMenuFor } from "@/features/shell/accountMenuFor.tsx";
 import { AppShell } from "@/features/shell/AppShell.tsx";
 import { WorkspaceShell } from "@/features/workspace/WorkspaceShell.tsx";
 import { loadWorkspaceView } from "@/features/workspace/loadView.ts";
@@ -20,10 +21,11 @@ export default async function StaffAgreementPage({ params, searchParams }: Props
   const view = await loadWorkspaceView(actor, id);
   if (view === null) notFound();
   return (
-    <AppShell session={session} home="staff">
+    <AppShell session={session} home="staff" bar={false}>
       <WorkspaceShell
         agreementId={id}
         capacity="staff"
+        account={accountMenuFor(session, "staff")}
         initialView={view}
         initialTab={parseTab(query.tab)}
         rev={parseRevision(query.rev)}

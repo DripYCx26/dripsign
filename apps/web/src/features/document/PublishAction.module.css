@@ -1,14 +1,15 @@
 /* Pinned to the foot of the screen, so it stays in reach under a long PDF. */
 .action {
   position: sticky;
-  bottom: 0;
+  bottom: var(--ds-space-4);
   z-index: 1;
   display: grid;
   gap: var(--ds-space-3);
-  padding: var(--ds-space-3) var(--ds-space-4);
-  border: var(--ds-hairline);
+  min-height: calc(var(--ds-space-14) + var(--ds-space-2));
+  align-content: center;
+  padding: var(--ds-space-2) var(--ds-space-4);
   border-radius: var(--ds-radius-card);
-  background: var(--ds-surface);
+  background: var(--ds-surface-raised);
   box-shadow: var(--ds-shadow-float);
 }
 

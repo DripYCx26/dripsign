@@ -1,3 +1,5 @@
+/* The loading frame draws what the workspace will: one bar, the rail, a sheet on the desk. */
+
 .skeleton {
   display: flex;
   min-height: 0;
@@ -5,16 +7,18 @@
   flex-direction: column;
 }
 
-.head {
+.bar {
   display: flex;
   min-height: var(--ds-layout-header);
   align-items: center;
+  gap: var(--ds-space-3);
   padding: 0 var(--ds-space-6);
   border-bottom: var(--ds-hairline);
   background: var(--ds-surface);
 }
 
-.head > span {
+.bar > span:last-child {
+  flex: 1 1 auto;
   max-width: var(--ds-layout-sheet-narrow);
 }
 
@@ -31,20 +35,21 @@
   background: var(--ds-surface);
 }
 
-.document {
-  padding: var(--ds-space-6);
-  background: var(--ds-canvas);
+.desk {
+  padding: var(--ds-space-8);
+  background: var(--ds-desk);
 }
 
-.paper {
+.sheet {
   display: grid;
   max-width: var(--ds-layout-sheet-read);
   align-content: start;
   gap: var(--ds-space-3);
   margin-inline: auto;
-  padding: var(--ds-space-10);
-  border-radius: var(--ds-radius-card);
+  padding: var(--ds-space-14) var(--ds-space-10);
+  border-radius: var(--ds-radius-sheet);
   background: var(--ds-paper);
+  box-shadow: var(--ds-shadow-card);
 }
 
 @media (max-width: 1023px) {
@@ -52,7 +57,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .document {
+  .desk {
     display: none;
   }
 }

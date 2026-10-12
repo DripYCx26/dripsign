@@ -1,12 +1,28 @@
-/* A milestone in the conversation: one quiet line at the bubble gutter, never a bubble. */
+/* A milestone in the conversation: a centred caps label between hairlines, never a bubble. */
+
+.rows {
+  display: grid;
+  gap: var(--ds-space-2);
+}
 
 .row {
   display: grid;
-  gap: var(--ds-space-half);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--ds-space-3);
   color: var(--ds-text-tertiary);
   font-size: var(--ds-text-xs);
+  letter-spacing: var(--ds-tracking-caps);
   line-height: var(--ds-leading-xs);
   overflow-wrap: anywhere;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.row::before,
+.row::after {
+  content: "";
+  border-top: var(--ds-hairline);
 }
 
 .time {

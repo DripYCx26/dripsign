@@ -1,4 +1,5 @@
-/* A chat bubble: the other side's left on the surface, one's own right on the subtle well. */
+/* A chat bubble: the other side's left, raised; one's own right, in the accent wash. The corner
+   nearest the author is squared off. */
 
 .message {
   display: grid;
@@ -20,15 +21,19 @@
 .bubble {
   max-width: 88%;
   padding: var(--ds-space-2) var(--ds-space-3);
-  border: var(--ds-hairline);
   border-radius: var(--ds-radius-panel);
-  background: var(--ds-surface);
+  border-start-start-radius: var(--ds-radius-tag);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-card);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 
 .message[data-own] .bubble {
-  background: var(--ds-surface-subtle);
+  border-start-start-radius: var(--ds-radius-panel);
+  border-end-end-radius: var(--ds-radius-tag);
+  background: var(--ds-accent-soft);
+  box-shadow: none;
 }
 
 .time {

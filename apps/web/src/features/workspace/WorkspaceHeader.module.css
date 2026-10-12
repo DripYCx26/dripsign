@@ -1,21 +1,24 @@
-/* One 56 px row: back, title (with its status, chip and void reason), the document's controls, the
-   primary action, menu. Under 1024 px a second row holds the Chat | Document switch, the document
-   controls and the primary action, so the switch is the only one on the page. The row is a flex
-   wrap, so its widths never resize the first row's title. */
+/* The workspace's one bar, 56 px: mark, back, title (with its status, chip and void reason), the
+   document's controls, the primary action, the menu, the account. Under 1024 px a second row holds
+   the Chat | Document switch, the document controls and the primary action, so the switch is the
+   only one on the page. The row is a flex wrap, so its widths never resize the first row's title. */
 
 .header {
   display: flex;
   min-height: var(--ds-layout-header);
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--ds-space-2) var(--ds-space-3);
+  gap: var(--ds-space-2);
   padding: var(--ds-space-2) var(--ds-space-6);
   border-bottom: var(--ds-hairline);
   background: var(--ds-surface);
 }
 
-.back {
-  margin-inline-start: calc(var(--ds-space-2) * -1);
+.brand {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--ds-radius-control);
+  padding: var(--ds-space-1);
 }
 
 .title {
@@ -57,18 +60,32 @@
 }
 
 .document {
+  display: flex;
   flex: none;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+
+/* A hairline between what shows the document and what acts on the agreement. */
+.document[data-divided]::after {
+  content: "";
+  width: 1px;
+  height: var(--ds-size-icon-tile);
+  margin-inline-start: var(--ds-space-2);
+  background: var(--ds-border);
 }
 
 .primary,
-.menu {
+.menu,
+.account {
   display: flex;
   align-items: center;
   gap: var(--ds-space-2);
 }
 
 .primary:empty,
-.menu:empty {
+.menu:empty,
+.account:empty {
   display: none;
 }
 
@@ -77,15 +94,16 @@
     padding-inline: var(--ds-space-4);
   }
 
-  .back {
+  /* The mark and the back chevron keep order 0, ahead of everything. */
+  .title {
     order: 1;
   }
 
-  .title {
+  .menu {
     order: 2;
   }
 
-  .menu {
+  .account {
     order: 3;
   }
 
@@ -107,6 +125,10 @@
     order: 6;
   }
 
+  .document[data-divided]::after {
+    display: none;
+  }
+
   /* On the chat tab there is no document in view to control. */
   .header[data-tab="chat"] .document {
     display: none;
@@ -120,10 +142,14 @@
 }
 
 /* A phone: the title is one line, smaller, with its pills beside it; who it is from is in the
-   conversation. */
+   conversation, and the back chevron is the way home. */
 @media (max-width: 639px) {
   .header {
     padding-inline: var(--ds-space-3);
+  }
+
+  .brand {
+    display: none;
   }
 
   .title > h1 {

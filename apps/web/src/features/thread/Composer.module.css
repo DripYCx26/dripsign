@@ -1,4 +1,5 @@
-/* The composer: one raised, rounded box pinned under the list, like any chat app. */
+/* The composer: one raised, rounded box pinned under the list, like any chat app. It lifts when
+   it holds focus. */
 
 .composer {
   padding: 0 var(--ds-space-4) var(--ds-space-4);
@@ -11,15 +12,15 @@
   max-height: 50dvh;
   flex-direction: column;
   gap: var(--ds-space-1);
-  padding: var(--ds-space-1) var(--ds-space-1) var(--ds-space-1) var(--ds-space-3);
-  border: var(--ds-hairline);
+  padding: var(--ds-space-2) var(--ds-space-2) var(--ds-space-2) var(--ds-space-3);
   border-radius: var(--ds-radius-panel);
   background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-card);
+  transition: box-shadow var(--ds-motion-quick) var(--ds-ease-enter);
 }
 
 .box:focus-within {
-  border-color: var(--ds-focus);
-  box-shadow: var(--ds-ring);
+  box-shadow: var(--ds-shadow-float), var(--ds-ring);
 }
 
 /* The resting composer is this one row: the field grows, Send sits at its bottom right. */
@@ -38,7 +39,7 @@
   border: 0;
   border-radius: var(--ds-radius-control);
   background: transparent;
-  padding: var(--ds-space-2) 0;
+  padding: var(--ds-space-1) 0;
   color: var(--ds-text);
   line-height: var(--ds-leading-md);
   outline-color: transparent;
@@ -53,4 +54,9 @@
   display: flex;
   align-items: center;
   margin-inline-start: calc(-1 * var(--ds-space-2));
+}
+
+/* Propose a change: the quiet row under the field, secondary until hovered. */
+.foot > button {
+  color: var(--ds-text-secondary);
 }
