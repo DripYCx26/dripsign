@@ -11,6 +11,7 @@ import {
   uuidSchema,
 } from "@dripsign/core/schema";
 import type { Capacity } from "@dripsign/core/types";
+import { STARTER_SECTION } from "@/features/draft/templates.ts";
 import { action } from "../action.ts";
 import { actorFor, staffActor } from "../session.ts";
 
@@ -28,13 +29,7 @@ export const runCommand = action(
 const STARTER_DRAFT = {
   source: {
     title: "Untitled agreement",
-    sections: [
-      {
-        id: "terms",
-        heading: "Terms",
-        paragraphs: ["Write the terms here, or start from a template."],
-      },
-    ],
+    sections: [{ ...STARTER_SECTION, paragraphs: [...STARTER_SECTION.paragraphs] }],
   },
   recipients: [],
 };

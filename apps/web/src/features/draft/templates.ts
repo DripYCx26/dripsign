@@ -10,6 +10,13 @@ interface Template {
   readonly sections: readonly Readonly<{ heading: string; paragraphs: readonly string[] }>[];
 }
 
+/** The one section "New agreement" starts with; a draft still holding only it is blank. */
+export const STARTER_SECTION = {
+  id: "terms",
+  heading: "Terms",
+  paragraphs: ["Write the terms here, or start from a template."],
+} as const;
+
 /** Shown wherever a starter template is in use. */
 export const TEMPLATE_NOTE = "Starter text. Have it reviewed before you rely on it.";
 

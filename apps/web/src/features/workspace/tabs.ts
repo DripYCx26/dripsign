@@ -1,4 +1,5 @@
 import type { AgreementView } from "@dripsign/core/types";
+import { STARTER_SECTION } from "../draft/templates.ts";
 
 type TabSource = Pick<
   AgreementView,
@@ -21,9 +22,15 @@ function hasConversation(view: TabSource): boolean {
   return view.messages.length > 0 || view.proposals.length > 0;
 }
 
-/** The draft is still the single section a new agreement starts with. */
+/** The draft still holds only the untouched section a new agreement starts with. */
 export function isBlankDraft(view: Pick<AgreementView, "draft">): boolean {
-  return view.draft?.source.sections.length === 1;
+  const sections = view.draft?.source.sections ?? [];
+  const [only] = sections;
+  return (
+    sections.length === 1 &&
+    only?.heading === STARTER_SECTION.heading &&
+    only.paragraphs.join("\n") === STARTER_SECTION.paragraphs.join("\n")
+  );
 }
 
 export function railMode(view: TabSource): RailMode {

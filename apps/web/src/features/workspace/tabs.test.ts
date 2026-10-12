@@ -1,5 +1,6 @@
 import type { AgreementView } from "@dripsign/core/types";
 import { expect, it } from "vitest";
+import { STARTER_SECTION } from "../draft/templates.ts";
 import { defaultTab, railMode } from "./tabs.ts";
 
 type Source = Pick<
@@ -9,13 +10,16 @@ type Source = Pick<
 
 const message = { id: "m1" } as AgreementView["messages"][number];
 
-/** A draft of `sections` sections: one is the blank draft a new agreement starts as. */
+const written = { ...STARTER_SECTION, paragraphs: ["The Studio builds the site."] };
+
+/** A draft of `sections` written sections, or with none the blank draft a new agreement starts as. */
 function source(
   allowed: Source["allowedActions"],
   messages: Source["messages"],
-  sections = 1,
+  sections = 0,
 ): Source {
-  const draft = { source: { sections: Array.from({ length: sections }) } } as Source["draft"];
+  const list = sections === 0 ? [STARTER_SECTION] : Array.from({ length: sections }, () => written);
+  const draft = { source: { sections: list } } as unknown as Source["draft"];
   return { allowedActions: allowed, messages, proposals: [], aiSuggestions: [], draft };
 }
 
@@ -34,6 +38,7 @@ it("gives a draft's staff the assistant rail only when it has something to offer
   // Assistant off: the blank draft keeps its starters, a written draft has nothing for a rail.
   expect(railMode(source(["save_draft"], []))).toBe("draft");
   expect(railMode(source(["save_draft"], [], 3))).toBe("none");
+  expect(railMode(source(["save_draft"], [], 1))).toBe("none");
   expect(
     railMode({
       ...source(["save_draft"], [], 3),

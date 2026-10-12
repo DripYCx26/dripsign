@@ -69,6 +69,11 @@ function DraftActions({ doc, busy }: Readonly<{ doc: DocumentState; busy: boolea
   );
 }
 
+/** Whether any control has something to choose; with none the header leaves the slot out. */
+export function hasDocumentControls(doc: DocumentState): boolean {
+  return doc.options.length > 1 || doc.switchableMode !== null || doc.editable;
+}
+
 /**
  * The document's controls, which sit in the workspace's title row: which revision, Reading or PDF,
  * and the draft's actions. Each part appears only when it has something to choose.

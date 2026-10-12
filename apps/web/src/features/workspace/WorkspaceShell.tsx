@@ -4,7 +4,7 @@ import type { Command } from "@dripsign/core/schema";
 import type { AgreementView, Capacity } from "@dripsign/core/types";
 import { useCallback, useState, type ReactNode } from "react";
 import { useCommand } from "@/features/command/useCommand.ts";
-import { DocumentControls } from "@/features/document/DocumentControls.tsx";
+import { DocumentControls, hasDocumentControls } from "@/features/document/DocumentControls.tsx";
 import { useDocumentState } from "@/features/document/useDocumentState.ts";
 import { CommandNotice } from "./CommandNotice.tsx";
 import type { RunCommand } from "./commands.ts";
@@ -103,7 +103,9 @@ export function WorkspaceShell({
         onTab={nav.selectTab}
         onPanel={open}
         documentControls={
-          doc.target === null ? null : <DocumentControls doc={doc} busy={pending} />
+          doc.target === null || !hasDocumentControls(doc) ? null : (
+            <DocumentControls doc={doc} busy={pending} />
+          )
         }
       />
       {panel === null && notice}
