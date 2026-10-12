@@ -130,8 +130,10 @@ To validate without Azure access: `terraform init -backend=false`, `terraform fm
 
 - Database passwords: bump `db_credential_version`, apply, run the `database` job, then restart both
   apps so they read the new URL.
-- Session secret: bump `auth_secret_version`, apply, and restart the web and worker apps. Every
-  session ends.
+- Auth secret (keys the one-time sign-in codes): bump `auth_secret_version`, apply, and restart the
+  web and worker apps. Codes already sent stop working; sessions are not signed with it and stay
+  live. To end every session, run
+  `UPDATE dripsign.auth_session SET revoked_at = now() WHERE revoked_at IS NULL` against the database.
 - Operator secrets: set the new values in `operator_secrets`, bump `operator_secrets_version`,
   apply, and restart the apps that read them.
 

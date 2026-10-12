@@ -46,7 +46,6 @@ export function useDraftEdit(view: AgreementView, run: RunCommand) {
       {
         kind: "save_draft",
         expectedVersion: session.version,
-        title: check.source.title,
         source: check.source,
       },
       "save_draft",

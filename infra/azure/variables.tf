@@ -144,7 +144,7 @@ variable "db_credential_version" {
 }
 
 variable "auth_secret_version" {
-  description = "Bumping it generates a new session signing secret; every session ends."
+  description = "Bumping it generates a new secret keying one-time sign-in codes; sessions are unaffected."
   type        = number
   default     = 1
 }

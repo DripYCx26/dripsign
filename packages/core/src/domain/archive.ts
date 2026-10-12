@@ -55,13 +55,13 @@ export async function loadArchiveEvidence(
 ): Promise<ArchiveEvidence | null> {
   const { tenantId, roundId } = input;
   const found = await db.query<EvidenceRow>(
-    `SELECT g.status, g.agreement_id AS "agreementId", a.title, g.created_at AS "createdAt",
+    `SELECT g.status, g.agreement_id AS "agreementId", v.source ->> 'title' AS title,
+       g.created_at AS "createdAt",
        g.finalizing_at AS "finalizingAt", g.consent_version AS "consentVersion",
        g.consent_text AS "consentText", g.consent_hash AS "consentHash", v.number,
        g.document_sha256 AS "documentSha256", v.document_bytes AS "documentBytes",
        v.signing_fields AS "signingFields"
      FROM dripsign.signing_round g
-     JOIN dripsign.agreement a ON a.tenant_id = g.tenant_id AND a.id = g.agreement_id
      JOIN dripsign.revision v ON v.tenant_id = g.tenant_id AND v.id = g.revision_id
      WHERE g.tenant_id = $1 AND g.id = $2`,
     [tenantId, roundId],

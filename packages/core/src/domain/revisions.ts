@@ -49,25 +49,23 @@ export function signerSetHash(signers: readonly LiveSigner[]): string {
 }
 
 interface DraftInput {
-  /** The renderer prints the agreement title, so it is part of the prepared input. */
-  readonly title: string;
   readonly source: DocumentSource;
   readonly signers: readonly LiveSigner[];
 }
 
 /**
- * The draft after a title, terms or signer change, and the fence to enqueue (null when nothing
- * needs preparing). An unchanged fence that is ready or preparing keeps the prepared document;
- * a null `current` always prepares.
+ * The draft after a terms or signer change, and the fence to enqueue (null when nothing needs
+ * preparing). An unchanged fence that is ready or preparing keeps the prepared document; a null
+ * `current` always prepares.
  */
 function nextDraft(
   current: Draft | null,
   input: DraftInput,
 ): { readonly draft: Draft; readonly fence: PreparationFence | null } {
-  const { title, source, signers } = input;
+  const { source, signers } = input;
   const signerIds = signers.map((signer) => signer.id);
   const fence = {
-    inputSha256: canonicalSha256({ title, source }),
+    inputSha256: canonicalSha256(source),
     signerSetHash: signerSetHash(signers),
   };
   const prior = current?.preparation;
@@ -85,8 +83,8 @@ function nextDraft(
 }
 
 /** A new agreement's first draft: its terms, before its recipients exist. */
-export function newDraft(title: string, source: DocumentSource): Draft {
-  return nextDraft(null, { title, source, signers: [] }).draft;
+export function newDraft(source: DocumentSource): Draft {
+  return nextDraft(null, { source, signers: [] }).draft;
 }
 
 async function enqueuePreparation(
@@ -103,17 +101,19 @@ async function enqueuePreparation(
   });
 }
 
+/** The agreement title is the draft's: lists and mail read the column, the renderer the source. */
 async function writeDraft(
   db: Db,
   agreement: AgreementRow,
   draft: Draft,
   dirty: boolean,
 ): Promise<void> {
+  const parsed = draftSchema.parse(draft);
   await db.query(
     `UPDATE dripsign.agreement
-     SET draft = $3, draft_dirty = draft_dirty OR $4, updated_at = now()
+     SET draft = $3, title = $5, draft_dirty = draft_dirty OR $4, updated_at = now()
      WHERE tenant_id = $1 AND id = $2`,
-    [agreement.tenantId, agreement.id, JSON.stringify(draftSchema.parse(draft)), dirty],
+    [agreement.tenantId, agreement.id, JSON.stringify(parsed), dirty, parsed.source.title],
   );
 }
 
@@ -122,7 +122,6 @@ export async function stageDraft(
   db: Db,
   agreement: AgreementRow,
   change: {
-    readonly title?: string;
     readonly source: DocumentSource;
     readonly signers: readonly LiveSigner[];
     readonly dirty: boolean;
@@ -131,7 +130,6 @@ export async function stageDraft(
   },
 ): Promise<void> {
   const { draft, fence } = nextDraft(change.fresh === true ? null : agreement.draft, {
-    title: change.title ?? agreement.title,
     source: change.source,
     signers: change.signers,
   });
@@ -148,22 +146,12 @@ export async function restageForSigners(db: Db, agreement: AgreementRow): Promis
   await stageDraft(db, agreement, { source: agreement.draft.source, signers, dirty: true });
 }
 
-/** New terms replace the draft's terms; a title-only save keeps them. */
-export async function saveDraft(
-  ctx: CommandContext,
-  command: CommandOf<"save_draft">,
-): Promise<void> {
-  const { db, agreement } = ctx;
-  const source = command.source ?? agreement.draft.source;
-  const title = command.title ?? agreement.title;
-  if (title !== agreement.title) {
-    await db.query("UPDATE dripsign.agreement SET title = $3 WHERE tenant_id = $1 AND id = $2", [
-      agreement.tenantId,
-      agreement.id,
-      title,
-    ]);
-  }
-  await stageDraft(db, agreement, { title, source, signers: ctx.state.signers, dirty: true });
+export function saveDraft(ctx: CommandContext, command: CommandOf<"save_draft">): Promise<void> {
+  return stageDraft(ctx.db, ctx.agreement, {
+    source: command.source,
+    signers: ctx.state.signers,
+    dirty: true,
+  });
 }
 
 export function retryPreparation(ctx: CommandContext): Promise<void> {

@@ -32,15 +32,16 @@ migrations. Every tenant table carries `tenant_id` with composite `(tenant_id, .
 | `signed` | the completion gate (artifacts committed) | none |
 | `void` | staff void, any status except `signed` | none |
 
-- **Revisions** are immutable and numbered. Accepting wording stages a private draft; only a
-  reviewed publish (the client sends the draft PDF sha it reviewed) creates a revision. The first
-  publish moves `draft` to `negotiating` and sends invitations.
+- **Revisions** are immutable and numbered. Accepting wording merges the sections it changed
+  against its base revision into the private draft, by section id, keeping other staff edits and
+  the draft title; only a reviewed publish (the client sends the draft PDF sha it reviewed)
+  creates a revision. The first publish moves `draft` to `negotiating` and sends invitations.
 - **Proposals** follow a turn rule: one pending proposal per agreement (`one_pending_proposal`),
   decided by the other side. A proposal is accepted, rejected or superseded (countered by the
-  other side, or withdrawn by its author; staff withdraw as one side). Messages are
-  immutable and interleave with proposals in one thread. The thread shows milestones only
-  (revision published, signatures, completion), one line each, grouped by minute; the rest of the
-  timeline stays in the audit record.
+  other side, or withdrawn by its author; staff withdraw as one side); each outcome is dated and
+  on the timeline. Messages are immutable and interleave with proposals in one thread. The thread
+  shows milestones only (revision published, signatures, completion), one line each, grouped by
+  minute; the rest of the timeline stays in the audit record.
 - **Signing rounds** freeze a revision, its document hash and the required signers
   (`one_live_round` allows one active or finalizing round). A round is `active`, `finalizing`,
   `completed` or `void`. Only a required signer of the active round can cancel it by proposing a
@@ -143,8 +144,9 @@ sandbox`.
 Staff write the terms in the app; there is no PDF upload. A `pdf_prepare` job renders the title
 and sections (at most 200 pages) and one signature page per three required signers in the worker,
 with one embedded font ([`assets/`](../packages/core/assets)), the same file the signature preview
-uses. Its commit is fenced on the hash of the title and terms and on the signer-set hash of the
-current draft. A rendered or stored PDF is at most 20 MB.
+uses. Its commit is fenced on the hash of the draft source (title and sections) and on the
+signer-set hash of the current draft. The agreement title is the draft source's title. A
+rendered or stored PDF is at most 20 MB.
 
 The signed PDF is an electronic-signature rendition with a signature page, not certificate-based
 signing. The audit record is a second artifact built from the signature,

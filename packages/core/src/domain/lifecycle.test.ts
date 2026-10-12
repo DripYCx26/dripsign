@@ -21,10 +21,13 @@ function must<T>(value: T | null | undefined): T {
   return value;
 }
 
-function terms(term: string): DocumentSource {
+function terms(term: string, fee = "$100 a month."): DocumentSource {
   return {
     title: "Services agreement",
-    sections: [{ id: "term", heading: "Term", paragraphs: [term] }],
+    sections: [
+      { id: "term", heading: "Term", paragraphs: [term] },
+      { id: "fee", heading: "Fee", paragraphs: [fee] },
+    ],
   };
 }
 
@@ -141,7 +144,6 @@ async function publish(staff: StaffActor, agreementId: string): Promise<Agreemen
 async function negotiating(recipients: readonly NewRecipient[], recipientIds?: readonly string[]) {
   const staff = await staffActor();
   const id = await createAgreement(staff, `key-${randomUUID()}`, {
-    title: "Services agreement",
     source: terms("Twelve months."),
     recipients: [...recipients],
   });
@@ -201,7 +203,6 @@ it("negotiates, publishes, collects every signature and archives the signed agre
   const jordan = person("Jordan Lee", true);
   const morgan = person("Morgan Diaz", true);
   const id = await createAgreement(staff, `key-${randomUUID()}`, {
-    title: "Services agreement",
     source: terms("Twelve months."),
     recipients: [jordan, morgan],
   });
@@ -224,6 +225,12 @@ it("negotiates, publishes, collects every signature and archives the signed agre
     text: "Shorter term.",
     replacementSource: terms("Six months."),
   });
+  // Staff keep editing the fee while the term is negotiated; accepting the term keeps the fee.
+  view = await run(staff, id, {
+    kind: "save_draft",
+    expectedVersion: view.agreement.version,
+    source: terms("Ten months.", "$120 a month."),
+  });
   view = await run(staff, id, {
     kind: "counter",
     expectedVersion: view.agreement.version,
@@ -236,9 +243,9 @@ it("negotiates, publishes, collects every signature and archives the signed agre
     expectedVersion: view.agreement.version,
     proposalId: must(view.proposals.at(-1)).id,
   });
-  expect(must((await loadAgreementView(staff, id)).draft?.source).sections[0]?.paragraphs).toEqual([
-    "Nine months.",
-  ]);
+  expect((await loadAgreementView(staff, id)).draft?.source).toEqual(
+    terms("Nine months.", "$120 a month."),
+  );
   view = await publish(staff, id);
   const signing = await run(staff, id, {
     kind: "request_signatures",
@@ -401,18 +408,18 @@ it("cancels signing only by a signer's proposal, voids on removal, keeps one sig
   ).not.toEqual(await renderAuditRecord(evidence));
 });
 
-it("keeps terms on rename, fences, replays, rechecks authority, keeps the last admin", async () => {
+it("renames from the terms, fences, replays, rechecks authority, keeps the last admin", async () => {
   const jordan = person("Jordan Lee", true);
   const { staff, id, view: published, actors } = await negotiating([jordan]);
   const jordanActor = must(actors[0]);
-  // A title-only save keeps the terms; the same save on the old version is fenced.
+  // The agreement title follows the saved terms' title; the same save on the old version is fenced.
   const rename = {
     kind: "save_draft",
-    title: "Renamed agreement",
+    source: { ...terms("Twelve months."), title: "Renamed agreement" },
     expectedVersion: published.agreement.version,
   } as const;
   const renamed = await run(staff, id, rename);
-  expect(renamed.draft?.source).toEqual(must(published.draft?.source));
+  expect(renamed.agreement.title).toBe("Renamed agreement");
   await expect(run(staff, id, rename)).rejects.toMatchObject({ code: "conflict" });
   // Terms the renderer refuses reach staff as its sentence, not its code; a retry prepares again.
   const { inputSha256, signerSetHash } = must(renamed.draft).preparation;
@@ -453,13 +460,17 @@ it("keeps terms on rename, fences, replays, rechecks authority, keeps the last a
   });
   const withdrawn = await withdraw(jordanActor, replayed.agreement.version);
   expect(must(withdrawn.proposals.at(-1)).status).toBe("superseded");
+  // A withdrawal is dated and on the shared timeline as the author's own act.
+  expect(withdrawn.timeline.at(-1)).toMatchObject({
+    kind: "proposal_superseded",
+    actor: { capacity: "recipient", label: "Jordan Lee" },
+  });
   expect((await loadAgreementView(staff, id)).allowedActions).toContain("request_signatures");
 
   // Revoked while a message waits on the agreement, a create replay on its receipt and a roster
   // change on the staff row: all three fail.
   const second = await colleague(staff);
   const draft: NewAgreementInput = {
-    title: "Second agreement",
     source: terms("Twelve months."),
     recipients: [person("Casey Park", false)],
   };

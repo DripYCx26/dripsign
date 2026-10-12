@@ -41,7 +41,6 @@ export function validateForm(values: FormValues): Validation {
     };
   }
   const parsed = newAgreementInputSchema.safeParse({
-    title: values.title,
     source: source.source,
     recipients: values.rows.map(({ name, email, isSigner }) => ({ name, email, isSigner })),
   });

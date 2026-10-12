@@ -51,7 +51,6 @@ describe("PDF evidence", () => {
       email: `signer${String(index)}@example.test`,
     }));
     const prepared = await prepareDraftPdf({
-      title: "Services agreement",
       source: {
         title: "Services agreement",
         sections: [

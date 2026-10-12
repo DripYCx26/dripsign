@@ -64,7 +64,6 @@ export async function archiveFixture() {
   const revisionId = randomUUID();
   const roundId = randomUUID();
   const prepared = await prepareDraftPdf({
-    title: source.title,
     source,
     signers: [{ id: recipientId, name: "Jordan Lee", email: "signer@example.test" }],
   });

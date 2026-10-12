@@ -119,7 +119,7 @@ function buildView(actor: Actor, rows: ViewRows): AgreementView {
     draft: staff ? agreement.draft : null,
     recipients: recipientViews(actor, rows.recipients),
     revisions: rows.revisions.map(revisionView),
-    proposals: rows.proposals.map((row) => proposalView(labeller, row, rows.revisions)),
+    proposals: rows.proposals.map((row) => proposalView(labeller, row, rows)),
     messages: rows.messages.map((row) => ({
       id: row.id,
       author: participant(labeller, row.authorCapacity, row.authorEmail),
@@ -171,13 +171,21 @@ function revisionView(row: RevisionRow): RevisionView {
   return { ...row, publishedAt: iso(row.publishedAt) };
 }
 
-function proposalView(labeller: Labeller, row: ProposalRow, revisions: readonly RevisionRow[]) {
+function proposalView(
+  labeller: Labeller,
+  row: ProposalRow,
+  rows: { readonly revisions: readonly RevisionRow[]; readonly proposals: readonly ProposalRow[] },
+) {
   const decided = row.decidedAt;
   const publishedIn =
     row.status === "accepted" && decided !== null
-      ? revisions.find((revision) => revision.publishedAt > decided)
+      ? rows.revisions.find((revision) => revision.publishedAt > decided)
       : undefined;
-  const deciderCapacity = row.authorCapacity === "staff" ? "recipient" : "staff";
+  // A withdrawal is the author's own decision; anything else, including a counter, the other side's.
+  const withdrawn =
+    row.status === "superseded" && !rows.proposals.some((next) => next.supersedesId === row.id);
+  const other = row.authorCapacity === "staff" ? "recipient" : "staff";
+  const deciderCapacity = withdrawn ? row.authorCapacity : other;
   return {
     id: row.id,
     baseRevisionId: row.baseRevisionId,

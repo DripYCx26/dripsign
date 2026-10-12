@@ -7,7 +7,6 @@ import {
   emailSchema,
   LIMITS,
   personNameSchema,
-  titleSchema,
   uuidSchema,
 } from "../schema.ts";
 import type { DocumentSource, SigningField } from "../schema.ts";
@@ -18,7 +17,6 @@ const signerSchema = z.strictObject({ id: uuidSchema, name: personNameSchema, em
 export type DraftSigner = z.infer<typeof signerSchema>;
 
 export interface PreparationInput {
-  title: string;
   source: DocumentSource;
   signers: readonly DraftSigner[];
 }
@@ -31,8 +29,8 @@ export interface PreparedPdf {
 
 /** Renders written terms, then one signature page per three required signers. */
 export async function prepareDraftPdf(input: PreparationInput): Promise<PreparedPdf> {
-  const title = titleSchema.parse(input.title);
   const source = documentSourceSchema.parse(input.source);
+  const { title } = source;
   const signers = z.array(signerSchema).max(LIMITS.requiredSigners).parse(input.signers);
   if (
     new Set(signers.map((signer) => signer.id)).size !== signers.length ||

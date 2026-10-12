@@ -177,6 +177,7 @@ export type TimelineKind =
   | "proposal_created"
   | "proposal_accepted"
   | "proposal_rejected"
+  | "proposal_superseded"
   | "signing_requested"
   | "signature_recorded"
   | "signing_ended"

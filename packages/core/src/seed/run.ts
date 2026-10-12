@@ -125,7 +125,7 @@ async function startDraft(
   source: DocumentSource,
   recipients: NewAgreementInput["recipients"],
 ): Promise<string> {
-  const id = await script.create(staff, { title: source.title, source, recipients });
+  const id = await script.create(staff, { source, recipients });
   await script.settle();
   return id;
 }

@@ -1,10 +1,11 @@
 // The shared thread: messages and turn-based proposals. Accepting wording stages it into the
 // private draft; only a reviewed publish turns it into a revision.
 import { randomUUID } from "node:crypto";
+import { canonicalJson, documentSourceSchema } from "../schema.ts";
 import type { CommandOf, DocumentSource } from "../schema.ts";
 import { stageDraft } from "./revisions.ts";
 import { endRound } from "./signing.ts";
-import { conflict, touchAgreement, uniqueOrConflict } from "./state.ts";
+import { conflict, parseOrInvalid, touchAgreement, uniqueOrConflict } from "./state.ts";
 import type { CommandContext } from "./state.ts";
 
 const PENDING_EXISTS = "Another proposal is waiting for an answer. Reload to see it.";
@@ -54,12 +55,12 @@ export async function withdraw(ctx: CommandContext, command: CommandOf<"withdraw
 }
 
 async function supersede(ctx: CommandContext, proposalId: string): Promise<void> {
-  const { db, agreement } = ctx;
+  const { db, agreement, actor } = ctx;
   if (ctx.state.pending?.id !== proposalId) throw conflict();
   await db.query(
-    `UPDATE dripsign.proposal SET status = 'superseded'
+    `UPDATE dripsign.proposal SET status = 'superseded', decided_by = $3, decided_at = now()
      WHERE tenant_id = $1 AND id = $2 AND status = 'pending'`,
-    [agreement.tenantId, proposalId],
+    [agreement.tenantId, proposalId, actor.email],
   );
 }
 
@@ -97,7 +98,7 @@ async function insertProposal(
 
 export async function accept(ctx: CommandContext, command: CommandOf<"accept">): Promise<void> {
   const { db, agreement, state } = ctx;
-  const replacement = await decide(ctx, command.proposalId, "accepted");
+  const { replacement, base } = await decide(ctx, command.proposalId, "accepted");
   if (replacement === null) {
     // Wording without replacement terms still needs a staff edit and a new revision.
     await db.query(
@@ -106,11 +107,37 @@ export async function accept(ctx: CommandContext, command: CommandOf<"accept">):
     );
     return;
   }
+  const merged = mergeProposal(agreement.draft.source, base, replacement);
   await stageDraft(db, agreement, {
-    source: replacement,
+    source: parseOrInvalid(documentSourceSchema, merged),
     signers: state.signers,
     dirty: true,
   });
+}
+
+/**
+ * Applies only what the proposal changed against its base revision, by section id, so staff edits
+ * made to other sections (and the draft title) while it waited survive.
+ */
+function mergeProposal(
+  draft: DocumentSource,
+  base: DocumentSource,
+  proposed: DocumentSource,
+): DocumentSource {
+  const kept = new Set(proposed.sections.map((section) => section.id));
+  const removed = new Set(base.sections.filter((s) => !kept.has(s.id)).map((s) => s.id));
+  const baseById = new Map(base.sections.map((section) => [section.id, canonicalJson(section)]));
+  const changed = proposed.sections
+    .map((section, index) => ({ section, index }))
+    .filter(({ section }) => baseById.get(section.id) !== canonicalJson(section));
+  const changedById = new Map(changed.map(({ section }) => [section.id, section]));
+  const sections = draft.sections
+    .filter((section) => !removed.has(section.id))
+    .map((section) => changedById.get(section.id) ?? section);
+  for (const { section, index } of changed) {
+    if (!sections.some((s) => s.id === section.id)) sections.splice(index, 0, section);
+  }
+  return { ...draft, sections };
 }
 
 export async function reject(ctx: CommandContext, command: CommandOf<"reject">): Promise<void> {
@@ -122,16 +149,18 @@ async function decide(
   ctx: CommandContext,
   proposalId: string,
   status: "accepted" | "rejected",
-): Promise<DocumentSource | null> {
+): Promise<{ readonly replacement: DocumentSource | null; readonly base: DocumentSource }> {
   const { db, agreement, actor } = ctx;
   if (ctx.state.pending?.id !== proposalId) throw conflict();
-  const decided = await db.query<{ replacementSource: DocumentSource | null }>(
-    `UPDATE dripsign.proposal SET status = $3, decided_by = $4, decided_at = now()
-     WHERE tenant_id = $1 AND id = $2 AND status = 'pending'
-     RETURNING replacement_source AS "replacementSource"`,
+  const decided = await db.query<{ replacement: DocumentSource | null; base: DocumentSource }>(
+    `UPDATE dripsign.proposal p SET status = $3, decided_by = $4, decided_at = now()
+     FROM dripsign.revision v
+     WHERE p.tenant_id = $1 AND p.id = $2 AND p.status = 'pending'
+       AND v.tenant_id = p.tenant_id AND v.id = p.base_revision_id
+     RETURNING p.replacement_source AS replacement, v.source AS base`,
     [agreement.tenantId, proposalId, status, actor.email],
   );
   const row = decided.rows[0];
   if (row === undefined) throw conflict();
-  return row.replacementSource;
+  return row;
 }

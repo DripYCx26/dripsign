@@ -25,7 +25,7 @@ it("refuses edited or out-of-order signatures, skipped finalizing, or signing wi
   await db.query(
     `INSERT INTO dripsign.revision (tenant_id, agreement_id, id, number, document_sha256,
        document_bytes, page_count, source, signing_fields, signer_ids, published_by)
-     VALUES ($1, $2, $3, 1, $4, 10, 1, '{}', '[]', ARRAY[$5::uuid], 'staff@evidence.test')`,
+     VALUES ($1, $2, $3, 1, $4, 10, 1, '{"title": "Evidence"}', '[]', ARRAY[$5::uuid], 'staff@evidence.test')`,
     [tenant, agreement, revision, sha256, recipient],
   );
   await db.query(

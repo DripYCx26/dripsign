@@ -5,6 +5,7 @@ import { canonicalJson, type Command } from "@dripsign/core/schema";
 import type { AgreementView, Capacity } from "@dripsign/core/types";
 import type { ActionFailure, ActionResult } from "@/server/action";
 import { refreshView, runCommand } from "@/server/actions/agreements";
+import { adoptRead, type Scope, type Started } from "./adopt.ts";
 
 const FOCUS_REFRESH_MS = 15_000;
 
@@ -31,14 +32,6 @@ export interface CommandState {
   readonly refresh: () => Promise<void>;
 }
 
-interface Scope {
-  readonly agreementId: string;
-  /** The server view this scope last adopted; a new one (navigation, refresh) replaces local state. */
-  readonly source: AgreementView;
-  readonly view: AgreementView;
-  readonly error: ActionFailure | null;
-}
-
 interface Intent {
   readonly key: string;
   readonly payload: string;
@@ -60,6 +53,11 @@ export function useCommand(
   const intents = useRef(new Map<string, Intent>());
   const latest = useRef(0);
   const lastRefresh = useRef(0);
+  // The committed scope, so a request started later (a conflict reload) sees the current source.
+  const committed = useRef(scope);
+  useEffect(() => {
+    committed.current = scope;
+  }, [scope]);
 
   if (scope.agreementId !== agreementId || scope.source !== initialView) {
     setScope(
@@ -67,28 +65,24 @@ export function useCommand(
     );
   }
 
-  // Applies a response only if no newer request has started and the workspace is still the same.
-  // The ticket is checked now, not in the updater, which React may run after the next request.
-  const settle = useCallback(
-    (ticket: number, result: ActionResult<AgreementView>, keepError = false) => {
-      if (ticket !== latest.current) return;
-      setScope((current) => {
-        if (current.agreementId !== agreementId) return current;
-        if (result.ok)
-          return { ...current, view: result.value, error: keepError ? current.error : null };
-        return keepError ? current : { ...current, error: result };
-      });
-    },
+  // The request's own agreement, not the screen's: a late conflict reload for A never lands on B.
+  const start = useCallback(
+    (keepError = false): Started => started(++latest.current, agreementId, committed, keepError),
     [agreementId],
   );
 
+  const settle = useCallback((started: Started, result: ActionResult<AgreementView>) => {
+    const newest = latest.current;
+    setScope((current) => adoptRead(current, started, newest, result));
+  }, []);
+
   const load = useCallback(
     async (keepError: boolean) => {
-      const ticket = ++latest.current;
+      const started = start(keepError);
       lastRefresh.current = Date.now();
-      settle(ticket, await settled(refreshView({ agreementId, capacity }), READ_FAILED), keepError);
+      settle(started, await settled(refreshView({ agreementId, capacity }), READ_FAILED));
     },
-    [agreementId, capacity, settle],
+    [agreementId, capacity, settle, start],
   );
 
   const refresh = useCallback(async () => {
@@ -102,12 +96,12 @@ export function useCommand(
       setPending(true);
       const slot = `${agreementId}:${intentId}`;
       const receiptKey = keyFor(intents.current, slot, canonicalJson(command));
-      const ticket = ++latest.current;
+      const started = start();
       try {
         const input = { agreementId, capacity, receiptKey, command };
         const result = await settled(runCommand(input), UNCERTAIN);
         if (result.ok) intents.current.delete(slot);
-        settle(ticket, result);
+        settle(started, result);
         if (!result.ok && result.code === "conflict") await load(true);
         return result.ok;
       } finally {
@@ -115,7 +109,7 @@ export function useCommand(
         setPending(false);
       }
     },
-    [agreementId, capacity, load, settle],
+    [agreementId, capacity, load, settle, start],
   );
 
   const clearError = useCallback(() => {
@@ -139,6 +133,15 @@ function useFocusRefresh(refresh: () => Promise<void>, lastRefreshRef: RefObject
       window.removeEventListener("focus", onFocus);
     };
   }, [refresh, lastRefreshRef]);
+}
+
+function started(
+  ticket: number,
+  agreementId: string,
+  committed: RefObject<Scope>,
+  keepError: boolean,
+): Started {
+  return { ticket, agreementId, source: committed.current.source, keepError };
 }
 
 function fresh(

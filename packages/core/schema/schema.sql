@@ -134,7 +134,7 @@ CREATE TABLE dripsign.proposal (
     REFERENCES dripsign.revision (tenant_id, agreement_id, id),
   FOREIGN KEY (tenant_id, agreement_id, supersedes_id)
     REFERENCES dripsign.proposal (tenant_id, agreement_id, id),
-  CHECK ((status IN ('accepted', 'rejected')) = (decided_at IS NOT NULL)),
+  CHECK ((status <> 'pending') = (decided_at IS NOT NULL)),
   CHECK ((decided_at IS NULL) = (decided_by IS NULL))
 );
 
@@ -627,6 +627,14 @@ SELECT p.tenant_id, p.agreement_id, p.decided_at, 'proposal_' || p.status,
   p.decided_by, p.id, NULL, '{}'::jsonb, 'shared'
 FROM dripsign.proposal p
 WHERE p.status IN ('accepted', 'rejected')
+UNION ALL
+-- Countered by the other side (the successor's author) or withdrawn by its own author.
+SELECT p.tenant_id, p.agreement_id, p.decided_at, 'proposal_superseded',
+  coalesce(n.author_capacity, p.author_capacity), p.decided_by, p.id, NULL, '{}'::jsonb, 'shared'
+FROM dripsign.proposal p
+LEFT JOIN dripsign.proposal n
+  ON n.tenant_id = p.tenant_id AND n.agreement_id = p.agreement_id AND n.supersedes_id = p.id
+WHERE p.status = 'superseded'
 UNION ALL
 SELECT g.tenant_id, g.agreement_id, g.created_at, 'signing_requested', 'staff',
   g.requested_by, g.id, NULL,

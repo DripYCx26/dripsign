@@ -11,7 +11,7 @@ import { typedNameSchema } from "../schema.ts";
 
 // A path from `import.meta.url`, not `new URL(..., import.meta.url)`: Next's bundler rewrites that
 // form into a `/_next/static/media/` asset URL that `readFile` cannot open in a server action.
-export const SIGNATURE_FONT_PATH = path.join(
+const SIGNATURE_FONT_PATH = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   "../../assets/NotoSans-Regular.ttf",
 );
@@ -29,7 +29,7 @@ const MIN_SIZE = 6;
 let fontBytes: Promise<Uint8Array> | undefined;
 let preflightFont: Promise<PDFFont> | undefined;
 
-export function loadSignatureFontBytes(): Promise<Uint8Array> {
+function loadSignatureFontBytes(): Promise<Uint8Array> {
   fontBytes ??= readFile(SIGNATURE_FONT_PATH);
   return fontBytes;
 }

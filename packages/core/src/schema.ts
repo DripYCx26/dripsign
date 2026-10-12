@@ -194,7 +194,6 @@ export const newRecipientSchema = z.strictObject({
 
 export const newAgreementInputSchema = z
   .strictObject({
-    title: titleSchema,
     source: documentSourceSchema,
     recipients: z.array(newRecipientSchema).min(1).max(LIMITS.recipients),
   })
@@ -217,8 +216,7 @@ export const commandSchema = z.discriminatedUnion("kind", [
   z.strictObject({
     kind: z.literal("save_draft"),
     ...fenced,
-    title: titleSchema.optional(),
-    source: documentSourceSchema.optional(),
+    source: documentSourceSchema,
   }),
   z.strictObject({ kind: z.literal("publish"), ...fenced, reviewedSha256: sha256Schema }),
   z.strictObject({ kind: z.literal("retry_preparation"), ...fenced }),
@@ -306,7 +304,7 @@ export const jobPayloadSchema = z
     }),
     z.strictObject({
       kind: z.literal("pdf_prepare"),
-      // canonicalJson sha256 of { title, source }: what the renderer consumes.
+      // canonicalJson sha256 of the source (its title included): what the renderer consumes.
       inputSha256: sha256Schema,
       signerSetHash: sha256Schema,
     }),

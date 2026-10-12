@@ -23,6 +23,7 @@ const TIMELINE_KINDS: Readonly<Record<TimelineKind, true>> = {
   proposal_created: true,
   proposal_accepted: true,
   proposal_rejected: true,
+  proposal_superseded: true,
   signing_requested: true,
   signature_recorded: true,
   signing_ended: true,

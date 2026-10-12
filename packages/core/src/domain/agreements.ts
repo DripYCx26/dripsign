@@ -22,8 +22,8 @@ export async function insertAgreement(
     [
       actor.tenantId,
       randomUUID(),
-      input.title,
-      JSON.stringify(newDraft(input.title, input.source)),
+      input.source.title,
+      JSON.stringify(newDraft(input.source)),
       actor.email,
     ],
   );

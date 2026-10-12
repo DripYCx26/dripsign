@@ -52,8 +52,8 @@ async function prepare(
   if (!job.agreementId) throw new Error("Preparation agreement is missing");
   const agreementId = job.agreementId;
   const input = await readTx(async (db) => {
-    const result = await db.query<{ title: string; draft: unknown }>(
-      "SELECT title, draft FROM dripsign.agreement WHERE tenant_id = $1 AND id = $2",
+    const result = await db.query<{ draft: unknown }>(
+      "SELECT draft FROM dripsign.agreement WHERE tenant_id = $1 AND id = $2",
       [tenantId, agreementId],
     );
     const row = result.rows[0];
@@ -66,7 +66,7 @@ async function prepare(
       return null;
     // The domain's one signer order, the order the draft's signer-set hash was taken in.
     const signers = await liveSigners(db, tenantId, agreementId);
-    return { title: row.title, source, signers };
+    return { source, signers };
   });
   if (!input) return;
   signal.throwIfAborted();
