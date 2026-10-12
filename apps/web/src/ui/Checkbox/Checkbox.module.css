@@ -44,6 +44,10 @@
   stroke-width: var(--ds-icon-stroke);
 }
 
+.checkbox:hover .input:not(:checked):not(:disabled) + .box {
+  background: var(--ds-surface-subtle);
+}
+
 .input:checked + .box {
   border-color: var(--ds-accent);
   background: var(--ds-accent);

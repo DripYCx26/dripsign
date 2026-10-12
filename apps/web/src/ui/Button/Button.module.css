@@ -1,4 +1,4 @@
-/* The button every action uses: ink leads a screen, secondary and quiet follow, danger removes.
+/* The button every action uses: ink (the teal accent fill) leads a screen, secondary and quiet follow, danger removes.
    Variant and size are data attributes, so IconButton and the Menu trigger compose `.button` and
    share every state below. */
 
@@ -32,7 +32,7 @@
   stroke-width: var(--ds-icon-stroke);
 }
 
-.button:enabled:active {
+.button:not(:disabled):active {
   scale: 0.98;
 }
 
@@ -49,13 +49,13 @@
 }
 
 .button[data-variant="ink"] {
-  background: var(--ds-ink);
-  color: var(--ds-on-ink);
+  background: var(--ds-accent);
+  color: var(--ds-on-accent);
 }
 
-.button[data-variant="ink"]:enabled:hover {
-  background: var(--ds-ink-hover);
-  color: var(--ds-on-ink);
+.button[data-variant="ink"]:not(:disabled):hover {
+  background: var(--ds-accent-hover);
+  color: var(--ds-on-accent);
 }
 
 .button[data-variant="secondary"] {
@@ -67,8 +67,8 @@
   color: var(--ds-text-secondary);
 }
 
-.button[data-variant="secondary"]:enabled:hover,
-.button[data-variant="quiet"]:enabled:hover {
+.button[data-variant="secondary"]:not(:disabled):hover,
+.button[data-variant="quiet"]:not(:disabled):hover {
   background: var(--ds-surface-subtle);
   color: var(--ds-text);
 }
@@ -80,7 +80,7 @@
   color: var(--ds-accent);
 }
 
-.button[data-variant="link"]:enabled:hover {
+.button[data-variant="link"]:not(:disabled):hover {
   color: var(--ds-accent-hover);
 }
 
@@ -89,15 +89,15 @@
   color: var(--tone-fg);
 }
 
-.button[data-variant="danger"]:enabled:hover {
+.button[data-variant="danger"]:not(:disabled):hover {
   border-color: var(--tone-fg);
 }
 
-/* A toggle that is on: the ink fill of the Segmented's active face, kept under the pointer. */
+/* A toggle that is on: the accent fill, kept under the pointer. */
 .button[aria-pressed="true"],
-.button[aria-pressed="true"]:enabled:hover {
-  background: var(--ds-ink);
-  color: var(--ds-on-ink);
+.button[aria-pressed="true"]:not(:disabled):hover {
+  background: var(--ds-accent);
+  color: var(--ds-on-accent);
 }
 
 /* Disabled, whatever the variant: a raised face with a hairline and tertiary ink, never a dark or

@@ -1,4 +1,5 @@
-/* The mark: the drop and line in the accent beside the display-face name; no margin of its own. */
+/* The mark: the drop and line in the accent beside the display-face name; no margin of its own.
+   Compact is the glyph alone at 24 px. */
 
 .mark {
   display: inline-flex;
@@ -19,4 +20,9 @@
   stroke-width: var(--ds-icon-stroke);
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.mark[data-compact] .glyph {
+  width: var(--ds-space-6);
+  height: var(--ds-space-6);
 }

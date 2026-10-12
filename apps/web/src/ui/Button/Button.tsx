@@ -8,7 +8,7 @@ import styles from "./Button.module.css";
 /** The kinds of action; link reads as a link and stays in place. */
 export type ButtonVariant = "ink" | "secondary" | "quiet" | "danger" | "link";
 
-/** Control heights 28, 36 and 44 (`--ds-size-control-*`); 44 on a coarse pointer. */
+/** Control heights 32, 36 and 44 (`--ds-size-control-*`); 44 on a coarse pointer. */
 export type ButtonSize = "sm" | "md" | "lg";
 
 type ButtonProps = Readonly<{

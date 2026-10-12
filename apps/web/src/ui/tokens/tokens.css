@@ -1,9 +1,9 @@
 /* DripSign visual system. The only source of colour, type, space, radius, depth and motion in
    product code. Faces load through next/font in the root layout, which sets --ds-face-geist,
    --ds-face-newsreader and --ds-face-geist-mono on <html>; without them each stack falls back to
-   system faces. Light first; dark follows prefers-color-scheme only (no toggle). The light block
-   also applies to [data-paper], so a document page stays light on a dark device. Sizes and
-   durations are design constants. */
+   system faces. Light first; dark follows prefers-color-scheme only (no toggle). The reading
+   sheet follows the theme; only the PDF page (--ds-pdf-page) stays white. Sizes and durations are
+   design constants. */
 
 :root {
   /* Faces: Geist for the interface, Newsreader for display, Geist Mono for evidence data. */
@@ -24,18 +24,19 @@
   --ds-text-lg: 16px;
   --ds-leading-lg: 24px;
   --ds-text-read: 17px;
-  --ds-leading-read: 26px;
+  --ds-leading-read: 28px;
   --ds-text-xl: 20px;
   --ds-leading-xl: 28px;
 
-  /* Display scale, Newsreader only: page titles, the employer on a packet, sign-in and first run. */
+  /* Display scale, Newsreader only: page titles, sign-in and the signature ink, and the sheet title. */
   --ds-display-sm: 24px;
   --ds-display-sm-leading: 30px;
   --ds-display-md: 30px;
   --ds-display-md-leading: 36px;
-  --ds-display-lg: 40px;
-  --ds-display-lg-leading: 46px;
-  --ds-tracking-display: -0.01em;
+  --ds-display-lg: 32px;
+  --ds-display-lg-leading: 38px;
+  --ds-tracking-display: -0.015em;
+  --ds-tracking-caps: 0.06em;
 
   /* Weights: body, controls, emphasis, and the one weight display type is drawn at. */
   --ds-weight-regular: 400;
@@ -55,26 +56,24 @@
   --ds-space-10: 40px;
   --ds-space-14: 56px;
 
-  /* Shape: evidence tags, controls, cards, sheets and dialogs, status pills. */
+  /* Shape: evidence tags, paper corners, controls, cards, sheets and dialogs, status pills. */
   --ds-radius-tag: 4px;
+  --ds-radius-sheet: 4px;
   --ds-radius-control: 6px;
-  --ds-radius-card: 10px;
-  --ds-radius-panel: 14px;
+  --ds-radius-card: 8px;
+  --ds-radius-panel: 12px;
   --ds-radius-pill: 999px;
 
-  /* Sizes: control heights, row heights (a list's, a table's, a compact table's), pointer targets
-     and icon boxes. */
-  --ds-size-control-sm: 28px;
+  /* Sizes: control heights, row heights (a list's, a table's), pointer targets and icon boxes. */
+  --ds-size-control-sm: 32px;
   --ds-size-control-md: 36px;
   --ds-size-control-lg: 44px;
-  --ds-size-row-list: 64px;
+  --ds-size-row-list: 56px;
   --ds-size-row: 40px;
-  --ds-size-row-compact: 36px;
   --ds-size-target-min: 24px;
   --ds-size-icon-inline: 14px;
   --ds-size-icon: 16px;
   --ds-size-icon-tile: 20px;
-  --ds-size-signature-ink: 72px;
   --ds-icon-stroke: 1.75;
 
   /* Fixed table columns (a short tag such as a role or an action, a timestamp, a select), the
@@ -89,11 +88,6 @@
   --ds-field-max-preview: 160px;
   --ds-rule-quote: 2px;
 
-  /* The sheet of paper an agreement is read on: white, and off-white on a dark device with no
-     shadow, so a page of text does not glare against the dark canvas. */
-  --ds-paper: #ffffff;
-  --ds-shadow-paper: 0 1px 2px rgb(22 23 27 / 8%);
-
   /* A list row's height and block padding. */
   --ds-row-height: var(--ds-size-row-list);
   --ds-row-pad: var(--ds-space-3);
@@ -106,32 +100,27 @@
   --ds-layout-rail-narrow: 320px;
   --ds-layout-page: 1280px;
   --ds-layout-sheet-read: 1200px;
-  --ds-layout-sheet-max: 760px;
   --ds-layout-sheet-narrow: 440px;
   --ds-layout-reading: 720px;
   --ds-layout-entry: 400px;
   --ds-layout-header: 56px;
   --ds-layout-drawer: 640px;
-  --ds-layout-dev-bar: 32px;
+  --ds-layout-dev-bar: 28px;
   --ds-layout-form-side: 360px;
 
   /* Motion that explains: a press, a control changing, a panel arriving, work in progress. */
   --ds-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
-  --ds-ease-exit: cubic-bezier(0.5, 0, 0.75, 0);
   --ds-motion-press: 80ms;
   --ds-motion-quick: 140ms;
   --ds-motion-panel: 220ms;
   --ds-motion-loop: 1600ms;
 
   /* Ready-made animations over the keyframes in base.css; use as `animation: var(--ds-anim-enter)`.
-     enter: a menu, notice or card arriving; leave: a notice going before its component removes it;
-     slide: the packet or a drawer arriving from the right; shimmer: a skeleton over --ds-skeleton;
-     pulse: the working dot only; spin: a saving icon. */
+     enter: a menu, notice or card arriving; slide: the packet or a drawer arriving from the right;
+     shimmer: a skeleton over --ds-skeleton; spin: a saving icon. */
   --ds-anim-enter: ds-enter var(--ds-motion-panel) var(--ds-ease-enter) both;
-  --ds-anim-leave: ds-leave var(--ds-motion-quick) var(--ds-ease-exit) both;
   --ds-anim-slide: ds-slide var(--ds-motion-panel) var(--ds-ease-enter) both;
   --ds-anim-shimmer: ds-shimmer var(--ds-motion-loop) linear infinite;
-  --ds-anim-pulse: ds-pulse var(--ds-motion-loop) ease-in-out infinite;
   --ds-anim-spin: ds-spin calc(var(--ds-motion-loop) / 2) linear infinite;
 }
 
@@ -144,41 +133,36 @@
   }
 }
 
-/* Light theme: the default, and any [data-paper] subtree. */
-:root,
-[data-paper] {
+/* Light theme: the default. */
+:root {
   color-scheme: light;
 
-  /* Surfaces, back to front: the page, panes and fields, floating layers, wells and tracks, scrim. */
-  --ds-canvas: #f5f4f0;
+  /* Surfaces, back to front: the page, the desk behind sheets, panes and fields, floating layers,
+     wells and tracks, scrim. */
+  --ds-canvas: #f6f5f1;
+  --ds-desk: #eeece6;
   --ds-surface: #ffffff;
   --ds-surface-raised: #ffffff;
-  --ds-surface-subtle: #edebe5;
-  --ds-scrim: rgb(22 23 27 / 32%);
+  --ds-surface-subtle: #f0eee9;
+  --ds-scrim: rgb(20 21 25 / 36%);
 
   /* Text in three steps; each passes 4.5:1 on every surface and on accent-soft. */
-  --ds-text: #16171b;
-  --ds-text-secondary: #52535b;
+  --ds-text: #141518;
+  --ds-text-secondary: #55565e;
   --ds-text-tertiary: #64656c;
 
   /* Lines: a decorative hairline, and a field's edge at 3:1 on every surface. */
-  --ds-border: #e2dfd7;
-  --ds-border-strong: #858279;
+  --ds-border: #e4e1d9;
+  --ds-border-strong: #8a877e;
   --ds-hairline: 1px solid var(--ds-border);
 
-  /* Ink: the primary action and the operator chrome, with text and muted text on it. */
-  --ds-ink: #16171b;
-  --ds-ink-hover: #2e2f35;
-  --ds-on-ink: #ffffff;
-  --ds-on-ink-muted: #a3a29c;
-
-  /* One accent: selection, focus, links and New; never a domain state. */
+  /* One accent: the primary action, selection, focus, links and the mark; never a domain state. */
   --ds-accent: #0a6a7a;
-  --ds-accent-hover: #08566a;
-  --ds-accent-soft: #e0eff1;
+  --ds-accent-hover: #085968;
+  --ds-accent-soft: #e3f1f3;
   --ds-on-accent: #ffffff;
   --ds-focus: var(--ds-accent);
-  --ds-ring: 0 0 0 3px rgb(10 106 122 / 24%);
+  --ds-ring: 0 0 0 3px rgb(10 106 122 / 28%);
 
   /* Tones, solid and soft, used only under [data-tone] and always with a word and an icon. */
   --ds-confirm: #17703f;
@@ -190,20 +174,21 @@
   --ds-quiet: #5b6270;
   --ds-quiet-soft: #eceef1;
 
-  /* Lead status, solid (word, dot, edge) and soft (pill), used only under [data-status]. */
-  --ds-status-new: #0a6a7a;
-  --ds-status-new-soft: #e0eff1;
-  --ds-status-working: #2453b8;
-  --ds-status-working-soft: #e8eefb;
-  --ds-status-won: #17703f;
-  --ds-status-won-soft: #e4f3e9;
-  --ds-status-passed: #5e6068;
-  --ds-status-passed-soft: #ededeb;
+  /* In review: the one status that is not a tone. Used only under [data-status]. */
+  --ds-review: #2453b8;
+  --ds-review-soft: #e8eefb;
 
-  /* Depth: hairlines carry cards; shadows only for a pressed knob, floating layers and dialogs. */
-  --ds-shadow-press: 0 1px 2px rgb(22 23 27 / 8%);
-  --ds-shadow-float: 0 12px 32px -12px rgb(22 23 27 / 20%), 0 0 0 1px rgb(22 23 27 / 6%);
-  --ds-shadow-modal: 0 24px 64px -16px rgb(22 23 27 / 28%), 0 0 0 1px rgb(22 23 27 / 6%);
+  /* The reading sheet and its edge ring; the PDF page is the artifact and never themed. */
+  --ds-paper: #ffffff;
+  --ds-paper-edge: rgb(20 21 25 / 8%);
+  --ds-pdf-page: #ffffff;
+
+  /* Depth in three levels: 1 a card or the sheet, 2 a floating layer, 3 a dialog; press is a knob. */
+  --ds-shadow-press: 0 1px 2px rgb(20 21 25 / 8%);
+  --ds-shadow-card:
+    0 0 0 1px rgb(20 21 25 / 6%), 0 1px 2px rgb(20 21 25 / 5%), 0 8px 24px -16px rgb(20 21 25 / 16%);
+  --ds-shadow-float: 0 12px 32px -12px rgb(20 21 25 / 22%), 0 0 0 1px rgb(20 21 25 / 6%);
+  --ds-shadow-modal: 0 24px 64px -16px rgb(20 21 25 / 28%), 0 0 0 1px rgb(20 21 25 / 6%);
 
   /* The skeleton's band: pair with background-size: 200% 100% and --ds-anim-shimmer. */
   --ds-skeleton: linear-gradient(
@@ -212,32 +197,38 @@
     var(--ds-border) 50%,
     var(--ds-surface-subtle) 70%
   );
+
+  /* lane1 alias: remove in lane 2/3 */
+  --ds-ink: var(--ds-accent);
+  /* lane1 alias: remove in lane 2/3 */
+  --ds-on-ink: var(--ds-on-accent);
+  /* lane1 alias: remove in lane 2/3 */
+  --ds-shadow-paper: var(--ds-shadow-card);
+  /* lane1 alias: remove in lane 2/3 */
+  --ds-size-signature-ink: var(--ds-display-md-leading);
 }
 
-/* Dark theme on a dark device; [data-paper] subtrees keep the light values above. The hairline,
-   focus and skeleton tokens are built from these, so they follow without a copy. */
+/* Dark theme on a dark device. The hairline, focus and skeleton tokens are built from these, so
+   they follow without a copy. */
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --ds-canvas: #0f1012;
-    --ds-surface: #16171a;
-    --ds-surface-raised: #1c1d21;
-    --ds-surface-subtle: #222328;
-    --ds-scrim: rgb(0 0 0 / 60%);
-    --ds-text: #edece8;
-    --ds-text-secondary: #abaaa4;
-    --ds-text-tertiary: #93928d;
-    --ds-border: #2b2c31;
-    --ds-border-strong: #6f6e6a;
-    --ds-ink: #edece8;
-    --ds-ink-hover: #d6d5d0;
-    --ds-on-ink: #121315;
-    --ds-on-ink-muted: #5a5b61;
-    --ds-accent: #5bc3d3;
-    --ds-accent-hover: #84d5e1;
-    --ds-accent-soft: #0e2a32;
-    --ds-on-accent: #0b1a1d;
-    --ds-ring: 0 0 0 3px rgb(91 195 211 / 32%);
+    --ds-canvas: #101113;
+    --ds-desk: #0a0b0d;
+    --ds-surface: #17181b;
+    --ds-surface-raised: #1d1e22;
+    --ds-surface-subtle: #24252a;
+    --ds-scrim: rgb(0 0 0 / 64%);
+    --ds-text: #ecebe6;
+    --ds-text-secondary: #a9a8a2;
+    --ds-text-tertiary: #8f8e89;
+    --ds-border: #2a2b30;
+    --ds-border-strong: #6d6c68;
+    --ds-accent: #58c1d1;
+    --ds-accent-hover: #80d3df;
+    --ds-accent-soft: #0f2a31;
+    --ds-on-accent: #07191d;
+    --ds-ring: 0 0 0 3px rgb(88 193 209 / 34%);
     --ds-confirm: #5dcb8a;
     --ds-confirm-soft: #12291c;
     --ds-attention: #e9b44c;
@@ -246,18 +237,13 @@
     --ds-stop-soft: #3a161b;
     --ds-quiet: #a6acb7;
     --ds-quiet-soft: #24272c;
-    --ds-status-new: #5bc3d3;
-    --ds-status-new-soft: #0e2a32;
-    --ds-status-working: #8db0ff;
-    --ds-status-working-soft: #17233f;
-    --ds-status-won: #5dcb8a;
-    --ds-status-won-soft: #12291c;
-    --ds-status-passed: #a3a4ab;
-    --ds-status-passed-soft: #26272c;
-    --ds-paper: #ecebe6;
-    --ds-shadow-paper: none;
+    --ds-review: #8db0ff;
+    --ds-review-soft: #17233f;
+    --ds-paper: #1b1c20;
+    --ds-paper-edge: rgb(255 255 255 / 7%);
     --ds-shadow-press: 0 1px 2px rgb(0 0 0 / 50%);
-    --ds-shadow-float: 0 16px 40px -12px rgb(0 0 0 / 64%), 0 0 0 1px rgb(255 255 255 / 6%);
+    --ds-shadow-card: 0 0 0 1px rgb(255 255 255 / 6%), 0 8px 24px -16px rgb(0 0 0 / 60%);
+    --ds-shadow-float: 0 16px 40px -12px rgb(0 0 0 / 66%), 0 0 0 1px rgb(255 255 255 / 7%);
     --ds-shadow-modal: 0 28px 72px -16px rgb(0 0 0 / 72%), 0 0 0 1px rgb(255 255 255 / 7%);
   }
 }
@@ -270,10 +256,8 @@
     --ds-motion-panel: 0ms;
     --ds-motion-loop: 0ms;
     --ds-anim-enter: none;
-    --ds-anim-leave: none;
     --ds-anim-slide: none;
     --ds-anim-shimmer: none;
-    --ds-anim-pulse: none;
     --ds-anim-spin: none;
   }
 }
@@ -286,8 +270,8 @@
 }
 
 [data-status="review"] {
-  --ds-status-fg: var(--ds-status-working);
-  --ds-status-bg: var(--ds-status-working-soft);
+  --ds-status-fg: var(--ds-review);
+  --ds-status-bg: var(--ds-review-soft);
 }
 
 [data-status="signing"] {
@@ -301,6 +285,6 @@
 }
 
 [data-status="void"] {
-  --ds-status-fg: var(--ds-status-passed);
-  --ds-status-bg: var(--ds-status-passed-soft);
+  --ds-status-fg: var(--ds-quiet);
+  --ds-status-bg: var(--ds-quiet-soft);
 }

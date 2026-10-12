@@ -22,6 +22,7 @@
   gap: var(--ds-space-half);
   border-radius: var(--ds-radius-control);
   background: var(--ds-surface-subtle);
+  box-shadow: inset 0 0 0 1px var(--ds-border);
   padding: var(--ds-space-half);
   font-size: var(--ds-text-sm);
   line-height: var(--ds-leading-sm);

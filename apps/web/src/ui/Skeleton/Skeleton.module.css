@@ -4,7 +4,7 @@
 .skeleton {
   display: block;
   height: var(--ds-space-3);
-  border-radius: var(--ds-radius-pill);
+  border-radius: var(--ds-radius-tag);
   background: var(--ds-skeleton);
   background-size: 200% 100%;
   animation: var(--ds-anim-shimmer);

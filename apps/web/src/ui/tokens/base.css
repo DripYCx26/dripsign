@@ -103,14 +103,6 @@ h3 {
   white-space: nowrap;
 }
 
-/* A document page: the tokens re-declare light for this subtree (tokens.css), and the sheet is
-   white whatever the device prefers. */
-[data-paper] {
-  background: var(--ds-paper);
-  color: var(--ds-text);
-  color-scheme: light;
-}
-
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -124,13 +116,6 @@ h3 {
 
 @keyframes ds-enter {
   from {
-    opacity: 0;
-    transform: translateY(var(--ds-space-1));
-  }
-}
-
-@keyframes ds-leave {
-  to {
     opacity: 0;
     transform: translateY(var(--ds-space-1));
   }
@@ -150,13 +135,6 @@ h3 {
 
   to {
     background-position: -100% 0;
-  }
-}
-
-@keyframes ds-pulse {
-  50% {
-    opacity: 0.4;
-    transform: scale(0.8);
   }
 }
 

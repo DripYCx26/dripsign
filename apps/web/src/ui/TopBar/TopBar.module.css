@@ -1,13 +1,16 @@
-/* The header bar: header height, the nav between the brand and the account. Under 640 the nav is
-   hidden; the caller lists the same places in the account menu. */
+/* The header bar: header height and sticky, the nav between the brand and the account. Under 640
+   the nav is hidden; the caller lists the same places in the account menu. */
 
 .bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--ds-space-2) var(--ds-space-4);
   min-height: var(--ds-layout-header);
-  padding: var(--ds-space-2) var(--ds-space-4);
+  padding: var(--ds-space-2) var(--ds-space-6);
   border-bottom: var(--ds-hairline);
   background: var(--ds-surface);
 }
@@ -30,6 +33,10 @@
 }
 
 @media (max-width: 639px) {
+  .bar {
+    padding-inline: var(--ds-space-4);
+  }
+
   .nav {
     display: none;
   }

@@ -10,7 +10,7 @@ type SegmentedProps<V extends string> = Readonly<{
   defaultValue?: V | undefined;
   onChange?: ((value: V) => void) | undefined;
   disabled?: boolean | undefined;
-  /** `sm` is the 28 px control of a toolbar (a 44 px target on a coarse pointer). */
+  /** `sm` is the 32 px control of a toolbar (a 44 px target on a coarse pointer). */
   size?: "md" | "sm" | undefined;
 }>;
 

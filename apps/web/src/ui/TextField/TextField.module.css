@@ -24,7 +24,9 @@
   background: var(--ds-surface);
   padding: 0 var(--ds-space-3);
   color: var(--ds-text);
-  transition: border-color var(--ds-motion-quick) var(--ds-ease-enter);
+  transition:
+    border-color var(--ds-motion-quick) var(--ds-ease-enter),
+    box-shadow var(--ds-motion-quick) var(--ds-ease-enter);
 }
 
 .input[data-size="lg"] {

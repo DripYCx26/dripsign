@@ -15,10 +15,10 @@
   padding: 0;
 }
 
-/* A round button (composer send, back chevron): 32 px, 44 px on a coarse pointer. */
+/* A round button (composer send, back chevron): the sm control, 44 px on a coarse pointer. */
 .iconButton[data-shape="round"] {
-  width: max(var(--ds-space-8), var(--ds-size-control-sm));
-  min-height: max(var(--ds-space-8), var(--ds-size-control-sm));
+  width: var(--ds-size-control-sm);
+  min-height: var(--ds-size-control-sm);
   border-radius: var(--ds-radius-pill);
   padding: 0;
 }
