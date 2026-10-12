@@ -6,6 +6,7 @@ import { getPool, tx } from "../db.ts";
 import { DomainError } from "../errors.ts";
 import { createHandlers } from "../jobs/handlers.ts";
 import type { ClaimedJob, JobLease } from "../jobs/outbox.ts";
+import { SIGNING_VERIFICATION_MAX_AGE_MS } from "../auth/sessions.ts";
 import { LIMITS, SIGNING_CONSENT } from "../schema.ts";
 import type { Command, DocumentSource, JobPayload } from "../schema.ts";
 import type { NewAgreementInput, NewRecipient } from "../schema.ts";
@@ -65,6 +66,13 @@ async function session(email: string): Promise<{ sessionId: string; verifiedAt: 
     [sessionId, sha256Hex(sessionId), email],
   );
   return { sessionId, verifiedAt: must(created.rows[0]).verifiedAt.toISOString() };
+}
+
+function verifiedAgo(actor: Actor, ms: number) {
+  return getPool().query(
+    "UPDATE dripsign.auth_session SET verified_at = now() - $2::float8 * interval '1 millisecond' WHERE id = $1",
+    [actor.sessionId, ms],
+  );
 }
 
 async function staffActor(): Promise<StaffActor> {
@@ -265,7 +273,17 @@ it("negotiates, publishes, collects every signature and archives the signed agre
     kind: "request_signatures",
     expectedVersion: view.agreement.version,
   });
+  // A verification older than the signing window is refused and records nothing.
+  await verifiedAgo(jordanActor, SIGNING_VERIFICATION_MAX_AGE_MS + 60_000);
+  await expect(run(jordanActor, id, signCommand(signing, "Jordan Lee"))).rejects.toMatchObject({
+    code: "verification_required",
+  });
+  const signatures = () =>
+    getPool().query("SELECT 1 FROM dripsign.signature WHERE agreement_id = $1", [id]);
+  expect((await signatures()).rowCount).toBe(0);
+  await verifiedAgo(jordanActor, 0);
   await run(jordanActor, id, signCommand(signing, "Jordan Lee"));
+  expect((await signatures()).rowCount).toBe(1);
 
   // Morgan re-verifies while the last signature waits on a lock; it must still follow, and archive.
   const held = await holdLocks(["SELECT 1 FROM dripsign.agreement WHERE id = $1 FOR UPDATE", [id]]);
@@ -273,9 +291,7 @@ it("negotiates, publishes, collects every signature and archives the signed agre
   const request = { ipAddress: "203.0.113.7", userAgent: "u".repeat(limit + 1) };
   const signed = run({ ...morganActor, request }, id, signCommand(signing, "Morgan Diaz"));
   await held.queue(1);
-  await getPool().query("UPDATE dripsign.auth_session SET verified_at = now() WHERE id = $1", [
-    morganActor.sessionId,
-  ]);
+  await verifiedAgo(morganActor, 0);
   await held.release();
   await signed;
   const evidence = await getPool().query<{ ipAddress: string; userAgent: number }>(
@@ -343,18 +359,27 @@ it("negotiates, publishes, collects every signature and archives the signed agre
   expect(settings.undelivered).toMatchObject([{ roundId: round.id, state: "held", eventId: null }]);
   await expect(recoverCompletionExport(staff, round.id)).rejects.toMatchObject({ code: "invalid" });
   await saveCompletionExportConfig(staff, { expectedRevision: 1, config: sendablePins() });
-  // Two admins recover at once: the one that waited on the round lock finds it frozen.
+  // Three recoveries wait on the round lock: the admin revoked meanwhile is refused, and of the
+  // other two, the one that waited longer finds the round frozen.
+  const second = await colleague(staff);
   const roundLock = await holdLocks([
     "SELECT 1 FROM dripsign.signing_round WHERE id = $1 FOR UPDATE",
     [round.id],
   ]);
-  const recovered = Promise.all([
+  const recovered = Promise.allSettled([
     recoverCompletionExport(staff, round.id),
-    recoverCompletionExport(staff, round.id),
+    recoverCompletionExport(second, round.id),
+    recoverCompletionExport(second, round.id),
   ]);
-  await roundLock.queue(2);
+  await roundLock.queue(3);
+  await revokeStaff(second, staff.email);
   await roundLock.release();
-  await recovered;
+  expect((await recovered).map((outcome) => outcome.status)).toEqual([
+    "rejected",
+    "fulfilled",
+    "fulfilled",
+  ]);
+  expect((await recovered)[0]).toMatchObject({ reason: { code: "not_found" } });
   expect((await exported()).rows).toEqual([{ revision: 2 }]);
   expect(await jobCount(id, "host_event")).toBe(1);
 });
@@ -542,7 +567,8 @@ it("keeps an upload on rename, fences, replays, rechecks authority, refuses unse
   }
   expect(await savePins({})).toBe(1);
 
-  // Revoked while a message waits on the agreement and a create replay on its receipt: both fail.
+  // Revoked while a message waits on the agreement, a create replay on its receipt and a pins
+  // save on the staff row: all three fail.
   const second = await colleague(staff);
   const draft: NewAgreementInput = {
     title: "Second agreement",
@@ -554,18 +580,23 @@ it("keeps an upload on rename, fences, replays, rechecks authority, refuses unse
   const held = await holdLocks(
     ["SELECT 1 FROM dripsign.agreement WHERE id = $1 FOR UPDATE", [id]],
     ["SELECT 1 FROM dripsign.command_receipt WHERE key = $1 FOR UPDATE", [createKey]],
+    [
+      "UPDATE dripsign.staff SET revoked_at = now() WHERE tenant_id = $1 AND email = $2",
+      [staff.tenantId, staff.email],
+    ],
   );
   const queued = Promise.allSettled([
     run(staff, id, { kind: "message", body: "Checking in." }),
     createAgreement(staff, createKey, draft),
+    saveCompletionExportConfig(staff, { expectedRevision: 1, config: pins }),
   ]);
-  await held.queue(2);
-  await revokeStaff(second, staff.email);
+  await held.queue(3);
   await held.release();
   for (const outcome of await queued) {
     expect(outcome).toMatchObject({ status: "rejected", reason: { code: "not_found" } });
   }
   expect((await loadAgreementView(jordanActor, id)).messages).toHaveLength(0);
+  expect((await readCompletionExportSettings(second)).history).toHaveLength(1);
 
   // The last admin cannot step down, and two admins revoking each other leave one.
   await expect(addStaff(second, { email: second.email, role: "member" })).rejects.toMatchObject({

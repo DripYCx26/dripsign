@@ -107,7 +107,8 @@ locking.
 - **Version fence.** Document-shaping commands update `agreement.version` where it equals the
   expected value; zero rows is a `conflict`. Lock order is receipt, agreement row, the actor's
   grant row `FOR SHARE` (a revocation that committed while the command queued is seen, a later one
-  waits), then job rows.
+  waits), then job rows. Admin writes (roster, export pins, export recovery after its round lock)
+  hold the admin's staff row the same way through `requireRole(..., "write")`.
 - **Read snapshots.** Reads use a `REPEATABLE READ READ ONLY` transaction and take no row locks.
   Writes use `READ COMMITTED` with statement, lock and idle timeouts.
 - **Errors.** `DomainError` codes: `not_found`, `conflict`, `invalid`, `rate_limited`,

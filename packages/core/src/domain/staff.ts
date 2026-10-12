@@ -24,7 +24,7 @@ const ROSTER_LIMIT = 500;
 
 export function listStaff(actor: StaffActor): Promise<readonly StaffMember[]> {
   return readTx(async (db) => {
-    await requireRole(db, actor, ["admin", "member"]);
+    await requireRole(db, actor, ["admin", "member"], "read");
     const found = await db.query<{
       email: string;
       name: string | null;
@@ -106,7 +106,7 @@ async function changeRoster(
   await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
     `dripsign.staff-roster:${tenantId}`,
   ]);
-  if (actor) await requireRole(db, actor, ["admin"]);
+  if (actor) await requireRole(db, actor, ["admin"], "write");
   await change();
   const admin = await db.query(
     `SELECT 1 FROM dripsign.staff
@@ -116,15 +116,22 @@ async function changeRoster(
   if (admin.rowCount !== 1) throw new DomainError("invalid", "Make someone else an admin first.");
 }
 
-/** Rechecks the actor's live role inside the caller's transaction; anything else is not found. */
+/**
+ * Rechecks the actor's live role inside the caller's transaction; anything else is not found. A
+ * write calls it after its last lock wait and holds the staff row FOR SHARE until commit, as
+ * `lockGrant` does for commands: a revocation that committed while it queued is seen here, and
+ * one that starts later waits for this commit. Reads take no row locks.
+ */
 export async function requireRole(
   db: Db,
   actor: StaffActor,
   roles: readonly StaffRole[],
+  use: "read" | "write",
 ): Promise<void> {
   const found = await db.query<{ role: StaffRole }>(
     `SELECT role FROM dripsign.staff
-     WHERE tenant_id = $1 AND email = $2 AND revoked_at IS NULL`,
+     WHERE tenant_id = $1 AND email = $2 AND revoked_at IS NULL
+     ${use === "write" ? "FOR SHARE" : ""}`,
     [actor.tenantId, actor.email],
   );
   const role = found.rows[0]?.role;

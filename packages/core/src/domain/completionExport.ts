@@ -152,7 +152,7 @@ export async function recordCompletionDelivery(
 export function readCompletionExportSettings(actor: StaffActor): Promise<CompletionExportSettings> {
   const config = loadConfig();
   return readTx(async (db) => {
-    await requireRole(db, actor, ["admin"]);
+    await requireRole(db, actor, ["admin"], "read");
     const history = await db.query<RevisionRow>(
       `SELECT ${REVISION_COLUMNS} FROM dripsign.completion_export_config
        WHERE tenant_id = $1 ORDER BY revision DESC LIMIT $2`,
@@ -222,7 +222,7 @@ export async function saveCompletionExportConfig(
 ): Promise<number> {
   const { expectedRevision, config } = parseOrInvalid(completionExportSaveSchema, input);
   return tx(async (db) => {
-    await requireRole(db, actor, ["admin"]);
+    await requireRole(db, actor, ["admin"], "write");
     // While delivery is off nothing freezes, so any pins save; freezing checks them again.
     const delivery = loadConfig().completionExport;
     const refusal = delivery === null ? null : undeliverableReason(config, delivery);
@@ -280,8 +280,8 @@ export async function recoverCompletionExport(actor: StaffActor, roundId: string
     throw new DomainError("invalid", "Completion export delivery is off on this server.");
   }
   return tx(async (db) => {
-    await requireRole(db, actor, ["admin"]);
-    // The round row lock serialises two admins recovering the same round.
+    // The round row lock serialises two admins recovering the same round; authority is checked
+    // after its wait.
     const found = await db.query<RoundRow>(
       `SELECT g.agreement_id AS "agreementId", g.revision_id AS "revisionId",
          (extract(epoch FROM g.ended_at) * 1000000)::bigint::text AS "completedMicros",
@@ -294,6 +294,7 @@ export async function recoverCompletionExport(actor: StaffActor, roundId: string
        FOR UPDATE`,
       [actor.tenantId, round],
     );
+    await requireRole(db, actor, ["admin"], "write");
     const completed = found.rows[0];
     if (completed === undefined) throw notFound();
     // A new statement after the lock sees what the admin who held it committed.
