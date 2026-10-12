@@ -1,6 +1,5 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createAgreement, executeCommand } from "@dripsign/core/domain/commands";
@@ -12,6 +11,7 @@ import {
   uuidSchema,
 } from "@dripsign/core/schema";
 import type { Capacity } from "@dripsign/core/types";
+import { starterDraft } from "@/features/list/starterDraft.ts";
 import { action } from "../action.ts";
 import { actorFor, staffActor } from "../session.ts";
 
@@ -28,19 +28,7 @@ export const runCommand = action(
 const startDraft = action(
   z.strictObject({ receiptKey: receiptKeySchema }),
   async ({ receiptKey }) =>
-    createAgreement(await staffActor(), receiptKey, {
-      source: {
-        title: "Untitled agreement",
-        sections: [
-          {
-            id: randomUUID(),
-            heading: "Terms",
-            paragraphs: ["Write the terms here, or start from a template."],
-          },
-        ],
-      },
-      recipients: [],
-    }),
+    createAgreement(await staffActor(), receiptKey, starterDraft(receiptKey)),
 );
 
 /** The "New agreement" form: a signerless one-section draft, then its workspace. */

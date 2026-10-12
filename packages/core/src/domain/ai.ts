@@ -1,7 +1,7 @@
 // The private staff assistant. Spend is reserved against the tenant's daily limit before the job
 // exists; suggestions apply to the draft only while it still has the source they were based on.
 import { randomUUID } from "node:crypto";
-import { AI_MODEL } from "../adapters/anthropic.ts";
+import { AI_MODEL, AI_RESERVATION_MICROS } from "../adapters/anthropic.ts";
 import { loadConfig } from "../config.ts";
 import type { Db } from "../db.ts";
 import { DomainError, notFound } from "../errors.ts";
@@ -12,16 +12,6 @@ import { canonicalSha256 } from "./receipts.ts";
 import { stageDraft } from "./revisions.ts";
 import { conflict } from "./state.ts";
 import type { CommandContext } from "./state.ts";
-
-/**
- * Reserved per request: an upper bound for one call (an admitted source, the instruction, a
- * proposal and `LIMITS.aiTurns` short turns of history are under 100k input tokens, plus the
- * mode's output tokens: 2k for a plan, 8k for a draft). The actual cost replaces it.
- */
-export const AI_RESERVATION_MICROS: Readonly<Record<AiMode, number>> = {
-  plan: 250_000,
-  draft: 1_000_000,
-};
 
 /** One earlier turn as the model sees it: the reply's summary and outline, never a full source. */
 export interface SuggestionTurn {
@@ -173,7 +163,10 @@ function turnReply(result: AiSuggestionResult): string {
   return [result.summary, ...lines].join("\n");
 }
 
-/** Worker seam: stores the result and the actual cost. False when the suggestion already ended. */
+/**
+ * Worker seam: stores the result and the actual cost, never more than was reserved. False when
+ * the suggestion already ended.
+ */
 export async function completeSuggestion(
   db: Db,
   input: {
@@ -189,7 +182,8 @@ export async function completeSuggestion(
   }
   const updated = await db.query(
     `UPDATE dripsign.ai_suggestion
-     SET status = 'ready', result = $3, cost_micros = $4, finished_at = now()
+     SET status = 'ready', result = $3, cost_micros = least($4, reserved_micros),
+       finished_at = now()
      WHERE tenant_id = $1 AND id = $2 AND status = 'queued'`,
     [input.tenantId, input.suggestionId, JSON.stringify(result), input.costMicros],
   );

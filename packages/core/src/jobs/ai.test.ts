@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
 import { hashBytes } from "../adapters/storage.ts";
 import { closePool, getPool, tx } from "../db.ts";
-import { AI_RESERVATION_MICROS, applyAi, askAi } from "../domain/ai.ts";
+import { AI_RESERVATION_MICROS } from "../adapters/anthropic.ts";
+import { applyAi, askAi } from "../domain/ai.ts";
 import { loadState, lockAgreement, resolveAccess } from "../domain/state.ts";
 import type { CommandContext } from "../domain/state.ts";
 import { loadAgreementView } from "../domain/view.ts";
@@ -53,10 +54,13 @@ function inCommand(
 }
 
 async function seedPriorDrafts(context: Awaited<ReturnType<typeof fixture>>): Promise<void> {
-  const prior = {
-    title: "Prior",
-    sections: [{ id: "prior", heading: "Fees", paragraphs: ["Prior full terms."] }],
-  };
+  // Every turn's reply lists LIMITS.sections long headings, so all of them exceed the plan budget.
+  const sections = Array.from({ length: LIMITS.sections }, (_, index) => ({
+    id: `s${String(index)}`,
+    heading: "Fees ".padEnd(LIMITS.heading, "x"),
+    paragraphs: ["Prior full terms."],
+  }));
+  const prior = { title: "Prior", sections };
   // Applied drafts are history, not another ready suggestion that could offer apply_ai.
   await getPool().query(
     `INSERT INTO dripsign.ai_suggestion (tenant_id,agreement_id,id,requested_by,instruction,mode,base_source,base_source_sha256,model,reserved_micros,status,result,cost_micros,finished_at,applied_at,created_at)
@@ -119,10 +123,13 @@ function assertPlanRequest(sent: string): void {
   const content = JSON.parse(body.messages[0]?.content ?? "{}") as {
     history: { instruction: string; reply: string }[];
   };
-  expect(content.history.map((item) => item.instruction)).toEqual(
-    Array.from({ length: LIMITS.aiTurns }, (_, index) => `Turn ${String(index + 2)}`),
-  );
-  expect(content.history[0]?.reply).toBe("Turn 2\n- Fees");
+  // The latest bounded turns, oldest dropped first until the request fits the plan reservation.
+  const latest = Array.from({ length: LIMITS.aiTurns }, (_, index) => `Turn ${String(index + 2)}`);
+  const kept = content.history.map((item) => item.instruction);
+  expect(kept.length).toBeGreaterThan(0);
+  expect(kept.length).toBeLessThan(LIMITS.aiTurns);
+  expect(kept).toEqual(latest.slice(-kept.length));
+  expect(content.history.at(-1)?.reply).toMatch(/^Turn 9\n- Fees x/u);
   expect(sent).not.toContain("Prior full terms.");
 }
 
@@ -157,7 +164,8 @@ it("plans on a forced tool with a bounded history, spends once and never applies
     new Response(
       JSON.stringify({
         stop_reason: "tool_use",
-        usage: { input_tokens: 1_000, output_tokens: 100 },
+        // Usage priced above the reservation is stored as the reservation.
+        usage: { input_tokens: 130_000, output_tokens: 100 },
         content: [{ type: "tool_use", name: "propose_plan", input: plan }],
       }),
     ),
@@ -169,7 +177,7 @@ it("plans on a forced tool with a bounded history, spends once and never applies
   assertPlanRequest(sent);
   expect((await turn()).rows[0]).toMatchObject({
     status: "ready",
-    cost: "3000",
+    cost: String(AI_RESERVATION_MICROS.plan),
     result: { kind: "plan", ...plan },
   });
   // A ready plan neither offers nor performs apply_ai.
