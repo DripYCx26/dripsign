@@ -1,5 +1,6 @@
 // The private draft, its PDF preparation (fenced on input and signer set) and publication of
-// immutable revisions.
+// immutable revisions. The prepared PDF prints the revision number it will publish as, so that
+// number is part of the input fence and publish refuses a draft prepared for another number.
 import { randomUUID } from "node:crypto";
 import { objectKey } from "../adapters/storage.ts";
 import type { StoredObject } from "../adapters/storage.ts";
@@ -48,9 +49,29 @@ export function signerSetHash(signers: readonly LiveSigner[]): string {
   return canonicalSha256(signers.map(({ id, name, email }) => ({ id, name, email })));
 }
 
+/** The fence over what the renderer reads from the draft: its terms and its revision number. */
+export function preparationInputSha256(source: DocumentSource, revision: number): string {
+  return canonicalSha256({ source, revision });
+}
+
+/** The number the agreement's next publish creates; revisions are never deleted. */
+export async function nextRevisionNumber(
+  db: Db,
+  tenantId: string,
+  agreementId: string,
+): Promise<number> {
+  const found = await db.query<{ next: number }>(
+    `SELECT coalesce(max(number), 0) + 1 AS next
+     FROM dripsign.revision WHERE tenant_id = $1 AND agreement_id = $2`,
+    [tenantId, agreementId],
+  );
+  return found.rows[0]?.next ?? 1;
+}
+
 interface DraftInput {
   readonly source: DocumentSource;
   readonly signers: readonly LiveSigner[];
+  readonly revision: number;
 }
 
 /**
@@ -62,10 +83,10 @@ function nextDraft(
   current: Draft | null,
   input: DraftInput,
 ): { readonly draft: Draft; readonly fence: PreparationFence | null } {
-  const { source, signers } = input;
+  const { source, signers, revision } = input;
   const signerIds = signers.map((signer) => signer.id);
   const fence = {
-    inputSha256: canonicalSha256(source),
+    inputSha256: preparationInputSha256(source, revision),
     signerSetHash: signerSetHash(signers),
   };
   const prior = current?.preparation;
@@ -84,7 +105,7 @@ function nextDraft(
 
 /** A new agreement's first draft: its terms, before its recipients exist. */
 export function newDraft(source: DocumentSource): Draft {
-  return nextDraft(null, { source, signers: [] }).draft;
+  return nextDraft(null, { source, signers: [], revision: 1 }).draft;
 }
 
 async function enqueuePreparation(
@@ -132,6 +153,7 @@ export async function stageDraft(
   const { draft, fence } = nextDraft(change.fresh === true ? null : agreement.draft, {
     source: change.source,
     signers: change.signers,
+    revision: await nextRevisionNumber(db, agreement.tenantId, agreement.id),
   });
   await writeDraft(db, agreement, draft, change.dirty);
   if (fence !== null) await enqueuePreparation(db, agreement, fence);
@@ -171,18 +193,21 @@ export async function publish(ctx: CommandContext, command: CommandOf<"publish">
   }
   // The reviewed PDF was prepared for exactly the live signers, in the one signer order.
   if (signerSetHash(state.signers) !== preparation.signerSetHash) throw conflict();
+  // The reviewed PDF prints this number.
+  const number = await nextRevisionNumber(db, agreement.tenantId, agreement.id);
+  if (preparationInputSha256(source, number) !== preparation.inputSha256) throw conflict();
   const revisionId = randomUUID();
   await db.query(
     `INSERT INTO dripsign.revision (
        tenant_id, agreement_id, id, number, document_sha256, document_bytes, page_count,
        source, signing_fields, signer_ids, published_by
      )
-     SELECT $1, $2, $3, coalesce(max(number), 0) + 1, $4, $5, $6, $7, $8, $9, $10
-     FROM dripsign.revision WHERE tenant_id = $1 AND agreement_id = $2`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
     [
       agreement.tenantId,
       agreement.id,
       revisionId,
+      number,
       document.sha256,
       document.byteLength,
       document.pageCount,

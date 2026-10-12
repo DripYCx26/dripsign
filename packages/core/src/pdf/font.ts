@@ -47,7 +47,8 @@ export async function embedFont(document: PDFDocument, face: SignatureFace): Pro
   return document.embedFont(await bytes, { subset: false });
 }
 
-function covers(font: PDFFont, value: string): boolean {
+/** True when the font has a glyph for every character of the value. */
+export function covers(font: PDFFont, value: string): boolean {
   const supported = new Set(font.getCharacterSet());
   return Array.from(value).every(
     (character) => character === "\n" || supported.has(character.codePointAt(0) ?? -1),

@@ -66,6 +66,8 @@ export async function archiveFixture() {
   const prepared = await prepareDraftPdf({
     source,
     signers: [{ id: recipientId, name: "Jordan Lee", email: "signer@example.test" }],
+    revision: 1,
+    organisation: "Northwind Studio",
   });
   const document = await storeBytes(tenantId, prepared.bytes);
   await db.query(

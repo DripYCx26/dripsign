@@ -8,7 +8,12 @@ import { retryableDelivery, sendEmail } from "../adapters/email.ts";
 import { getStorage, readBytes, storeBytes } from "../adapters/storage.ts";
 import type { StorageDriver } from "../adapters/storage.ts";
 import { loadSuggestionInput, completeSuggestion, failSuggestion } from "../domain/ai.ts";
-import { applyPreparedDraft, failPreparation } from "../domain/revisions.ts";
+import {
+  applyPreparedDraft,
+  failPreparation,
+  nextRevisionNumber,
+  preparationInputSha256,
+} from "../domain/revisions.ts";
 import { loadArchiveEvidence, completeArchive } from "../domain/signing.ts";
 import { liveSigners } from "../domain/state.ts";
 import { prepareDraftPdf } from "../pdf/prepare.ts";
@@ -52,8 +57,11 @@ async function prepare(
   if (!job.agreementId) throw new Error("Preparation agreement is missing");
   const agreementId = job.agreementId;
   const input = await readTx(async (db) => {
-    const result = await db.query<{ draft: unknown }>(
-      "SELECT draft FROM dripsign.agreement WHERE tenant_id = $1 AND id = $2",
+    // The fence need not cover the organisation: a tenant's name never changes.
+    const result = await db.query<{ draft: unknown; organisation: string }>(
+      `SELECT a.draft, t.name AS organisation
+       FROM dripsign.agreement a JOIN dripsign.tenant t ON t.id = a.tenant_id
+       WHERE a.tenant_id = $1 AND a.id = $2`,
       [tenantId, agreementId],
     );
     const row = result.rows[0];
@@ -64,9 +72,13 @@ async function prepare(
       preparation.signerSetHash !== job.payload.signerSetHash
     )
       return null;
+    // Only publish adds a revision, and it needs this preparation ready: a mismatch is a bug.
+    const revision = await nextRevisionNumber(db, tenantId, agreementId);
+    if (preparationInputSha256(source, revision) !== preparation.inputSha256)
+      throw new Error("Preparation revision number is stale");
     // The domain's one signer order, the order the draft's signer-set hash was taken in.
     const signers = await liveSigners(db, tenantId, agreementId);
-    return { source, signers };
+    return { source, signers, revision, organisation: row.organisation };
   });
   if (!input) return;
   signal.throwIfAborted();

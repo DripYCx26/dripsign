@@ -16,6 +16,13 @@ face. Under the signature the PDF prints the signing time and "Email verified", 
 Rejected: a handwriting face (a novelty beside a serif contract, Latin only); Newsreader for the
 PDF body (it would refuse terms that render today).
 
+The revision PDF opens with a title block: the title, "REVISION N · BETWEEN" the organisation and
+the signers' names (never emails), and a rule. It carries no date and no "Draft" mark, because the
+PDF staff review must be byte-for-byte the one that is published; N is the number the next
+publish creates and is part of the preparation fence, so publish refuses a PDF prepared for a
+different number. Signed blocks keep the printed name caption, because the signed PDF draws over
+the immutable revision PDF and never covers its text.
+
 ## 2026-10-11: V1 removes uploaded PDFs and completion export
 
 V1 removes uploaded PDFs and completion export; staff write terms in the app; host completion

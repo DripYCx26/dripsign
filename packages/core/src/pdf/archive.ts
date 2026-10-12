@@ -7,7 +7,7 @@ import { LIMITS, signingFieldSchema } from "../schema.ts";
 import type { SigningField } from "../schema.ts";
 import { embedFont, fitSignatureText, signatureFaceOf } from "./font.ts";
 import type { SignatureFace } from "./font.ts";
-import { MAX_PREPARED_PAGES, metadata, pageNumbers, savePdf, textWriter } from "./render.ts";
+import { MAX_PREPARED_PAGES, metadata, MUTED, pageNumbers, savePdf, textWriter } from "./render.ts";
 
 export interface ArchiveEvidence {
   readonly title: string;
@@ -167,7 +167,7 @@ function drawField(
   });
 }
 
-/** Under the signature's caption: when it was signed, and that a fresh email code preceded it. */
+/** In the date field, under the signer's caption: when, and that a fresh email code preceded it. */
 function drawEvidenceLine(
   document: PDFDocument,
   field: SigningField,
@@ -176,12 +176,12 @@ function drawEvidenceLine(
 ): void {
   const page = document.getPage(field.page - 1);
   const { width, height } = page.getSize();
-  page.drawText(`Signed ${signedAt.slice(0, 19).replace("T", " ")} UTC · Email verified`, {
+  page.drawText(`Signed ${signedAt.slice(0, 16).replace("T", " ")} UTC · Email verified`, {
     x: field.x * width,
-    y: height * (1 - field.y - field.height) - 32,
+    y: height * (1 - field.y - field.height) + 4,
     size: 9,
     font,
-    color: rgb(0.33, 0.34, 0.37),
+    color: MUTED,
   });
 }
 
@@ -212,14 +212,13 @@ export async function renderSignedPdf(
     if (!signature) throw new DomainError("invalid", "A required signature is missing.");
     const signedAt = new Date(signature.signedAt).toISOString();
     if (field.type === "date") {
-      drawField(document, field, signedAt.slice(0, 10), plain);
+      drawEvidenceLine(document, field, signedAt, font);
       continue;
     }
     const face = await signatureFaceOf(signature.typedName);
     const typeface =
       face === "script" ? { font: await (script ??= embedFont(document, face)), face } : plain;
     drawField(document, field, signature.typedName, typeface);
-    drawEvidenceLine(document, field, signedAt, font);
   }
   for (const page of document.getPages()) {
     page.drawText("Signed electronically with DripSign", { x: 54, y: 18, font, size: 7 });

@@ -142,12 +142,17 @@ Storage is content-addressed: a file's key derives from its sha256, so identical
 object. File responses are `application/pdf` with `nosniff` and `Content-Security-Policy:
 sandbox`.
 
-Staff write the terms in the app; there is no PDF upload. A `pdf_prepare` job renders the title
-and sections (at most 200 pages) and one signature page per three required signers in the worker,
-in Noto Sans ([`assets/`](../packages/core/assets)); the signed PDF draws a typed signature in
-Newsreader Italic, or in Noto Sans when the name has a glyph Newsreader lacks. Its commit is fenced on the hash of the draft source (title and sections) and on the
-signer-set hash of the current draft. The agreement title is the draft source's title. A
-rendered or stored PDF is at most 20 MB.
+Staff write the terms in the app; there is no PDF upload. A `pdf_prepare` job renders, in the
+worker and in Noto Sans ([`assets/`](../packages/core/assets)), a title block (title; revision
+number, organisation and signer names, never emails or a date), the numbered sections (at most
+200 pages) and one signature page per three required signers: a rule, the signer's name under it
+and a date field. The signed PDF draws the typed signature above the rule in Newsreader Italic, or
+in Noto Sans when the name has a glyph Newsreader lacks, and `Signed <UTC minute> · Email
+verified` in the date field. The prepared bytes are the reviewed and published bytes, so they
+carry no publish date, and the revision number the next publish creates is part of the input
+hash: the commit is fenced on that hash (source and revision number) and on the signer-set hash,
+and publish refuses a draft prepared for another number. The agreement title is the draft
+source's title. A rendered or stored PDF is at most 20 MB.
 
 The signed PDF is an electronic-signature rendition with a signature page, not certificate-based
 signing. The audit record is a second artifact built from the signature,

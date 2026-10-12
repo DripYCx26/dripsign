@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { hashBytes } from "../adapters/storage.ts";
 import { SIGNING_CONSENT } from "../schema.ts";
+import type { SigningField } from "../schema.ts";
 import { assertRenderableName } from "./font.ts";
 import { prepareDraftPdf } from "./prepare.ts";
 import { renderAuditRecord, renderSignedPdf } from "./archive.ts";
@@ -12,25 +13,39 @@ interface PdfReader {
   getDocument(input: { data: Uint8Array; verbosity: number }): {
     promise: Promise<{
       numPages: number;
-      getPage(page: number): Promise<{ getTextContent(): Promise<{ items: unknown[] }> }>;
+      getPage(page: number): Promise<{
+        getTextContent(): Promise<{
+          items: { str?: string; fontName?: string; transform?: number[] }[];
+        }>;
+      }>;
     }>;
     destroy(): Promise<void>;
   };
 }
 
-/** Every text run in the PDF with the id of the font resource it is drawn in. */
-async function pdfRuns(bytes: Uint8Array): Promise<{ str: string; font: string }[]> {
+interface Run {
+  readonly str: string;
+  /** The id of the font resource the run is drawn in. */
+  readonly font: string;
+  readonly page: number;
+  readonly size: number;
+  /** Baseline, in points from the page's foot. */
+  readonly y: number;
+}
+
+/** Every text run in the PDF. */
+async function pdfRuns(bytes: Uint8Array): Promise<Run[]> {
   const require = createRequire(new URL("../../../../package.json", import.meta.url));
   const reader = (await import(require.resolve("pdfjs-dist/legacy/build/pdf.mjs"))) as PdfReader;
   const task = reader.getDocument({ data: bytes.slice(), verbosity: 0 });
   const document = await task.promise;
   try {
-    const runs: { str: string; font: string }[] = [];
+    const runs: Run[] = [];
     for (let page = 1; page <= document.numPages; page++) {
       const content = await (await document.getPage(page)).getTextContent();
-      for (const item of content.items) {
-        if (typeof item === "object" && item !== null && "str" in item && "fontName" in item)
-          runs.push({ str: String(item.str), font: String(item.fontName) });
+      for (const { str, fontName, transform } of content.items) {
+        if (str && fontName !== undefined && transform !== undefined)
+          runs.push({ str, font: fontName, page, size: transform[0] ?? 0, y: transform[5] ?? 0 });
       }
     }
     return runs;
@@ -70,15 +85,35 @@ describe("PDF evidence", () => {
         ],
       },
       signers,
+      revision: 1,
+      organisation: "Northwind Studio",
     });
     expect(prepared.fields).toHaveLength(signers.length * 2);
+    const revisionRuns = await pdfRuns(prepared.bytes);
+    // The title block's meta line, and the section number hanging beside its heading.
+    expect(revisionRuns.map((run) => run.str)).toEqual(
+      expect.arrayContaining([
+        "REVISION 1 · BETWEEN NORTHWIND STUDIO AND JORDAN LEE, МАРИЯ ИВАНОВА",
+        "1.",
+        "Scope",
+      ]),
+    );
+    /** Baselines of runs in the band `depth` points under a field's foot, on its page. */
+    const under = (runs: Run[], field: SigningField, depth: number) =>
+      runs.filter((run) => {
+        const foot = (1 - field.y - field.height) * 792;
+        return run.page === field.page && run.y < foot && run.y >= foot - depth;
+      });
     for (const signer of signers) {
-      expect(
-        prepared.fields
-          .filter((field) => field.recipientId === signer.id)
-          .map((field) => field.type)
-          .sort(),
-      ).toEqual(["date", "signature"]);
+      const mine = prepared.fields.filter((field) => field.recipientId === signer.id);
+      expect(mine.map((field) => field.type).sort()).toEqual(["date", "signature"]);
+      const signature = mine.find((field) => field.type === "signature");
+      // The signer's name appears once on the signature page: a 9pt caption under the rule.
+      const names = revisionRuns.filter((run) => run.str === signer.name);
+      expect(names).toHaveLength(1);
+      expect(signature && under(names, signature, 24)).toEqual([
+        expect.objectContaining({ size: 9 }),
+      ]);
     }
     const evidence: ArchiveEvidence = {
       title: "Services agreement",
@@ -124,8 +159,20 @@ describe("PDF evidence", () => {
     }
     // Each signature is drawn in the face the preflight named: Newsreader Italic for the Latin
     // name, and for the Cyrillic one the same Noto Sans as the evidence line under it.
-    const evidenceLine = "Signed 2026-10-11 10:01:00 UTC · Email verified";
+    const evidenceLine = "Signed 2026-10-11 10:01 UTC · Email verified";
     const signedRuns = await pdfRuns(firstSigned);
+    // Under each rule: the 9pt caption, then the 9pt evidence line; no label or separate date.
+    for (const signer of signers) {
+      const field = prepared.fields.find(
+        (item) => item.recipientId === signer.id && item.type === "signature",
+      );
+      expect(field && under(signedRuns, field, 48).map(({ str, size }) => ({ str, size }))).toEqual(
+        [
+          { str: signer.name, size: 9 },
+          { str: evidenceLine, size: 9 },
+        ],
+      );
+    }
     const fontOf = (str: string) => signedRuns.filter((run) => run.str === str).at(-1)?.font;
     expect(new TextDecoder("latin1").decode(firstSigned)).toContain("/Newsreader16pt-Italic");
     expect(fontOf(evidenceLine)).toBeDefined();

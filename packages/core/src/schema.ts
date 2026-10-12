@@ -304,7 +304,7 @@ export const jobPayloadSchema = z
     }),
     z.strictObject({
       kind: z.literal("pdf_prepare"),
-      // canonicalJson sha256 of the source (its title included): what the renderer consumes.
+      // `preparationInputSha256`: the source (title included) and the revision number it prints.
       inputSha256: sha256Schema,
       signerSetHash: sha256Schema,
     }),
