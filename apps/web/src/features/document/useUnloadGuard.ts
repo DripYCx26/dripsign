@@ -40,19 +40,26 @@ export function useUnloadGuard(active: boolean): void {
     const pushSentinel = () => {
       window.history.pushState({ ...state, [SENTINEL]: true }, "", href);
     };
+    // One approved step back passes unasked; the guard stays armed in case there is nowhere to go.
+    let approved = false;
     const guardBack = (event: PopStateEvent) => {
+      if (approved) {
+        approved = false;
+        return;
+      }
       if (confirmLeave()) {
         // Next handles this popstate; from the editor's own entry we still need one more step.
-        unsaved = false;
-        window.removeEventListener("popstate", guardBack, true);
-        if (window.location.href === href) window.history.back();
+        if (window.location.href === href) {
+          approved = true;
+          window.history.back();
+        }
         return;
       }
       event.stopImmediatePropagation();
       pushSentinel();
     };
     const guard = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
+      if (!approved) event.preventDefault();
     };
     pushSentinel();
     window.addEventListener("popstate", guardBack, true);
