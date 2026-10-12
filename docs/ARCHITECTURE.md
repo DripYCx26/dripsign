@@ -32,10 +32,11 @@ migrations. Every tenant table carries `tenant_id` with composite `(tenant_id, .
 | `signed` | the completion gate (artifacts committed) | none |
 | `void` | staff void, any status except `signed` | none |
 
-- **Revisions** are immutable and numbered. Accepting wording merges the sections it changed
-  against its base revision into the private draft, by section id, keeping other staff edits and
-  the draft title; only a reviewed publish (the client sends the draft PDF sha it reviewed)
-  creates a revision. The first publish moves `draft` to `negotiating` and sends invitations.
+- **Revisions** are immutable and numbered. A proposal rewrites exactly one section of its base
+  revision (same title, same section ids in order). Accepting it replaces that section in the
+  private draft by id, keeping other staff edits and the draft title, and is refused while staff
+  have removed that section; only a reviewed publish (the client sends the draft PDF sha it
+  reviewed) creates a revision. The first publish moves `draft` to `negotiating` and sends invitations.
 - **Proposals** follow a turn rule: one pending proposal per agreement (`one_pending_proposal`),
   decided by the other side. A proposal is accepted, rejected or superseded (countered by the
   other side, or withdrawn by its author; staff withdraw as one side); each outcome is dated and

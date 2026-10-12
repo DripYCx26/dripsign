@@ -219,17 +219,24 @@ it("negotiates, publishes, collects every signature and archives the signed agre
     recipientActor(jordan.email),
     recipientActor(morgan.email),
   ]);
+  // A proposal rewrites one section of its base: two sections, or a reorder, is refused.
+  const reordered = terms("Ten months.");
+  reordered.sections.reverse();
+  for (const replacementSource of [terms("Six months.", "$90 a month."), reordered]) {
+    await expect(
+      run(jordanActor, id, {
+        kind: "propose",
+        expectedVersion: view.agreement.version,
+        text: "Shorter term.",
+        replacementSource,
+      }),
+    ).rejects.toMatchObject({ code: "invalid", message: "A proposal changes one section." });
+  }
   view = await run(jordanActor, id, {
     kind: "propose",
     expectedVersion: view.agreement.version,
     text: "Shorter term.",
     replacementSource: terms("Six months."),
-  });
-  // Staff keep editing the fee while the term is negotiated; accepting the term keeps the fee.
-  view = await run(staff, id, {
-    kind: "save_draft",
-    expectedVersion: view.agreement.version,
-    source: terms("Ten months.", "$120 a month."),
   });
   view = await run(staff, id, {
     kind: "counter",
@@ -238,11 +245,27 @@ it("negotiates, publishes, collects every signature and archives the signed agre
     text: "Meet in the middle.",
     replacementSource: terms("Nine months."),
   });
-  await run(jordanActor, id, {
-    kind: "accept",
+  // Staff edit the fee and drop the term while it waits: accepting is refused until the term is
+  // back, then lands on the term alone and keeps the fee.
+  const acceptPending = (current: AgreementView) =>
+    run(jordanActor, id, {
+      kind: "accept",
+      expectedVersion: current.agreement.version,
+      proposalId: must(current.proposals.at(-1)).id,
+    });
+  const edited = terms("Ten months.", "$120 a month.");
+  view = await run(staff, id, {
+    kind: "save_draft",
     expectedVersion: view.agreement.version,
-    proposalId: must(view.proposals.at(-1)).id,
+    source: { ...edited, sections: edited.sections.slice(1) },
   });
+  await expect(acceptPending(view)).rejects.toThrow("The draft no longer has this section.");
+  view = await run(staff, id, {
+    kind: "save_draft",
+    expectedVersion: view.agreement.version,
+    source: edited,
+  });
+  await acceptPending(view);
   expect((await loadAgreementView(staff, id)).draft?.source).toEqual(
     terms("Nine months.", "$120 a month."),
   );

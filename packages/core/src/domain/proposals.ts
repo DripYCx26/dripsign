@@ -1,14 +1,18 @@
 // The shared thread: messages and turn-based proposals. Accepting wording stages it into the
 // private draft; only a reviewed publish turns it into a revision.
 import { randomUUID } from "node:crypto";
+import { DomainError } from "../errors.ts";
 import { canonicalJson, documentSourceSchema } from "../schema.ts";
-import type { CommandOf, DocumentSource } from "../schema.ts";
+import type { CommandOf, DocumentSection, DocumentSource } from "../schema.ts";
 import { stageDraft } from "./revisions.ts";
 import { endRound } from "./signing.ts";
 import { conflict, parseOrInvalid, touchAgreement, uniqueOrConflict } from "./state.ts";
 import type { CommandContext } from "./state.ts";
 
 const PENDING_EXISTS = "Another proposal is waiting for an answer. Reload to see it.";
+const ONE_SECTION = "A proposal changes one section.";
+const SECTION_REMOVED =
+  "The draft no longer has this section. Staff can restore it, or the proposal can be declined.";
 
 export async function addMessage(
   ctx: CommandContext,
@@ -73,6 +77,9 @@ async function insertProposal(
   },
 ): Promise<void> {
   const { db, agreement, actor } = ctx;
+  if (proposal.replacementSource !== null) {
+    changedSection(await currentSource(ctx), proposal.replacementSource);
+  }
   const replacement =
     proposal.replacementSource === null ? null : JSON.stringify(proposal.replacementSource);
   await uniqueOrConflict("one_pending_proposal", PENDING_EXISTS, () =>
@@ -107,37 +114,51 @@ export async function accept(ctx: CommandContext, command: CommandOf<"accept">):
     );
     return;
   }
-  const merged = mergeProposal(agreement.draft.source, base, replacement);
+  const changed = changedSection(base, replacement);
+  const draft = agreement.draft.source;
+  if (!draft.sections.some((section) => section.id === changed.id)) {
+    throw conflict(SECTION_REMOVED);
+  }
+  // Only the one section moves, so staff edits elsewhere (and the draft title) survive.
+  const sections = draft.sections.map((section) => (section.id === changed.id ? changed : section));
   await stageDraft(db, agreement, {
-    source: parseOrInvalid(documentSourceSchema, merged),
+    source: parseOrInvalid(documentSourceSchema, { ...draft, sections }),
     signers: state.signers,
     dirty: true,
   });
 }
 
 /**
- * Applies only what the proposal changed against its base revision, by section id, so staff edits
- * made to other sections (and the draft title) while it waited survive.
+ * The one section a replacement rewrites: same title, same section ids in the same order, and
+ * exactly one section's heading or paragraphs different from the base revision.
  */
-function mergeProposal(
-  draft: DocumentSource,
-  base: DocumentSource,
-  proposed: DocumentSource,
-): DocumentSource {
-  const kept = new Set(proposed.sections.map((section) => section.id));
-  const removed = new Set(base.sections.filter((s) => !kept.has(s.id)).map((s) => s.id));
-  const baseById = new Map(base.sections.map((section) => [section.id, canonicalJson(section)]));
-  const changed = proposed.sections
-    .map((section, index) => ({ section, index }))
-    .filter(({ section }) => baseById.get(section.id) !== canonicalJson(section));
-  const changedById = new Map(changed.map(({ section }) => [section.id, section]));
-  const sections = draft.sections
-    .filter((section) => !removed.has(section.id))
-    .map((section) => changedById.get(section.id) ?? section);
-  for (const { section, index } of changed) {
-    if (!sections.some((s) => s.id === section.id)) sections.splice(index, 0, section);
+function changedSection(base: DocumentSource, proposed: DocumentSource): DocumentSection {
+  const sameShape =
+    proposed.title === base.title &&
+    proposed.sections.length === base.sections.length &&
+    proposed.sections.every((section, index) => section.id === base.sections[index]?.id);
+  const changed = sameShape
+    ? proposed.sections.filter(
+        (section, index) => canonicalJson(section) !== canonicalJson(base.sections[index]),
+      )
+    : [];
+  const [section] = changed;
+  if (changed.length !== 1 || section === undefined) {
+    throw new DomainError("invalid", ONE_SECTION);
   }
-  return { ...draft, sections };
+  return section;
+}
+
+/** The published revision a new proposal is written against. */
+async function currentSource(ctx: CommandContext): Promise<DocumentSource> {
+  const { db, agreement } = ctx;
+  const found = await db.query<{ source: DocumentSource }>(
+    "SELECT source FROM dripsign.revision WHERE tenant_id = $1 AND id = $2",
+    [agreement.tenantId, agreement.currentRevisionId],
+  );
+  const row = found.rows[0];
+  if (row === undefined) throw conflict();
+  return row.source;
 }
 
 export async function reject(ctx: CommandContext, command: CommandOf<"reject">): Promise<void> {
