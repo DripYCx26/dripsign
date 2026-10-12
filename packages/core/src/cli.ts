@@ -1,11 +1,13 @@
 // Operator commands: pnpm --filter @dripsign/core cli <command>.
 import { randomUUID } from "node:crypto";
 import { parseArgs } from "node:util";
+import { PDFDocument } from "pdf-lib";
 import { z } from "zod";
 import { loadConfig } from "./config.ts";
 import { applySchema, closePool, resetSchema, schemaState, tx } from "./db.ts";
 import { emailSchema, personNameSchema, titleSchema } from "./schema.ts";
 import { upsertStaff } from "./domain/staff.ts";
+import { covers, embedFont } from "./pdf/font.ts";
 
 const USAGE = `Usage: cli <command>
 
@@ -82,6 +84,9 @@ async function addStaff(args: readonly string[]): Promise<void> {
   const parsed = addStaffSchema.safeParse(values);
   if (!parsed.success) throw new Error(USAGE);
   const input = parsed.data;
+  // Every revision PDF prints the organisation, and a tenant is never renamed.
+  if (!covers(await embedFont(await PDFDocument.create(), "plain"), input.tenant))
+    throw new Error("The organisation name has characters the PDF cannot print.");
   const tenantId = await tx(async (db) => {
     await db.query(
       `INSERT INTO dripsign.tenant (id, name) VALUES ($1, $2)

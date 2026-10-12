@@ -41,26 +41,30 @@ afterAll(async () => {
 });
 
 describe("operator CLI", () => {
-  it("refuses the demo seed in production before connecting to a database", () => {
-    const result = spawnSync(
+  const cli = (args: readonly string[], env: NodeJS.ProcessEnv) =>
+    spawnSync(
       process.execPath,
-      ["--import", "tsx", fileURLToPath(new URL("../cli.ts", import.meta.url)), "seed"],
-      {
-        encoding: "utf8",
-        env: {
-          NODE_ENV: "production",
-          DRIPSIGN_DATABASE_URL: "postgres://synthetic:synthetic@127.0.0.1:1/synthetic_test",
-          DRIPSIGN_PUBLIC_ORIGIN: "https://dripsign.example.test",
-          DRIPSIGN_AUTH_SECRET: "synthetic-auth-secret-0123456789abcdef",
-          DRIPSIGN_STORAGE: "s3",
-          DRIPSIGN_S3_BUCKET: "synthetic-dripsign-fj",
-          AWS_REGION: "us-east-1",
-          DRIPSIGN_EMAIL_TRANSPORT: "ses",
-          DRIPSIGN_EMAIL_FROM: "no-reply@example.test",
-        },
-      },
+      ["--import", "tsx", fileURLToPath(new URL("../cli.ts", import.meta.url)), ...args],
+      { encoding: "utf8", env },
+    ).stderr.trim();
+
+  it("refuses the demo seed in production and an unprintable organisation before any database", () => {
+    const production = {
+      NODE_ENV: "production",
+      DRIPSIGN_DATABASE_URL: "postgres://synthetic:synthetic@127.0.0.1:1/synthetic_test",
+      DRIPSIGN_PUBLIC_ORIGIN: "https://dripsign.example.test",
+      DRIPSIGN_AUTH_SECRET: "synthetic-auth-secret-0123456789abcdef",
+      DRIPSIGN_STORAGE: "s3",
+      DRIPSIGN_S3_BUCKET: "synthetic-dripsign-fj",
+      AWS_REGION: "us-east-1",
+      DRIPSIGN_EMAIL_TRANSPORT: "ses",
+      DRIPSIGN_EMAIL_FROM: "no-reply@example.test",
+    };
+    expect(cli(["seed"], production)).toBe("seed is refused in production.");
+    const tenant = ["--tenant", "東京 Legal", "--email", "admin@example.test", "--role", "admin"];
+    expect(cli(["add-staff", ...tenant], production)).toBe(
+      "The organisation name has characters the PDF cannot print.",
     );
-    expect(result.stderr.trim()).toBe("seed is refused in production.");
   });
 });
 

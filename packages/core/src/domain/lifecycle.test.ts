@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { createRequire } from "node:module";
 import { expect, it } from "vitest";
+import { objectKey, readBytes } from "../adapters/storage.ts";
 import { getPool, tx } from "../db.ts";
 import { DomainError } from "../errors.ts";
 import { createHandlers } from "../jobs/handlers.ts";
@@ -8,7 +10,7 @@ import { SIGNING_VERIFICATION_MAX_AGE_MS } from "../auth/sessions.ts";
 import { LIMITS, SIGNING_CONSENT } from "../schema.ts";
 import type { Command, DocumentSource, JobPayload } from "../schema.ts";
 import type { NewAgreementInput, NewRecipient } from "../schema.ts";
-import type { Actor, AgreementView, RecipientActor, StaffActor } from "../types.ts";
+import type { Actor, AgreementView, RecipientActor, RevisionView, StaffActor } from "../types.ts";
 import { createAgreement, executeCommand } from "./commands.ts";
 import { sha256Hex } from "./receipts.ts";
 import { addStaff, revokeStaff, upsertStaff } from "./staff.ts";
@@ -29,6 +31,30 @@ function terms(term: string, fee = "$100 a month."): DocumentSource {
       { id: "fee", heading: "Fee", paragraphs: [fee] },
     ],
   };
+}
+
+interface PdfReader {
+  getDocument(input: { data: Uint8Array; verbosity: number }): {
+    promise: Promise<{
+      getPage(page: number): Promise<{ getTextContent(): Promise<{ items: { str?: string }[] }> }>;
+    }>;
+    destroy(): Promise<void>;
+  };
+}
+
+/** The text runs of a published revision's first page, read back from storage. */
+async function firstPageText(tenantId: string, revision: RevisionView): Promise<string[]> {
+  const { sha256, byteLength } = revision;
+  const bytes = await readBytes({ key: objectKey(tenantId, sha256), sha256, byteLength });
+  const require = createRequire(new URL("../../../../package.json", import.meta.url));
+  const reader = (await import(require.resolve("pdfjs-dist/legacy/build/pdf.mjs"))) as PdfReader;
+  const task = reader.getDocument({ data: new Uint8Array(bytes), verbosity: 0 });
+  try {
+    const content = await (await (await task.promise).getPage(1)).getTextContent();
+    return content.items.map((item) => item.str ?? "");
+  } finally {
+    await task.destroy();
+  }
 }
 
 async function session(email: string): Promise<{ sessionId: string; verifiedAt: string }> {
@@ -270,6 +296,20 @@ it("negotiates, publishes, collects every signature and archives the signed agre
     terms("Nine months.", "$120 a month."),
   );
   view = await publish(staff, id);
+  // Identical terms saved after a publish prepare again: the PDF prints the number it publishes as.
+  view = await run(staff, id, {
+    kind: "save_draft",
+    expectedVersion: view.agreement.version,
+    source: terms("Nine months.", "$120 a month."),
+  });
+  expect(view.agreement.preparation?.status).not.toBe("ready");
+  view = await publish(staff, id);
+  const latest = must(view.revisions.at(-1));
+  expect(latest.number).toBe(3);
+  const printed = (await firstPageText(staff.tenantId, latest)).find((text) =>
+    text.startsWith("REVISION "),
+  );
+  expect(printed).toMatch(/^REVISION 3 · /u);
   const signing = await run(staff, id, {
     kind: "request_signatures",
     expectedVersion: view.agreement.version,
