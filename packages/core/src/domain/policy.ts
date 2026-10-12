@@ -22,6 +22,8 @@ export interface PolicyViewer {
   /** Required signer of the live round (recipients only). */
   readonly isRequiredSigner: boolean;
   readonly hasSigned: boolean;
+  /** Wrote the pending proposal: any staff member for the staff side, else that recipient. */
+  readonly ownsPendingProposal: boolean;
 }
 
 export const STAFF_ONLY_ACTIONS: readonly AgreementAction[] = [
@@ -47,19 +49,20 @@ const ACTION_RANK: Readonly<Record<AgreementAction, number>> = {
   accept: 3,
   counter: 4,
   reject: 5,
-  propose: 6,
-  message: 7,
-  save_draft: 8,
-  retry_preparation: 9,
-  add_recipient: 10,
-  remove_recipient: 11,
-  set_signer: 12,
-  resend_invite: 13,
-  cancel_signatures: 14,
-  ask_ai: 15,
-  apply_ai: 16,
-  download: 17,
-  void: 18,
+  withdraw: 6,
+  propose: 7,
+  message: 8,
+  save_draft: 9,
+  retry_preparation: 10,
+  add_recipient: 11,
+  remove_recipient: 12,
+  set_signer: 13,
+  resend_invite: 14,
+  cancel_signatures: 15,
+  ask_ai: 16,
+  apply_ai: 17,
+  download: 18,
+  void: 19,
 };
 
 export function allowedActions(
@@ -79,12 +82,16 @@ export function allowedActions(
     allowed.add("message");
     return ordered(allowed);
   }
-  if (capacity === "staff") addStaffActions(snapshot, allowed);
+  if (capacity === "staff") addStaffActions(snapshot, viewer, allowed);
   else addRecipientActions(snapshot, viewer, allowed);
   return ordered(allowed);
 }
 
-function addStaffActions(snapshot: PolicySnapshot, allowed: Set<AgreementAction>): void {
+function addStaffActions(
+  snapshot: PolicySnapshot,
+  viewer: PolicyViewer,
+  allowed: Set<AgreementAction>,
+): void {
   const editable = snapshot.status === "draft" || snapshot.status === "negotiating";
   allowed.add("void");
   if (snapshot.hasRevision) {
@@ -99,7 +106,9 @@ function addStaffActions(snapshot: PolicySnapshot, allowed: Set<AgreementAction>
     return;
   }
   if (editable) addDraftActions(snapshot, allowed);
-  if (snapshot.status === "negotiating") addNegotiationActions(snapshot, "staff", allowed);
+  if (snapshot.status === "negotiating") {
+    addNegotiationActions(snapshot, "staff", viewer, allowed);
+  }
   if (
     snapshot.status === "negotiating" &&
     !snapshot.publicationNeeded &&
@@ -115,10 +124,12 @@ function addDraftActions(snapshot: PolicySnapshot, allowed: Set<AgreementAction>
   allowed.add("remove_recipient");
   allowed.add("set_signer");
   if (snapshot.preparation === "failed") allowed.add("retry_preparation");
+  // A recipient's open proposal is answered first: publishing would leave it on an old revision.
   if (
     snapshot.preparation === "ready" &&
     snapshot.publicationNeeded &&
-    snapshot.draftSignerCount > 0
+    snapshot.draftSignerCount > 0 &&
+    snapshot.pendingProposalBy !== "recipient"
   ) {
     allowed.add("publish");
   }
@@ -126,10 +137,14 @@ function addDraftActions(snapshot: PolicySnapshot, allowed: Set<AgreementAction>
   if (snapshot.readyAiSuggestions > 0) allowed.add("apply_ai");
 }
 
-/** Turn-taking is by side: only the side that did not author the pending proposal answers it. */
+/**
+ * Turn-taking is by side: only the side that did not author the pending proposal answers it, and
+ * only its author takes it back.
+ */
 function addNegotiationActions(
   snapshot: PolicySnapshot,
   capacity: Capacity,
+  viewer: PolicyViewer,
   allowed: Set<AgreementAction>,
 ): void {
   if (snapshot.pendingProposalBy === null) {
@@ -140,6 +155,8 @@ function addNegotiationActions(
     allowed.add("counter");
     allowed.add("accept");
     allowed.add("reject");
+  } else if (viewer.ownsPendingProposal) {
+    allowed.add("withdraw");
   }
 }
 
@@ -150,7 +167,7 @@ function addRecipientActions(
 ): void {
   allowed.add("message");
   if (snapshot.status === "negotiating") {
-    addNegotiationActions(snapshot, "recipient", allowed);
+    addNegotiationActions(snapshot, "recipient", viewer, allowed);
     return;
   }
   // During signing only a required signer may propose, which cancels the round.

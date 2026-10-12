@@ -204,7 +204,7 @@ export async function readAgreement(
 }
 
 interface StateRow {
-  pending: { id: string; by: Capacity } | null;
+  pending: { id: string; by: Capacity; email: string } | null;
   round: LiveRound | null;
   signers: LiveSigner[];
   readyAi: number;
@@ -230,7 +230,8 @@ export async function loadState(
        WHERE tenant_id = $1 AND agreement_id = $2 AND email = $3 AND revoked_at IS NULL
      )
      SELECT
-       (SELECT jsonb_build_object('id', id, 'by', author_capacity) FROM dripsign.proposal
+       (SELECT jsonb_build_object('id', id, 'by', author_capacity, 'email', author_email)
+        FROM dripsign.proposal
         WHERE tenant_id = $1 AND agreement_id = $2 AND status = 'pending') AS pending,
        (SELECT jsonb_build_object('id', id, 'status', status, 'revisionId', revision_id,
           'documentSha256', document_sha256, 'consentVersion', consent_version,
@@ -249,15 +250,19 @@ export async function loadState(
   );
   const row = loaded.rows[0];
   if (row === undefined) throw new Error("State query returned no row");
+  const pending = row.pending;
   return {
     agreement,
     signers: row.signers,
-    pending: row.pending,
+    pending,
     round: row.round,
     viewer: {
       recipientId: row.viewerId,
       isRequiredSigner: row.viewerIsRoundSigner,
       hasSigned: row.viewerHasSigned,
+      ownsPendingProposal:
+        pending?.by === actor.capacity &&
+        (actor.capacity === "staff" || pending.email === actor.email),
     },
     snapshot: {
       status: agreement.status,

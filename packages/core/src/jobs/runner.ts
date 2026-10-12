@@ -88,6 +88,7 @@ async function finalFailure(
 function keepLease(job: ClaimedJob, controller: AbortController): () => void {
   let renewing = false;
   let stopped = false;
+  // The lease token fences database transitions, not external effects, so stop before expiry.
   let leaseUntil = job.leaseUntil.getTime();
   let expiry = setTimeout(
     () => {

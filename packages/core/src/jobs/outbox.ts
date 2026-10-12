@@ -7,7 +7,7 @@ export const OUTBOX_CHANNEL = "dripsign_outbox";
 
 /** Attempts before a job is failed. Archive never fails: a signed agreement must not get stuck. */
 export const JOB_MAX_ATTEMPTS: Readonly<Record<JobKind, number | null>> = {
-  email: 5,
+  email: 10,
   pdf_prepare: 2,
   // At most once: a second claim means the first may have spent, so it fails instead.
   ai_suggest: 1,
@@ -39,8 +39,6 @@ export interface ClaimedJob<P extends JobPayload = JobPayload> extends JobLease 
 }
 
 export type JobOf<K extends JobKind> = ClaimedJob<Extract<JobPayload, { kind: K }>>;
-export type JobHandler<K extends JobKind> = (job: JobOf<K>, signal: AbortSignal) => Promise<void>;
-export type JobHandlers = { readonly [K in JobKind]: JobHandler<K> };
 
 /** Inserts a job in the caller's transaction and wakes workers on commit. Null when deduplicated. */
 export async function enqueue(db: Db, job: NewJob): Promise<string | null> {
@@ -71,7 +69,6 @@ interface ClaimRow {
   payload: unknown;
   attempts: number;
   lease_token: string;
-  lease_until: Date;
   created_at: Date;
 }
 
@@ -83,6 +80,8 @@ export async function claimJobs(
   db: Db,
   options: { readonly limit: number; readonly leaseMs: number },
 ): Promise<ClaimedJob[]> {
+  // Local deadline taken before the claim, so it can only end before the database lease does.
+  const leaseUntil = new Date(Date.now() + options.leaseMs);
   const claimed = await db.query<ClaimRow>(
     `WITH due AS (
        SELECT id FROM dripsign.outbox
@@ -100,7 +99,7 @@ export async function claimJobs(
      FROM due
      WHERE o.id = due.id
      RETURNING o.id, o.tenant_id, o.agreement_id, o.payload, o.attempts, o.lease_token,
-       o.lease_until, o.created_at`,
+       o.created_at`,
     [options.limit, options.leaseMs],
   );
   const jobs: ClaimedJob[] = [];
@@ -116,7 +115,7 @@ export async function claimJobs(
       tenantId: row.tenant_id,
       agreementId: row.agreement_id,
       attempts: row.attempts,
-      leaseUntil: row.lease_until,
+      leaseUntil,
       createdAt: row.created_at,
       payload: payload.data,
     });

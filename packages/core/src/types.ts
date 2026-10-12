@@ -237,11 +237,10 @@ export interface StaffListItem {
   readonly version: number;
   readonly updatedAt: string;
   readonly recipients: readonly { readonly name: string; readonly isSigner: boolean }[];
-  readonly publicationNeeded: boolean;
-  readonly hasRevision: boolean;
   readonly preparation: PreparationStatus;
-  readonly pendingProposalBy: Capacity | null;
   readonly pendingProposalAuthor: string | null;
+  /** The policy's answer for staff, as the workspace would compute it. */
+  readonly allowedActions: readonly AgreementAction[];
   readonly signedCount: number;
   readonly requiredCount: number;
   readonly finalizing: boolean;
@@ -254,11 +253,11 @@ export interface InboxItem {
   readonly status: AgreementStatus;
   readonly orgName: string;
   readonly updatedAt: string;
-  readonly pendingProposalBy: Capacity | null;
   readonly signedCount: number;
   readonly requiredCount: number;
-  readonly viewerIsRequiredSigner: boolean;
   readonly viewerHasSigned: boolean;
+  /** The policy's answer for this recipient, as the workspace would compute it. */
+  readonly allowedActions: readonly AgreementAction[];
   readonly finalizing: boolean;
   readonly finalizingDelayed: boolean;
 }
@@ -292,15 +291,19 @@ export interface CompletionExportRevision {
   readonly createdAt: string;
 }
 
-/** queued: a delivery attempt is due or running; failed: attempts stopped, an admin may retry. */
-export type CompletionDeliveryState = "queued" | "failed";
+/**
+ * queued: a delivery attempt is due or running; failed: attempts stopped, an admin may retry;
+ * held: completion froze nothing because the pins were undeliverable, an admin sends it once fixed.
+ */
+export type CompletionDeliveryState = "queued" | "failed" | "held";
 
-/** A frozen executed event the host has not yet acknowledged. */
+/** A completed round whose executed event the host has not yet acknowledged. */
 export interface UndeliveredCompletion {
   readonly roundId: string;
   readonly agreementId: string;
   readonly title: string;
-  readonly eventId: string;
+  /** Null while held: no event was frozen yet. */
+  readonly eventId: string | null;
   readonly completedAt: string;
   readonly state: CompletionDeliveryState;
 }

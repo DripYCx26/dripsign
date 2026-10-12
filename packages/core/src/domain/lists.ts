@@ -1,4 +1,6 @@
-// The staff dashboard and the recipient inbox: one bounded query each, newest activity first.
+// The staff dashboard and the recipient inbox: one bounded query each, newest activity first. Each
+// row carries the policy's allowed actions, so a list names the same next step as the workspace.
+import { loadConfig } from "../config.ts";
 import { readTx } from "../db.ts";
 import { DomainError, notFound } from "../errors.ts";
 import { LIMITS, staffListQuerySchema, uuidSchema } from "../schema.ts";
@@ -13,10 +15,24 @@ import type {
   StaffActor,
   StaffListItem,
 } from "../types.ts";
+import { allowedActions } from "./policy.ts";
+import type { PolicySnapshot } from "./policy.ts";
 import { FINALIZING_DELAYED_ATTEMPTS } from "./snapshot.ts";
 import { iso, parseOrInvalid } from "./state.ts";
 
 const INBOX_LIMIT = 200;
+
+// What the policy reads besides the pending proposal and the round, as one list row selects it.
+const POLICY_COLUMNS = `a.status, a.draft_dirty AS "draftDirty",
+  a.current_revision_id IS NOT NULL AS "hasRevision",
+  a.draft->'preparation'->>'status' AS preparation,
+  jsonb_typeof(a.draft->'source') = 'object' AS "hasSource",
+  (SELECT count(*)::int FROM dripsign.recipient s
+   WHERE s.tenant_id = a.tenant_id AND s.agreement_id = a.id AND s.is_signer
+     AND s.revoked_at IS NULL) AS "draftSigners",
+  (SELECT count(*)::int FROM dripsign.ai_suggestion i
+   WHERE i.tenant_id = a.tenant_id AND i.agreement_id = a.id AND i.status = 'ready') AS "readyAi",
+  p.by AS "pendingBy", p.email AS "pendingEmail", g.status AS "roundStatus"`;
 
 const PENDING_PROPOSAL = `LEFT JOIN LATERAL (
     SELECT q.author_capacity AS by, q.author_email AS email FROM dripsign.proposal q
@@ -46,20 +62,43 @@ interface Progress {
   attempts: number | null;
 }
 
-interface StaffRow extends Progress {
-  id: string;
-  title: string;
+interface PolicyRow {
   status: AgreementStatus;
-  version: number;
-  updatedAt: Date;
-  cursorAt: string;
   draftDirty: boolean;
   hasRevision: boolean;
   preparation: PreparationStatus;
+  hasSource: boolean;
+  draftSigners: number;
+  readyAi: number;
   pendingBy: Capacity | null;
+  pendingEmail: string | null;
+  roundStatus: RoundStatus | null;
+}
+
+function policySnapshot(row: PolicyRow): PolicySnapshot {
+  const round = row.roundStatus;
+  return {
+    status: row.status,
+    hasRevision: row.hasRevision,
+    publicationNeeded: row.draftDirty,
+    preparation: row.preparation,
+    draftSignerCount: row.draftSigners,
+    draftHasSource: row.hasSource,
+    pendingProposalBy: row.pendingBy,
+    round: round === "active" || round === "finalizing" ? round : null,
+    aiEnabled: loadConfig().ai !== null,
+    readyAiSuggestions: row.readyAi,
+  };
+}
+
+interface StaffRow extends Progress, PolicyRow {
+  id: string;
+  title: string;
+  version: number;
+  updatedAt: Date;
+  cursorAt: string;
   pendingAuthor: string | null;
   recipients: { name: string; isSigner: boolean }[];
-  signers: number;
 }
 
 export async function listStaffAgreements(
@@ -76,10 +115,9 @@ export async function listStaffAgreements(
     );
     if (staff.rowCount !== 1) throw notFound();
     const found = await db.query<StaffRow>(
-      `SELECT a.id, a.title, a.status, a.version, a.updated_at AS "updatedAt",
+      `SELECT a.id, a.title, a.version, a.updated_at AS "updatedAt",
          (extract(epoch FROM a.updated_at) * 1000000)::bigint::text AS "cursorAt",
-         a.draft_dirty AS "draftDirty", a.current_revision_id IS NOT NULL AS "hasRevision",
-         a.draft->'preparation'->>'status' AS preparation, p.by AS "pendingBy",
+         ${POLICY_COLUMNS},
          CASE p.by
            WHEN 'recipient' THEN (SELECT r.name FROM dripsign.recipient r
              WHERE r.tenant_id = a.tenant_id AND r.agreement_id = a.id AND r.email = p.email
@@ -87,14 +125,13 @@ export async function listStaffAgreements(
            WHEN 'staff' THEN (SELECT coalesce(s.name, s.email) FROM dripsign.staff s
              WHERE s.tenant_id = a.tenant_id AND s.email = p.email)
          END AS "pendingAuthor",
-         g.status AS "roundStatus", g.signed, g.required, g.attempts, rc.recipients, rc.signers
+         g.signed, g.required, g.attempts, rc.recipients
        FROM dripsign.agreement a
        ${PENDING_PROPOSAL}
        ${ROUND_PROGRESS}
        LEFT JOIN LATERAL (
          SELECT coalesce(jsonb_agg(jsonb_build_object('name', r.name, 'isSigner', r.is_signer)
-             ORDER BY r.added_at, r.id), '[]'::jsonb) AS recipients,
-           (count(*) FILTER (WHERE r.is_signer))::int AS signers
+             ORDER BY r.added_at, r.id), '[]'::jsonb) AS recipients
          FROM dripsign.recipient r
          WHERE r.tenant_id = a.tenant_id AND r.agreement_id = a.id AND r.revoked_at IS NULL
        ) rc ON true
@@ -139,7 +176,9 @@ function progress(row: Progress, requiredWithoutRound: number) {
   };
 }
 
+/** Staff stand on the staff side: any of them owns the staff side's pending proposal. */
 function staffItem(row: StaffRow): StaffListItem {
+  const viewer = { isRequiredSigner: false, hasSigned: false };
   return {
     id: row.id,
     title: row.title,
@@ -147,42 +186,48 @@ function staffItem(row: StaffRow): StaffListItem {
     version: row.version,
     updatedAt: iso(row.updatedAt),
     recipients: row.recipients,
-    publicationNeeded: row.draftDirty,
-    hasRevision: row.hasRevision,
     preparation: row.preparation,
-    pendingProposalBy: row.pendingBy,
     pendingProposalAuthor: row.pendingAuthor,
-    ...progress(row, row.signers),
+    allowedActions: allowedActions(policySnapshot(row), "staff", {
+      ...viewer,
+      ownsPendingProposal: row.pendingBy === "staff",
+    }),
+    ...progress(row, row.draftSigners),
   };
 }
 
-interface InboxRow extends Progress {
+interface InboxRow extends Progress, PolicyRow {
   id: string;
   title: string;
-  status: AgreementStatus;
   orgName: string;
   updatedAt: Date;
-  pendingBy: Capacity | null;
   roundSigner: boolean;
   viewerSigned: boolean;
   revisionSigners: number;
-  revisionSigner: boolean;
 }
 
-/** Agreements shared with the address, across tenants, once they have a first revision. */
+/**
+ * Agreements shared with the address, across tenants, once they have a first revision. Only a
+ * live first-party session reads it: a host bridge session is scoped to one staff tenant.
+ */
 export function listInbox(actor: RecipientActor): Promise<readonly InboxItem[]> {
   return readTx(async (db) => {
+    const session = await db.query(
+      `SELECT 1 FROM dripsign.auth_session
+       WHERE id = $1 AND email = $2 AND NOT embed AND revoked_at IS NULL AND expires_at > now()`,
+      [actor.sessionId, actor.email],
+    );
+    if (session.rowCount !== 1) throw notFound();
     const found = await db.query<InboxRow>(
-      `SELECT a.id, a.title, a.status, t.name AS "orgName", a.updated_at AS "updatedAt",
-         p.by AS "pendingBy", g.status AS "roundStatus", g.signed, g.required, g.attempts,
+      `SELECT a.id, a.title, t.name AS "orgName", a.updated_at AS "updatedAt",
+         ${POLICY_COLUMNS}, g.signed, g.required, g.attempts,
          EXISTS (SELECT 1 FROM dripsign.round_signer rs
                  WHERE rs.tenant_id = a.tenant_id AND rs.round_id = g.id
                    AND rs.recipient_id = r.id) AS "roundSigner",
          EXISTS (SELECT 1 FROM dripsign.signature s
                  WHERE s.tenant_id = a.tenant_id AND s.round_id = g.id
                    AND s.recipient_id = r.id) AS "viewerSigned",
-         cardinality(v.signer_ids) AS "revisionSigners",
-         r.id = ANY(v.signer_ids) AS "revisionSigner"
+         cardinality(v.signer_ids) AS "revisionSigners"
        FROM dripsign.recipient r
        JOIN dripsign.agreement a ON a.tenant_id = r.tenant_id AND a.id = r.agreement_id
        JOIN dripsign.tenant t ON t.id = a.tenant_id
@@ -194,16 +239,24 @@ export function listInbox(actor: RecipientActor): Promise<readonly InboxItem[]> 
        LIMIT $2`,
       [actor.email, INBOX_LIMIT],
     );
-    return found.rows.map((row) => ({
-      id: row.id,
-      title: row.title,
-      status: row.status,
-      orgName: row.orgName,
-      updatedAt: iso(row.updatedAt),
-      pendingProposalBy: row.pendingBy,
-      viewerIsRequiredSigner: row.roundStatus === null ? row.revisionSigner : row.roundSigner,
-      viewerHasSigned: row.viewerSigned,
-      ...progress(row, row.revisionSigners),
-    }));
+    return found.rows.map((row) => inboxItem(row, actor.email));
   });
+}
+
+function inboxItem(row: InboxRow, email: string): InboxItem {
+  const viewer = {
+    isRequiredSigner: row.roundSigner,
+    hasSigned: row.viewerSigned,
+    ownsPendingProposal: row.pendingBy === "recipient" && row.pendingEmail === email,
+  };
+  return {
+    id: row.id,
+    title: row.title,
+    status: row.status,
+    orgName: row.orgName,
+    updatedAt: iso(row.updatedAt),
+    viewerHasSigned: row.viewerSigned,
+    allowedActions: allowedActions(policySnapshot(row), "recipient", viewer),
+    ...progress(row, row.revisionSigners),
+  };
 }

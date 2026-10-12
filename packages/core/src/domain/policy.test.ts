@@ -16,8 +16,12 @@ const negotiating: PolicySnapshot = {
   readyAiSuggestions: 0,
 };
 const signing: PolicySnapshot = { ...negotiating, status: "signing", round: "active" };
-const observer: PolicyViewer = { isRequiredSigner: false, hasSigned: false };
-const signer: PolicyViewer = { isRequiredSigner: true, hasSigned: false };
+const observer: PolicyViewer = {
+  isRequiredSigner: false,
+  hasSigned: false,
+  ownsPendingProposal: false,
+};
+const signer: PolicyViewer = { ...observer, isRequiredSigner: true };
 
 interface Row {
   readonly rule: string;
@@ -45,18 +49,26 @@ const rows: readonly Row[] = [
     excludes: ["publish"],
   },
   {
-    rule: "the author side cannot accept its own proposal",
+    rule: "the author side cannot accept its own proposal, nor take back another's",
     snapshot: { ...negotiating, pendingProposalBy: "recipient" },
     capacity: "recipient",
     viewer: observer,
-    excludes: ["accept", "counter", "reject", "propose"],
+    excludes: ["accept", "counter", "reject", "propose", "withdraw"],
   },
   {
-    rule: "the other side answers the pending proposal",
+    rule: "only the author takes its pending proposal back",
     snapshot: { ...negotiating, pendingProposalBy: "recipient" },
+    capacity: "recipient",
+    viewer: { ...observer, ownsPendingProposal: true },
+    includes: ["withdraw"],
+    excludes: ["accept", "propose"],
+  },
+  {
+    rule: "the other side answers the pending proposal before publishing or signing",
+    snapshot: { ...negotiating, pendingProposalBy: "recipient", publicationNeeded: true },
     capacity: "staff",
     includes: ["accept", "counter", "reject"],
-    excludes: ["propose", "request_signatures"],
+    excludes: ["propose", "request_signatures", "publish", "withdraw"],
   },
   {
     rule: "an observer may only message during signing",

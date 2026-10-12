@@ -41,18 +41,27 @@ export async function propose(ctx: CommandContext, command: CommandOf<"propose">
 }
 
 export async function counter(ctx: CommandContext, command: CommandOf<"counter">): Promise<void> {
-  const { db, agreement } = ctx;
-  if (ctx.state.pending?.id !== command.proposalId) throw conflict();
-  await db.query(
-    `UPDATE dripsign.proposal SET status = 'superseded'
-     WHERE tenant_id = $1 AND id = $2 AND status = 'pending'`,
-    [agreement.tenantId, command.proposalId],
-  );
+  await supersede(ctx, command.proposalId);
   await insertProposal(ctx, {
     text: command.text,
     replacementSource: command.replacementSource ?? null,
     supersedesId: command.proposalId,
   });
+}
+
+/** The author takes the pending proposal back; the policy already limited this to its author. */
+export async function withdraw(ctx: CommandContext, command: CommandOf<"withdraw">): Promise<void> {
+  await supersede(ctx, command.proposalId);
+}
+
+async function supersede(ctx: CommandContext, proposalId: string): Promise<void> {
+  const { db, agreement } = ctx;
+  if (ctx.state.pending?.id !== proposalId) throw conflict();
+  await db.query(
+    `UPDATE dripsign.proposal SET status = 'superseded'
+     WHERE tenant_id = $1 AND id = $2 AND status = 'pending'`,
+    [agreement.tenantId, proposalId],
+  );
 }
 
 async function insertProposal(

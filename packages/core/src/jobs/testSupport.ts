@@ -3,6 +3,7 @@ import { expect, vi } from "vitest";
 import * as configModule from "../config.ts";
 import { suggestEdits } from "../adapters/anthropic.ts";
 import { getPool } from "../db.ts";
+import type { Db } from "../db.ts";
 import { hashBytes, storeBytes } from "../adapters/storage.ts";
 import { canonicalJson, SIGNING_CONSENT } from "../schema.ts";
 import { prepareDraftPdf } from "../pdf/prepare.ts";
@@ -131,12 +132,24 @@ export async function archiveFixture() {
   return { ...context, roundId, jobId, document };
 }
 
+export function claimOwnJobs(ids: readonly (string | null)[]): Promise<ClaimedJob[]> {
+  // Exercise the real claim statement, with a test-only fence before it can lease foreign jobs.
+  const db = {
+    query: (sql: string, values: unknown[]) =>
+      getPool().query(sql.replace("WHERE status IN", "WHERE id = ANY($3::uuid[]) AND status IN"), [
+        ...values,
+        ids,
+      ]),
+  } as Db;
+  return claimJobs(db, { limit: 100, leaseMs: 120_000 });
+}
+
 export async function dueAgain(job: ClaimedJob): Promise<ClaimedJob> {
   await getPool().query(
     "UPDATE dripsign.outbox SET available_at=now()-interval '1 second',lease_until=CASE WHEN status='running' THEN now()-interval '1 second' ELSE NULL END WHERE id=$1",
     [job.id],
   );
-  const jobs = await claimJobs(getPool(), { limit: 100, leaseMs: 120_000 });
+  const jobs = await claimOwnJobs([job.id]);
   const reclaimed = jobs.find((candidate) => candidate.id === job.id);
   if (!reclaimed) throw new Error("Test job was not reclaimed");
   return reclaimed;

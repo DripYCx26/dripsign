@@ -87,12 +87,14 @@ export async function loadArchiveEvidence(
      ORDER BY array_position(v.signer_ids, rs.recipient_id)`,
     [tenantId, roundId],
   );
-  // AI requests are staff-private; the audit record is shared with every party.
+  // AI requests are staff-private; the audit record is shared with every party. The cutoff stays
+  // in SQL: a JS Date drops the microseconds, and with them a signature in the same millisecond.
   const timeline = await db.query<{ at: Date; kind: string }>(
     `SELECT at, kind FROM dripsign.agreement_timeline
-     WHERE tenant_id = $1 AND agreement_id = $2 AND kind <> 'ai_requested' AND at <= $3
+     WHERE tenant_id = $1 AND agreement_id = $2 AND kind <> 'ai_requested'
+       AND at <= (SELECT finalizing_at FROM dripsign.signing_round WHERE tenant_id = $1 AND id = $3)
      ORDER BY at, kind LIMIT 1000`,
-    [tenantId, round.agreementId, round.finalizingAt],
+    [tenantId, round.agreementId, roundId],
   );
   return toEvidence(round, signers.rows, timeline.rows);
 }

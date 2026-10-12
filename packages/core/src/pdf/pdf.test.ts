@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { hashBytes } from "../adapters/storage.ts";
 import { SIGNING_CONSENT } from "../schema.ts";
 import { assertRenderableName } from "./font.ts";
-import { prepareDraftPdf } from "./prepare.ts";
+import { prepareDraftPdf, preparePdfInProcess } from "./prepare.ts";
 import { renderAuditRecord, renderSignedPdf } from "./archive.ts";
 import type { ArchiveEvidence } from "./archive.ts";
 import {
@@ -47,7 +47,122 @@ async function pdfText(bytes: Uint8Array): Promise<string> {
 
 afterEach(() => vi.useRealTimers());
 
+async function expectRefusedUpload(uploaded: PDFDocument): Promise<void> {
+  await expect(
+    preparePdfInProcess({
+      title: "Unsupported upload",
+      signers: [],
+      uploadBytes: await uploaded.save(),
+    }),
+  ).rejects.toMatchObject({
+    code: "invalid",
+    message: "The PDF contains unsupported active content.",
+  });
+}
+
 describe("PDF evidence", () => {
+  it("accepts discarded OpenAction, navigation, Link URIs and unsigned fields; refuses unsafe actions and signed fields", async () => {
+    const uploaded = await PDFDocument.create();
+    const page = uploaded.addPage();
+    const destination = uploaded.context.obj([page.ref, PDFName.of("Fit")]);
+    uploaded.catalog.set(
+      PDFName.of("OpenAction"),
+      uploaded.context.obj({ S: PDFName.of("JavaScript"), JS: PDFString.of("") }),
+    );
+    page.node.set(
+      PDFName.of("AA"),
+      uploaded.context.obj({
+        O: {
+          S: PDFName.of("GoTo"),
+          D: destination,
+          Next: ["NextPage", "PrevPage", "FirstPage", "LastPage"].map((name) => ({
+            S: PDFName.of("Named"),
+            N: PDFName.of(name),
+          })),
+        },
+      }),
+    );
+    const signature = uploaded.context.obj({
+      Type: PDFName.of("Annot"),
+      Subtype: PDFName.of("Widget"),
+      FT: PDFName.of("Sig"),
+      Rect: [0, 0, 100, 30],
+      T: PDFString.of("Unsigned signature"),
+    });
+    const uri = uploaded.context.register(
+      uploaded.context.obj({
+        S: PDFName.of("URI"),
+        URI: PDFString.of("https://example.test"),
+        Next: { S: PDFName.of("URI"), URI: PDFString.of("mailto:recipient@example.test") },
+      }),
+    );
+    const link = uploaded.context.obj({
+      Type: PDFName.of("Annot"),
+      Subtype: PDFName.of("Link"),
+      Rect: [0, 40, 100, 70],
+      A: uri,
+    });
+    page.node.set(PDFName.of("Annots"), uploaded.context.obj([signature, link]));
+    const prepared = await prepareDraftPdf({
+      title: "Benign navigation and unsigned signature",
+      signers: [],
+      uploadBytes: await uploaded.save(),
+    });
+    expect(prepared.pageCount).toBe(1);
+    const copied = await PDFDocument.load(prepared.bytes);
+    expect(copied.catalog.has(PDFName.of("OpenAction"))).toBe(false);
+    uploaded
+      .addPage()
+      .node.set(
+        PDFName.of("AA"),
+        uploaded.context.obj({ O: { S: PDFName.of("GoTo"), D: destination, Next: uri } }),
+      );
+    await expectRefusedUpload(uploaded);
+    uploaded.removePage(1);
+    signature.set(PDFName.of("V"), uploaded.context.obj({}));
+    await expectRefusedUpload(uploaded);
+    signature.delete(PDFName.of("V"));
+    link.set(PDFName.of("Subtype"), PDFName.of("Widget"));
+    await expectRefusedUpload(uploaded);
+    link.set(PDFName.of("Subtype"), PDFName.of("Link"));
+    page.node.set(
+      PDFName.of("AA"),
+      uploaded.context.obj({
+        O: {
+          S: PDFName.of("GoTo"),
+          D: destination,
+          Next: [{ S: PDFName.of("Named"), N: PDFName.of("Print") }],
+        },
+      }),
+    );
+    await expectRefusedUpload(uploaded);
+    page.node.delete(PDFName.of("AA"));
+    signature.set(
+      PDFName.of("Parent"),
+      uploaded.context.obj({
+        AA: { K: { S: PDFName.of("URI"), URI: PDFString.of("https://example.test") } },
+      }),
+    );
+    await expectRefusedUpload(uploaded);
+    signature.delete(PDFName.of("Parent"));
+    page.node.set(
+      PDFName.of("Annots"),
+      uploaded.context.obj([
+        {
+          Type: PDFName.of("Annot"),
+          Subtype: PDFName.of("FileAttachment"),
+          Rect: [0, 0, 10, 10],
+          FS: {
+            Type: PDFName.of("Filespec"),
+            F: PDFString.of("synthetic.txt"),
+            EF: { F: uploaded.context.register(uploaded.context.stream("Harmless fixture")) },
+          },
+        },
+      ]),
+    );
+    await expectRefusedUpload(uploaded);
+  });
+
   it("prepares fields and deterministic redacted evidence, bounds upload inflation, rejects unsafe PDFs and accepts large concurrent uploads", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-10-11T10:03:00Z"));
@@ -152,7 +267,7 @@ describe("PDF evidence", () => {
     );
     expect(hashBytes(await renderAuditRecord(reordered))).toBe(hashBytes(firstAudit));
     const uploaded = await PDFDocument.create();
-    uploaded.addPage();
+    const uploadedPage = uploaded.addPage();
     const uploadBytes = await uploaded.save();
     assertPreflightWorkBound();
     await assertUploadQueueBound(uploadBytes);
@@ -165,11 +280,13 @@ describe("PDF evidence", () => {
     );
     cancellation.abort(new Error("Synthetic cancellation"));
     await expect(cancelled).rejects.toThrow("Synthetic cancellation");
-    uploaded.catalog.set(
-      PDFName.of("OpenAction"),
+    uploadedPage.node.set(
+      PDFName.of("AA"),
       uploaded.context.obj({
-        S: PDFName.of("JavaScript"),
-        JS: PDFString.of("app.alert('synthetic')"),
+        O: {
+          S: PDFName.of("JavaScript"),
+          JS: PDFString.of(""),
+        },
       }),
     );
     await expect(
@@ -177,7 +294,7 @@ describe("PDF evidence", () => {
     ).rejects.toMatchObject({ code: "invalid" });
     await assertUploadInflationBound();
     await assertLargeConcurrentUploads();
-    uploaded.catalog.delete(PDFName.of("OpenAction"));
+    uploadedPage.node.delete(PDFName.of("AA"));
     uploaded.context.trailerInfo.Encrypt = uploaded.context.register(
       PDFDict.withContext(uploaded.context),
     );

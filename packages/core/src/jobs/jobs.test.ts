@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { closePool, getPool, tx } from "../db.ts";
 import { AI_RESERVATION_MICROS, askAi } from "../domain/ai.ts";
@@ -7,7 +9,7 @@ import type { StaffActor } from "../types.ts";
 import { canonicalJson } from "../schema.ts";
 import { getStorage, hashBytes, objectKey, readBytes } from "../adapters/storage.ts";
 import { completeArchive } from "../domain/signing.ts";
-import { claimJobs, enqueue, finishJob, retryJob } from "./outbox.ts";
+import { enqueue, finishJob, retryJob } from "./outbox.ts";
 import * as outboxModule from "./outbox.ts";
 import { createHandlers } from "./handlers.ts";
 import { executeJob } from "./runner.ts";
@@ -17,6 +19,7 @@ import {
   archiveFixture,
   assertModelPrices,
   assertRetention,
+  claimOwnJobs,
   dueAgain,
   fixture,
   source,
@@ -24,6 +27,7 @@ import {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 
@@ -36,10 +40,34 @@ afterAll(async () => {
   vi.unstubAllEnvs();
 });
 
+describe("operator CLI", () => {
+  it("refuses the demo seed in production before connecting to a database", () => {
+    const result = spawnSync(
+      process.execPath,
+      ["--import", "tsx", fileURLToPath(new URL("../cli.ts", import.meta.url)), "seed"],
+      {
+        encoding: "utf8",
+        env: {
+          NODE_ENV: "production",
+          DRIPSIGN_DATABASE_URL: "postgres://synthetic:synthetic@127.0.0.1:1/synthetic_test",
+          DRIPSIGN_PUBLIC_ORIGIN: "https://dripsign.example.test",
+          DRIPSIGN_AUTH_SECRET: "synthetic-auth-secret-0123456789abcdef",
+          DRIPSIGN_STORAGE: "s3",
+          DRIPSIGN_S3_BUCKET: "synthetic-dripsign-fj",
+          AWS_REGION: "us-east-1",
+          DRIPSIGN_EMAIL_TRANSPORT: "ses",
+          DRIPSIGN_EMAIL_FROM: "no-reply@example.test",
+        },
+      },
+    );
+    expect(result.stderr.trim()).toBe("seed is refused in production.");
+  });
+});
+
 describe("outbox execution", () => {
   it("archives through failures with fenced leases, rescue, capped backoff and confidential logs", async () => {
     const context = await archiveFixture();
-    const jobs = await claimJobs(getPool(), { limit: 100, leaseMs: 120_000 });
+    const jobs = await claimOwnJobs([context.jobId]);
     const stale = jobs.find((job) => job.id === context.jobId);
     if (!stale) throw new Error("Archive was not claimed");
     let current = await dueAgain(stale);
@@ -75,7 +103,7 @@ describe("outbox execution", () => {
       [context.tenantId, context.roundId],
     );
     expect(rescued.rows).toHaveLength(1);
-    const replacement = (await claimJobs(getPool(), { limit: 100, leaseMs: 120_000 })).find(
+    const replacement = (await claimOwnJobs([rescued.rows[0]?.id ?? null])).find(
       (job) => job.id === rescued.rows[0]?.id,
     );
     if (!replacement) throw new Error("Rescued archive was not claimed");
@@ -141,6 +169,16 @@ describe("outbox execution", () => {
       /DRIPSIGN_JOBS_CONCURRENCY/u,
     );
     const context = await fixture();
+    const foreignId = await enqueue(getPool(), {
+      tenantId: null,
+      agreementId: null,
+      dedupeKey: null,
+      availableAt: new Date(0),
+      payload: { kind: "email", template: "otp_code", to: "foreign@example.test", params: {} },
+    });
+    const foreignRow = () =>
+      getPool().query("SELECT * FROM dripsign.outbox WHERE id=$1", [foreignId]);
+    const foreignBefore = await foreignRow();
     const suggestionId = randomUUID();
     await getPool().query(
       `INSERT INTO dripsign.ai_suggestion (tenant_id,agreement_id,id,requested_by,instruction,base_source,base_source_sha256,model,reserved_micros)
@@ -172,19 +210,25 @@ describe("outbox execution", () => {
       },
     });
     const [first, second] = await Promise.all([
-      claimJobs(getPool(), { limit: 100, leaseMs: 120_000 }),
-      claimJobs(getPool(), { limit: 100, leaseMs: 120_000 }),
+      claimOwnJobs([aiId, emailId]),
+      claimOwnJobs([aiId, emailId]),
     ]);
     const ids = [...first, ...second].map((job) => job.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids).toContain(aiId);
     expect(ids).toContain(emailId);
+    expect((await foreignRow()).rows).toEqual(foreignBefore.rows);
     const aiJob = [...first, ...second].find((job) => job.id === aiId);
     if (!aiJob) throw new Error("AI job not claimed");
     const reclaimed = await dueAgain(aiJob);
     expect(reclaimed.attempts).toBe(2);
     expect(reclaimed.leaseToken).not.toBe(aiJob.leaseToken);
+    expect((await foreignRow()).rows).toEqual(foreignBefore.rows);
+    const provider = vi.fn().mockRejectedValue(new Error("Synthetic provider refusal"));
+    vi.stubGlobal("fetch", provider);
     await executeJob(reclaimed, createHandlers(), new AbortController().signal);
+    expect(provider).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
     const state = await getPool().query<{ status: string; cost_micros: string; total: string }>(
       "SELECT status,cost_micros,(SELECT sum(coalesce(cost_micros,reserved_micros))::text FROM dripsign.ai_suggestion WHERE tenant_id=$1 AND day=(now() AT TIME ZONE 'UTC')::date) AS total FROM dripsign.ai_suggestion WHERE tenant_id=$1 AND id=$2",
       [context.tenantId, suggestionId],
@@ -207,8 +251,11 @@ describe("outbox execution", () => {
     expect(
       handlers.host_event.retryable(Object.assign(new Error("Invalid data"), { code: "23503" })),
     ).toBe(false);
-    const emailJob = [...first, ...second].find((job) => job.id === emailId);
+    let emailJob = [...first, ...second].find((job) => job.id === emailId);
     if (!emailJob) throw new Error("Email job not claimed");
+    await getPool().query("UPDATE dripsign.outbox SET attempts=9 WHERE id=$1", [emailJob.id]);
+    expect(await retryJob(getPool(), emailJob, "synthetic_mail_retry")).toBe("retrying");
+    emailJob = await dueAgain(emailJob);
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const renew = vi
       .spyOn(outboxModule, "renewLease")

@@ -8,7 +8,7 @@ import type { Command, CommandKind, CommandOf, NewAgreementInput } from "../sche
 import type { Actor, AgreementAction, AgreementView, StaffActor } from "../types.ts";
 import { applyAi, askAi } from "./ai.ts";
 import { insertAgreement, voidAgreement } from "./agreements.ts";
-import { accept, addMessage, counter, propose, reject } from "./proposals.ts";
+import { accept, addMessage, counter, propose, reject, withdraw } from "./proposals.ts";
 import { withReceipt } from "./receipts.ts";
 import { addRecipient, removeRecipient, resendInvite, setSigner } from "./recipients.ts";
 import {
@@ -53,6 +53,7 @@ const HANDLERS: Handlers = {
   counter,
   accept,
   reject,
+  withdraw,
   request_signatures: requestSignatures,
   cancel_signatures: cancelSignatures,
   // A signature changes lifecycle state without a version fence, so it moves the version itself.

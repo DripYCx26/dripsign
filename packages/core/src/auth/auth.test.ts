@@ -1,8 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, expect, it } from "vitest";
-import { closePool, getPool } from "../db.ts";
+import { closePool, getPool, tx } from "../db.ts";
+import { listInbox } from "../domain/lists.ts";
+import type { Session } from "./sessions.ts";
 import type { IssuedChallenge } from "./sessions.ts";
 import {
+  issueSession,
   readSession,
   requestCode,
   resolveRecipient,
@@ -134,7 +137,12 @@ it("locks a challenge after 5 wrong codes, then the email budget stops mail; unk
   expect(stored.rowCount).toBe(1);
 });
 
-it("resolves staff and recipient capacity for one email and drops a revoked grant", async () => {
+function inboxActor(session: Session) {
+  const { id: sessionId, email, verifiedAt } = session;
+  return { capacity: "recipient", email, sessionId, verifiedAt } as const;
+}
+
+it("resolves staff and recipient capacity for one email, drops revoked grants, keeps embed out of the inbox", async () => {
   const email = `dual-${randomUUID()}@dripsign.test`;
   const ip = testIp();
   const tenantId = await addTenantWithStaff(email);
@@ -167,4 +175,18 @@ it("resolves staff and recipient capacity for one email and drops a revoked gran
   });
   expect((await readSession(issued.sessionToken))?.view.hasRecipientGrants).toBe(false);
   expect(await resolveStaff(resolved.session)).toMatchObject({ tenantId, role: "admin" });
+
+  // A bridge session outlives its staff membership; it never reads the email's other-tenant inbox.
+  const embed = await tx((db) => issueSession(db, { email, embed: true, staffTenantId: tenantId }));
+  const bridged = await readSession(embed.sessionToken);
+  if (bridged === null) throw new Error("The bridge session is not readable");
+  const elsewhere = await addRecipient(email);
+  await getPool().query("UPDATE dripsign.staff SET revoked_at = now() WHERE tenant_id = $1", [
+    tenantId,
+  ]);
+  const inbox = await listInbox(inboxActor(resolved.session));
+  expect(inbox.map((item) => item.id)).toEqual([elsewhere.agreementId]);
+  await expect(listInbox(inboxActor(bridged.session))).rejects.toMatchObject({
+    code: "not_found",
+  });
 });

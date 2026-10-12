@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { expect, it } from "vitest";
 import { getPool } from "../db.ts";
 import { SIGNING_CONSENT } from "../schema.ts";
+import { loadArchiveEvidence } from "./archive.ts";
 
 it("refuses edited or out-of-order signatures, skipped finalizing, or signing without artifacts", async () => {
   const db = getPool();
@@ -55,9 +56,11 @@ it("refuses edited or out-of-order signatures, skipped finalizing, or signing wi
   const sign = (verifiedAfterNow: string) =>
     db.query(
       `INSERT INTO dripsign.signature (tenant_id, agreement_id, round_id, recipient_id, typed_name,
-         consent_version, consent_text, consent_hash, document_sha256, session_id, verified_at)
+         consent_version, consent_text, consent_hash, document_sha256, session_id, verified_at,
+         signed_at)
        SELECT tenant_id, agreement_id, id, $3, 'Signer', consent_version, consent_text,
-         consent_hash, document_sha256, gen_random_uuid(), now() + $4::interval
+         consent_hash, document_sha256, gen_random_uuid(), now() + $4::interval,
+         date_trunc('milliseconds', clock_timestamp()) + interval '1500 microseconds'
        FROM dripsign.signing_round WHERE tenant_id = $1 AND id = $2`,
       [tenant, round, recipient, verifiedAfterNow],
     );
@@ -86,11 +89,19 @@ it("refuses edited or out-of-order signatures, skipped finalizing, or signing wi
       [tenant, round],
     ),
   ).rejects.toThrow(/Every signature must precede finalizing/u);
+  // Signed mid-millisecond and finalized a microsecond later: the audit timeline keeps it.
   await db.query(
-    `UPDATE dripsign.signing_round SET status = 'finalizing', finalizing_at = now()
+    `UPDATE dripsign.signing_round SET status = 'finalizing', finalizing_at = (
+       SELECT signed_at + interval '1 microsecond' FROM dripsign.signature
+       WHERE tenant_id = $1 AND round_id = $2)
      WHERE tenant_id = $1 AND id = $2`,
     [tenant, round],
   );
+  const evidence = await loadArchiveEvidence(db, {
+    tenantId: String(tenant),
+    roundId: String(round),
+  });
+  expect(evidence?.timeline.map((item) => item.kind)).toContain("signature_recorded");
   await expect(
     db.query("UPDATE dripsign.agreement SET status = 'signed' WHERE tenant_id = $1 AND id = $2", [
       tenant,

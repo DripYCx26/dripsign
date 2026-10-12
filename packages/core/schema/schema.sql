@@ -724,8 +724,10 @@ SELECT g.tenant_id, g.agreement_id, g.created_at, 'signing_requested', 'staff',
     'revisionId', g.revision_id,
     'documentSha256', g.document_sha256,
     'signers', (
-      SELECT coalesce(jsonb_agg(rs.name ORDER BY rs.name), '[]'::jsonb)
+      SELECT coalesce(
+        jsonb_agg(rs.name ORDER BY array_position(v.signer_ids, rs.recipient_id)), '[]'::jsonb)
       FROM dripsign.round_signer rs
+      JOIN dripsign.revision v ON v.tenant_id = g.tenant_id AND v.id = g.revision_id
       WHERE rs.tenant_id = g.tenant_id AND rs.round_id = g.id
     )
   ),

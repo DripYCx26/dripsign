@@ -1,6 +1,5 @@
 import type { Db } from "../db.ts";
 import { getPool, pgErrorCode, readTx } from "../db.ts";
-import { loadConfig } from "../config.ts";
 import { DomainError } from "../errors.ts";
 import { draftSchema } from "../schema.ts";
 import type { JobKind } from "../schema.ts";
@@ -35,6 +34,11 @@ export interface HandlerDefinition {
 function tenant(job: ClaimedJob): string {
   if (!job.tenantId) throw new Error("Job tenant is missing");
   return job.tenantId;
+}
+
+/** The sentence of a PDF the worker refused as invalid; null for any other failure. */
+function refusal(error: unknown): string | null {
+  return error instanceof DomainError && error.code === "invalid" ? error.message : null;
 }
 
 function preparationFence(job: JobOf<"pdf_prepare">) {
@@ -135,7 +139,6 @@ async function ai(job: JobOf<"ai_suggest">, signal: AbortSignal): Promise<void> 
     const input = await loadSuggestionInput(getPool(), { tenantId, suggestionId });
     if (!input) return;
     signal.throwIfAborted();
-    if (!loadConfig().ai) throw new DomainError("unavailable", "The assistant is disabled.");
     const { costMicros, ...result } = await suggestEdits(input, signal, () => {
       providerCalled = true;
     });
@@ -205,18 +208,18 @@ export function createHandlers(storage = getStorage()): Record<JobKind, HandlerD
       },
     },
     pdf_prepare: {
-      retryable: (error) => !(error instanceof DomainError && error.code === "invalid"),
+      retryable: (error) => refusal(error) === null,
       handler: async (job, signal) => {
         if (job.payload.kind === "pdf_prepare")
           await prepare({ ...job, payload: job.payload }, storage, signal);
       },
-      onFinalFailure: async (db, job, code) => {
+      onFinalFailure: async (db, job, _code, error) => {
         if (job.payload.kind === "pdf_prepare" && job.agreementId)
           await failPreparation(db, {
             tenantId: tenant(job),
             agreementId: job.agreementId,
             fence: preparationFence({ ...job, payload: job.payload }),
-            code,
+            reason: refusal(error) ?? "The PDF could not be prepared. Try again.",
           });
       },
     },

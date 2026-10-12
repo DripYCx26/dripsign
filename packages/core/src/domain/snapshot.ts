@@ -189,7 +189,7 @@ export async function loadRounds(db: Db, scope: Scope): Promise<RoundRow[]> {
        (SELECT coalesce(jsonb_agg(jsonb_build_object(
            'recipientId', rs.recipient_id, 'name', rs.name, 'email', rs.email,
            'typedName', s.typed_name, 'signedAt', s.signed_at
-         ) ORDER BY rs.name, rs.recipient_id), '[]'::jsonb)
+         ) ORDER BY array_position(v.signer_ids, rs.recipient_id)), '[]'::jsonb)
         FROM dripsign.round_signer rs
         LEFT JOIN dripsign.signature s
           ON s.tenant_id = rs.tenant_id AND s.round_id = rs.round_id

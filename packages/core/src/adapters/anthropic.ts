@@ -8,6 +8,7 @@ import {
   proposalTextSchema,
 } from "../schema.ts";
 import type { AiSuggestionResult, DocumentSource } from "../schema.ts";
+import { readBoundedJson } from "./http.ts";
 
 const RESPONSE_LIMIT = 2 * 1024 * 1024;
 const MAX_OUTPUT_TOKENS = 8_000;
@@ -88,7 +89,7 @@ export async function suggestEdits(
     await response.body?.cancel();
     throw new Error("AI provider refused request");
   }
-  const parsed = responseSchema.parse(JSON.parse(await boundedText(response)) as unknown);
+  const parsed = responseSchema.parse(await readBoundedJson(response, RESPONSE_LIMIT));
   if (parsed.usage.output_tokens > MAX_OUTPUT_TOKENS)
     throw new Error("AI output usage exceeds limit");
   if (parsed.content.length !== 1) throw new Error("AI result is ambiguous");
@@ -102,26 +103,4 @@ export async function suggestEdits(
     parsed.usage.input_tokens * price.input + parsed.usage.output_tokens * price.output;
   if (!Number.isSafeInteger(costMicros)) throw new Error("AI usage is invalid");
   return { ...result, costMicros };
-}
-
-async function boundedText(response: Response): Promise<string> {
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error("AI response has no body");
-  let size = 0;
-  const chunks: Uint8Array[] = [];
-  try {
-    for (;;) {
-      const next = await reader.read();
-      if (next.done) break;
-      const chunk: unknown = next.value;
-      if (!(chunk instanceof Uint8Array)) throw new Error("AI response chunk is invalid");
-      size += chunk.byteLength;
-      if (size > RESPONSE_LIMIT) throw new Error("AI response exceeds limit");
-      chunks.push(chunk);
-    }
-    return Buffer.concat(chunks).toString("utf8");
-  } finally {
-    await reader.cancel();
-    reader.releaseLock();
-  }
 }

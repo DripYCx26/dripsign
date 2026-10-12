@@ -265,6 +265,7 @@ export const commandSchema = z.discriminatedUnion("kind", [
   }),
   z.strictObject({ kind: z.literal("accept"), ...fenced, proposalId: uuidSchema }),
   z.strictObject({ kind: z.literal("reject"), ...fenced, proposalId: uuidSchema }),
+  z.strictObject({ kind: z.literal("withdraw"), ...fenced, proposalId: uuidSchema }),
   z.strictObject({ kind: z.literal("request_signatures"), ...fenced }),
   z.strictObject({ kind: z.literal("cancel_signatures"), ...fenced, roundId: uuidSchema }),
   z.strictObject({
@@ -288,8 +289,6 @@ export const commandSchema = z.discriminatedUnion("kind", [
   }),
   z.strictObject({ kind: z.literal("apply_ai"), ...fenced, suggestionId: uuidSchema }),
 ]);
-
-export const COMMAND_KINDS = commandSchema.options.map((option) => option.shape.kind.value);
 
 export const staffListQuerySchema = z.strictObject({
   q: z.string().trim().max(LIMITS.search).optional(),

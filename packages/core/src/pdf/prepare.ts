@@ -67,6 +67,7 @@ export async function preparePdfInProcess(input: PreparationInput): Promise<Prep
     const uploaded = await loadUploadedPdf(input.uploadBytes);
     const pages = await document.copyPages(uploaded, uploaded.getPageIndices());
     for (const page of pages) document.addPage(page);
+    rejectActiveContent(document);
     uploadedPages = pages.length;
   } else {
     const source = documentSourceSchema.parse(input.source);
@@ -101,43 +102,118 @@ async function loadUploadedPdf(bytes: Uint8Array): Promise<PDFDocument> {
   ) {
     throw new DomainError("invalid", "The PDF is encrypted or has too many pages.");
   }
-  rejectActiveContent(document);
   return document;
 }
 
 function rejectActiveContent(document: PDFDocument): void {
+  const indirectObjects = document.context.enumerateIndirectObjects();
+  if (indirectObjects.length > 100_000) throw new DomainError("invalid", "The PDF is too complex.");
+  rejectPageActions(document);
   const prohibited = new Set([
     "JavaScript",
     "JS",
     "Launch",
     "EmbeddedFiles",
     "EmbeddedFile",
+    "FileAttachment",
+    "EF",
     "RichMedia",
-    "XFA",
-    "OpenAction",
-    "AA",
-    "Sig",
   ]);
-  const pending: PDFObject[] = document.context
-    .enumerateIndirectObjects()
-    .map(([, object]) => object);
+  const pending: PDFObject[] = indirectObjects.map(([, object]) => object);
   const visited = new Set<PDFObject>();
+  const additionalActionVisited = new Set<PDFObject>();
   while (pending.length > 0) {
     const object = pending.pop();
     if (!object || visited.has(object)) continue;
-    visited.add(object);
-    if (visited.size > 100_000) throw new DomainError("invalid", "The PDF is too complex.");
+    if (object instanceof PDFStream || object instanceof PDFArray || object instanceof PDFDict)
+      visited.add(object);
     if (object instanceof PDFStream) pending.push(object.dict);
     if (object instanceof PDFArray) pending.push(...object.asArray());
     if (object instanceof PDFName && prohibited.has(object.decodeText()))
       throw new DomainError("invalid", "The PDF contains unsupported active content.");
     if (object instanceof PDFDict) {
+      rejectSignedField(document, object);
+      rejectAdditionalActions(document, object, additionalActionVisited);
       for (const [key, value] of object.entries()) {
         if (prohibited.has(key.decodeText()))
           throw new DomainError("invalid", "The PDF contains unsupported active content.");
         pending.push(value);
       }
     }
+  }
+}
+
+function rejectSignedField(document: PDFDocument, field: PDFDict): void {
+  const type = document.context.lookup(field.get(PDFName.of("FT")));
+  if (type instanceof PDFName && type.decodeText() === "Sig" && field.has(PDFName.of("V")))
+    throw new DomainError("invalid", "The PDF contains unsupported active content.");
+}
+
+function rejectPageActions(document: PDFDocument): void {
+  const visited = new Set<PDFObject>();
+  const linkVisited = new Set<PDFObject>();
+  for (const page of document.getPages()) {
+    const annotations = document.context.lookup(page.node.get(PDFName.of("Annots")));
+    if (annotations === undefined) continue;
+    if (!(annotations instanceof PDFArray))
+      throw new DomainError("invalid", "The PDF contains unsupported active content.");
+    for (const reference of annotations.asArray()) {
+      const annotation = document.context.lookup(reference);
+      if (!(annotation instanceof PDFDict))
+        throw new DomainError("invalid", "The PDF contains unsupported active content.");
+      const action = annotation.get(PDFName.of("A"));
+      const subtype = document.context.lookup(annotation.get(PDFName.of("Subtype")));
+      const isLink = subtype instanceof PDFName && subtype.decodeText() === "Link";
+      if (action !== undefined)
+        rejectUnsupportedAction(document, action, isLink ? linkVisited : visited, isLink);
+    }
+  }
+}
+
+function rejectAdditionalActions(
+  document: PDFDocument,
+  owner: PDFDict,
+  visited: Set<PDFObject>,
+): void {
+  const reference = owner.get(PDFName.of("AA"));
+  if (reference === undefined) return;
+  const actions = document.context.lookup(reference);
+  if (!(actions instanceof PDFDict))
+    throw new DomainError("invalid", "The PDF contains unsupported active content.");
+  for (const [, action] of actions.entries()) rejectUnsupportedAction(document, action, visited);
+}
+
+function rejectUnsupportedAction(
+  document: PDFDocument,
+  action: PDFObject,
+  visited: Set<PDFObject>,
+  allowUri = false,
+): void {
+  const pending = [action];
+  while (pending.length > 0) {
+    const object = document.context.lookup(pending.pop());
+    if (!object) throw new DomainError("invalid", "The PDF contains unsupported active content.");
+    if (visited.has(object)) continue;
+    visited.add(object);
+    if (!(object instanceof PDFDict))
+      throw new DomainError("invalid", "The PDF contains unsupported active content.");
+    const type = document.context.lookup(object.get(PDFName.of("S")));
+    const name = document.context.lookup(object.get(PDFName.of("N")));
+    if (
+      !(type instanceof PDFName) ||
+      !(
+        type.decodeText() === "GoTo" ||
+        (allowUri && type.decodeText() === "URI") ||
+        (type.decodeText() === "Named" &&
+          name instanceof PDFName &&
+          ["NextPage", "PrevPage", "FirstPage", "LastPage"].includes(name.decodeText()))
+      )
+    )
+      throw new DomainError("invalid", "The PDF contains unsupported active content.");
+    const next = object.get(PDFName.of("Next"));
+    if (next === undefined) continue;
+    const resolved = document.context.lookup(next);
+    pending.push(...(resolved instanceof PDFArray ? resolved.asArray() : [next]));
   }
 }
 

@@ -44,7 +44,8 @@ export interface FailedPreparation {
   readonly tenantId: string;
   readonly agreementId: string;
   readonly fence: PreparationFence;
-  readonly code: string;
+  /** A sentence staff read in the draft; the job's code stays in `last_error` and the logs. */
+  readonly reason: string;
 }
 
 const PDF_MAGIC = "%PDF-";
@@ -288,7 +289,7 @@ export async function failPreparation(db: Db, failed: FailedPreparation): Promis
   return withinTx(db, async (tx) => {
     const agreement = await lockForWorker(tx, failed.tenantId, failed.agreementId);
     if (agreement === null || !expects(agreement.draft, failed.fence)) return false;
-    const error = failed.code.slice(0, PREPARATION_ERROR_LENGTH);
+    const error = failed.reason.slice(0, PREPARATION_ERROR_LENGTH);
     const preparation = { ...agreement.draft.preparation, status: "failed", error } as const;
     await writeDraft(tx, agreement, { ...agreement.draft, preparation }, false);
     return true;

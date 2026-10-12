@@ -11,15 +11,8 @@ const USAGE = `Usage: cli <command>
 
   migrate                     Apply schema.sql to a database without it (no-op when current)
   reset                       Drop and reapply the schema (refused in production)
-  seed [--if-empty]           Load the demo agreements
+  seed [--if-empty]           Load the demo agreements (refused in production)
   add-staff --tenant <name> --email <email> --role admin|member [--name <name>]`;
-
-interface SeedModule {
-  seed(options: { readonly ifEmpty: boolean }): Promise<void>;
-}
-
-// A variable specifier keeps the seed lane's module out of this file's compile-time graph.
-const SEED_MODULE = "./seed.ts";
 
 async function main(argv: readonly string[]): Promise<void> {
   const [command, ...rest] = argv;
@@ -58,12 +51,13 @@ async function reset(): Promise<void> {
 }
 
 async function seed(args: readonly string[]): Promise<void> {
+  if (loadConfig().production) throw new Error("seed is refused in production.");
   const { values } = parseArgs({
     args: [...args],
     options: { "if-empty": { type: "boolean", default: false } },
     strict: true,
   });
-  const module = (await import(SEED_MODULE)) as SeedModule;
+  const module = await import("./seed.ts");
   await module.seed({ ifEmpty: values["if-empty"] });
 }
 

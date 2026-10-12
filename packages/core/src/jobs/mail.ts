@@ -67,7 +67,7 @@ export function renderMail(
     };
   }
   const copy = COPY[input.template];
-  const id = input.agreementId ?? input.params.agreementId;
+  const id = input.agreementId;
   if (!id) throw new Error("Mail agreement is missing");
   const path = `/agreements/${encodeURIComponent(id)}${input.template === "sign_request" ? "/sign" : ""}`;
   const url = new URL(path, origin).href;

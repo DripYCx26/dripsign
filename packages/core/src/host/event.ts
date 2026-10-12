@@ -5,7 +5,7 @@
 import { createHash, createPrivateKey, sign } from "node:crypto";
 import { z } from "zod";
 import { HOST_EVENT_PATH, loadConfig } from "../config.ts";
-import type { CompletionKey } from "../config.ts";
+import type { CompletionExportDelivery, CompletionKey } from "../config.ts";
 import {
   canonicalJson,
   completionExportConfigSchema,
@@ -139,19 +139,39 @@ export function signExecutedEvent(
   };
 }
 
+/** The pins an executed event is addressed and signed by. */
+type DeliveryPins = Pick<CompletionExportConfig, "issuer" | "audience" | "keyId" | "keyVersion">;
+
+/**
+ * The one deliverability rule, shared by saving pins, freezing an event and delivering it: why
+ * this deployment could never send an event under these pins (another sender or destination, or
+ * a key it does not hold), or null when it can.
+ */
+export function undeliverableReason(
+  pins: DeliveryPins,
+  delivery: CompletionExportDelivery,
+): string | null {
+  const issuer = loadConfig().publicOrigin;
+  const audience = new URL(delivery.url).origin;
+  if (pins.issuer !== issuer || pins.audience !== audience) {
+    return `On this server the issuer is ${issuer} and the audience is ${audience}.`;
+  }
+  const held = delivery.keys.some(
+    (key) => key.keyId === pins.keyId && key.keyVersion === pins.keyVersion,
+  );
+  return held ? null : "This server holds no completion key with that id and version.";
+}
+
 /**
  * A freshly stamped delivery of a frozen event. Call it per attempt: the signature expires after
- * the frozen freshness. Throws when delivery is off or the frozen pins do not belong to this
- * deployment and its destination.
+ * the frozen freshness. Throws when delivery is off or the frozen pins are undeliverable here.
  */
 export function prepareExecutedEvent(frozen: FrozenExport): HostEventRequest {
-  const config = loadConfig();
-  const delivery = config.completionExport;
+  const delivery = loadConfig().completionExport;
   if (delivery === null) throw new Error("Completion export delivery is off");
   const event = parseExecutedEvent(frozen.body);
-  if (event.issuer !== config.publicOrigin || event.audience !== new URL(delivery.url).origin) {
-    throw new Error("The frozen event names another sender or destination");
-  }
+  const refusal = undeliverableReason(event, delivery);
+  if (refusal !== null) throw new Error(refusal);
   const signed = signExecutedEvent(
     frozen.body,
     delivery.keys,
