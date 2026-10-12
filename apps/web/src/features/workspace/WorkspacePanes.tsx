@@ -31,7 +31,7 @@ export function WorkspacePanes({ view, capacity, run, busy, rail, tab, doc }: Wo
     <div className={styles.panes} data-tab={tab} data-rail={rail}>
       {rail === "draft" && (
         <section className={styles.rail} aria-label="Assistant">
-          {/* Applying or starting while the terms form is open would strand its typed text. */}
+          {/* The assistant waits while the terms form is open: anything it applied would strand the form. */}
           <AssistantThread
             view={view}
             run={run}

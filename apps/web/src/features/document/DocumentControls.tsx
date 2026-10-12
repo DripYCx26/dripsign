@@ -60,7 +60,7 @@ function DraftActions({ doc, busy }: Readonly<{ doc: DocumentState; busy: boolea
         variant="ink"
         size="sm"
         loading={busy}
-        disabled={!draft.dirty}
+        disabled={!draft.dirty || !doc.editable}
         onClick={() => void draft.save()}
       >
         Save
@@ -71,7 +71,9 @@ function DraftActions({ doc, busy }: Readonly<{ doc: DocumentState; busy: boolea
 
 /** Whether any control has something to choose; with none the header leaves the slot out. */
 export function hasDocumentControls(doc: DocumentState): boolean {
-  return doc.options.length > 1 || doc.switchableMode !== null || doc.editable;
+  return (
+    doc.options.length > 1 || doc.switchableMode !== null || doc.editable || doc.draft.edit !== null
+  );
 }
 
 /**
@@ -94,7 +96,8 @@ export function DocumentControls({ doc, busy }: Readonly<{ doc: DocumentState; b
           onChange={setMode}
         />
       )}
-      {editable && <DraftActions doc={doc} busy={busy} />}
+      {/* An open form keeps Discard even when the policy has since withdrawn editing. */}
+      {(editable || doc.draft.edit !== null) && <DraftActions doc={doc} busy={busy} />}
     </div>
   );
 }
