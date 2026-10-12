@@ -281,8 +281,7 @@ it("negotiates, publishes, collects every signature and archives the signed agre
   // its real render and commit.
   const leased = await getPool().query<JobLease>(
     `UPDATE dripsign.outbox SET status = 'running', attempts = attempts + 1,
-       lease_token = gen_random_uuid(), lease_until = now() + interval '1 minute',
-       available_at = now() + interval '1 minute'
+       lease_token = gen_random_uuid(), available_at = now() + interval '1 minute'
      WHERE agreement_id = $1 AND kind = 'archive'
      RETURNING id, lease_token AS "leaseToken"`,
     [id],
@@ -420,7 +419,7 @@ it("keeps terms on rename, fences, replays, rechecks authority, keeps the last a
   const fence = { inputSha256: must(inputSha256), signerSetHash: must(signerSetHash) };
   const refused = new DomainError("invalid", "The signer label is too long.");
   await tx((db) =>
-    createHandlers().pdf_prepare.onFinalFailure(
+    must(createHandlers().pdf_prepare.onFinalFailure)(
       db,
       job({ kind: "pdf_prepare", ...fence }, staff, id),
       "invalid",
@@ -462,10 +461,11 @@ it("keeps terms on rename, fences, replays, rechecks authority, keeps the last a
   const draft: NewAgreementInput = {
     title: "Second agreement",
     source: terms("Twelve months."),
-    recipients: [person("Casey Park", true)],
+    recipients: [person("Casey Park", false)],
   };
   const createKey = `key-${randomUUID()}`;
-  await createAgreement(staff, createKey, draft);
+  // A new draft prepares even before it has a signer.
+  expect(await jobCount(await createAgreement(staff, createKey, draft), "pdf_prepare")).toBe(1);
   const held = await holdLocks(
     ["SELECT 1 FROM dripsign.agreement WHERE id = $1 FOR UPDATE", [id]],
     ["SELECT 1 FROM dripsign.command_receipt WHERE key = $1 FOR UPDATE", [createKey]],

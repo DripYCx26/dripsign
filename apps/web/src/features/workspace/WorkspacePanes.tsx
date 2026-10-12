@@ -6,7 +6,6 @@ import type { DocumentState } from "@/features/document/useDocumentState.ts";
 import { CompletionPanel } from "@/features/signing/CompletionPanel.tsx";
 import { ThreadPane } from "@/features/thread/ThreadPane.tsx";
 import type { RunCommand } from "./commands.ts";
-import { DOCUMENT_PANE_ID } from "./nextStep.ts";
 import type { RailMode, WorkspaceTab } from "./tabs.ts";
 import styles from "./WorkspacePanes.module.css";
 
@@ -34,12 +33,7 @@ export function WorkspacePanes({ view, capacity, run, busy, rail, tab, doc }: Wo
           <ThreadPane view={view} capacity={capacity} run={run} busy={busy} />
         </section>
       )}
-      <section
-        id={DOCUMENT_PANE_ID}
-        className={styles.document}
-        aria-label="Document"
-        tabIndex={-1}
-      >
+      <section className={styles.document} aria-label="Document">
         <CompletionPanel view={view} />
         <DocumentPane view={view} capacity={capacity} run={run} busy={busy} doc={doc} />
       </section>

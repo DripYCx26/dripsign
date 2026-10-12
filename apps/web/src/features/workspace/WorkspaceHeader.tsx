@@ -21,7 +21,6 @@ type WorkspaceHeaderProps = Readonly<{
   tab: WorkspaceTab;
   onTab: (tab: WorkspaceTab) => void;
   onPanel: (panel: Panel) => void;
-  onReveal: (href: string) => void;
   /** The document's revision, view and draft controls; null when there is no document. */
   documentControls: ReactNode;
 }>;
@@ -49,7 +48,6 @@ export function WorkspaceHeader({
   tab,
   onTab,
   onPanel,
-  onReveal,
   documentControls,
 }: WorkspaceHeaderProps) {
   const { title, status, voidReason } = view.agreement;
@@ -86,7 +84,7 @@ export function WorkspaceHeader({
       )}
       {documentControls !== null && <div className={styles.document}>{documentControls}</div>}
       <div className={styles.primary}>
-        <WorkspacePrimary step={step} run={run} busy={busy} onPanel={onPanel} onReveal={onReveal} />
+        <WorkspacePrimary step={step} run={run} busy={busy} onPanel={onPanel} />
       </div>
       <div className={styles.menu}>
         <WorkspaceMenu view={view} capacity={capacity} onPanel={onPanel} />

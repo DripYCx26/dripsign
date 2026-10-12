@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { expect, vi } from "vitest";
-import * as configModule from "../config.ts";
 import { suggestEdits } from "../adapters/anthropic.ts";
 import { getPool } from "../db.ts";
 import type { Db } from "../db.ts";
@@ -32,7 +31,12 @@ export async function fixture(tenantId = randomUUID()) {
     document: null,
     signingFields: [],
     signerIds: [recipientId],
-    preparation: { status: "empty", error: null, inputSha256: null, signerSetHash: null },
+    preparation: {
+      status: "preparing",
+      error: null,
+      inputSha256: "a".repeat(64),
+      signerSetHash: "b".repeat(64),
+    },
   };
   await db.query("INSERT INTO dripsign.tenant (id, name) VALUES ($1,$2) ON CONFLICT DO NOTHING", [
     tenantId,
@@ -145,7 +149,7 @@ export function claimOwnJobs(ids: readonly (string | null)[]): Promise<ClaimedJo
 
 export async function dueAgain(job: ClaimedJob): Promise<ClaimedJob> {
   await getPool().query(
-    "UPDATE dripsign.outbox SET available_at=now()-interval '1 second',lease_until=CASE WHEN status='running' THEN now()-interval '1 second' ELSE NULL END WHERE id=$1",
+    "UPDATE dripsign.outbox SET available_at=now()-interval '1 second' WHERE id=$1",
     [job.id],
   );
   const jobs = await claimOwnJobs([job.id]);
@@ -222,22 +226,10 @@ export async function assertRetention(context: Context, suggestionId: string): P
   expect(Number((await receipts()).rows[0]?.count)).toBe(1);
 }
 
-export async function assertModelPrices(): Promise<void> {
-  const config = configModule.loadConfig();
-  if (!config.ai) throw new Error("Test assistant is disabled");
-  const configuration = vi.spyOn(configModule, "loadConfig").mockReturnValue({
-    ...config,
-    ai: { ...config.ai, model: "unpriced-synthetic-model" },
-  });
+export async function assertModelPrice(): Promise<void> {
   const fetch = vi.spyOn(globalThis, "fetch");
   const called = vi.fn();
   try {
-    await expect(
-      suggestEdits({ source, instruction: "Synthetic" }, undefined, called),
-    ).rejects.toMatchObject({ code: "unavailable" });
-    expect(fetch).not.toHaveBeenCalled();
-    expect(called).not.toHaveBeenCalled();
-    configuration.mockReturnValue(config);
     fetch.mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -257,7 +249,6 @@ export async function assertModelPrices(): Promise<void> {
     expect(result.costMicros).toBe(34);
     expect(called).toHaveBeenCalledOnce();
   } finally {
-    configuration.mockRestore();
     fetch.mockRestore();
   }
 }

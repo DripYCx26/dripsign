@@ -17,10 +17,11 @@ import { scrubEmailParams } from "./outbox.ts";
 import type { ClaimedJob, JobOf } from "./outbox.ts";
 import { renderMail } from "./mail.ts";
 
+/** Absent `retryable` means no failure is retried within the kind's attempts. */
 export interface HandlerDefinition {
   readonly handler: (job: ClaimedJob, signal: AbortSignal) => Promise<void>;
-  readonly retryable: (error: unknown) => boolean;
-  readonly onFinalFailure: (
+  readonly retryable?: (error: unknown) => boolean;
+  readonly onFinalFailure?: (
     db: Db,
     job: ClaimedJob,
     code: string,
@@ -59,7 +60,6 @@ async function prepare(
     if (!row) return null;
     const { source, preparation } = draftSchema.parse(row.draft);
     if (
-      source === null ||
       preparation.inputSha256 !== job.payload.inputSha256 ||
       preparation.signerSetHash !== job.payload.signerSetHash
     )
@@ -128,9 +128,6 @@ async function ai(job: JobOf<"ai_suggest">, signal: AbortSignal): Promise<void> 
 }
 
 export function createHandlers(storage = getStorage()): Record<JobKind, HandlerDefinition> {
-  const none = async (): Promise<void> => {
-    /* No domain effect needs a failure transition. */
-  };
   return {
     email: {
       retryable: retryableDelivery,
@@ -158,16 +155,14 @@ export function createHandlers(storage = getStorage()): Record<JobKind, HandlerD
           });
       },
     },
+    // Archive has no attempt limit, so it never fails finally.
     archive: {
-      retryable: () => true,
-      onFinalFailure: none,
       handler: async (job, signal) => {
         if (job.payload.kind === "archive")
           await archive({ ...job, payload: job.payload }, storage, signal);
       },
     },
     ai_suggest: {
-      retryable: () => false,
       handler: async (job, signal) => {
         if (job.payload.kind === "ai_suggest") await ai({ ...job, payload: job.payload }, signal);
       },

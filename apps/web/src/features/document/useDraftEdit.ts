@@ -1,18 +1,16 @@
 "use client";
 
+import type { DocumentSource } from "@dripsign/core/schema";
 import type { AgreementView } from "@dripsign/core/types";
 import { useState } from "react";
 import type { RunCommand } from "@/features/workspace/commands.ts";
 import type { Edit } from "./DraftForm.tsx";
-import { buildSource, emptySection, toEditable } from "./sections.ts";
+import { buildSource, toEditable } from "./sections.ts";
 import { useUnloadGuard } from "./useUnloadGuard.ts";
 
-/** What the form starts from: the draft's terms, or one blank section for a draft with none. */
-function startingEdit(view: AgreementView): Edit {
-  const source = view.draft?.source ?? null;
-  return source === null
-    ? { title: view.agreement.title, sections: [emptySection()] }
-    : { title: source.title, sections: toEditable(source.sections) };
+/** What the form starts from: the draft's terms. */
+function startingEdit(source: DocumentSource): Edit {
+  return { title: source.title, sections: toEditable(source.sections) };
 }
 
 /** One editing session. `version` is the agreement version the form started from, frozen. */
@@ -61,7 +59,8 @@ export function useDraftEdit(view: AgreementView, run: RunCommand) {
     dirty,
     problem,
     begin: () => {
-      const start = startingEdit(view);
+      if (view.draft === null) return;
+      const start = startingEdit(view.draft.source);
       setSession({ baseline: start, edit: start, version: view.agreement.version });
     },
     change: (next: Edit) => {

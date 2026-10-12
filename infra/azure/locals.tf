@@ -22,35 +22,21 @@ locals {
   # Operator secrets exist only for the features that are switched on.
   ai_enabled = var.ai_enabled
 
+  # Environment variable to secret; the web and the worker read the same ones.
+  app_secret_env = merge(
+    {
+      DRIPSIGN_DATABASE_URL = "database-url"
+      DRIPSIGN_AUTH_SECRET  = "auth-secret"
+    },
+    local.ai_enabled ? { DRIPSIGN_ANTHROPIC_API_KEY = "anthropic-api-key" } : {},
+  )
+
   # Which identity reads which secret; an app can hold no secret its row does not name.
   readers = {
-    web = concat(
-      ["database-url", "auth-secret"],
-      local.ai_enabled ? ["anthropic-api-key"] : [],
-    )
-    worker = concat(
-      ["database-url", "auth-secret"],
-      local.ai_enabled ? ["anthropic-api-key"] : [],
-    )
+    web     = values(local.app_secret_env)
+    worker  = values(local.app_secret_env)
     release = ["database-admin-url", "database-app-password", "database-migrator-password", "migration-database-url", "database-url", "auth-secret"]
   }
-
-  # Environment variable to secret, per runtime.
-  ai_secret_env = local.ai_enabled ? { DRIPSIGN_ANTHROPIC_API_KEY = "anthropic-api-key" } : {}
-  web_secret_env = merge(
-    {
-      DRIPSIGN_DATABASE_URL = "database-url"
-      DRIPSIGN_AUTH_SECRET  = "auth-secret"
-    },
-    local.ai_secret_env,
-  )
-  worker_secret_env = merge(
-    {
-      DRIPSIGN_DATABASE_URL = "database-url"
-      DRIPSIGN_AUTH_SECRET  = "auth-secret"
-    },
-    local.ai_secret_env,
-  )
 
   # What every process parses at startup (packages/core/src/config.ts); the web and the worker
   # also receive the identity variable Container Apps resolves for them.

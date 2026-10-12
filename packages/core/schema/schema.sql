@@ -298,10 +298,9 @@ CREATE TABLE dripsign.outbox (
   payload jsonb NOT NULL CHECK (octet_length(payload::text) <= 65536),
   status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'done', 'failed')),
   attempts integer NOT NULL DEFAULT 0 CHECK (attempts >= 0),
-  -- A claim sets available_at to lease_until, so an expired lease is claimable again.
+  -- Claims and renewals set available_at to the lease's end, when it is claimable again.
   available_at timestamptz NOT NULL DEFAULT now(),
   lease_token uuid,
-  lease_until timestamptz,
   dedupe_key text UNIQUE CHECK (length(dedupe_key) BETWEEN 1 AND 300),
   last_error text CHECK (length(last_error) <= 2000),
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -310,7 +309,6 @@ CREATE TABLE dripsign.outbox (
   -- MATCH SIMPLE skips the foreign key when tenant_id is null, so forbid that combination.
   CHECK (agreement_id IS NULL OR tenant_id IS NOT NULL),
   CHECK ((status = 'running') = (lease_token IS NOT NULL)),
-  CHECK ((lease_token IS NULL) = (lease_until IS NULL)),
   CHECK ((status IN ('done', 'failed')) = (finished_at IS NOT NULL))
 );
 

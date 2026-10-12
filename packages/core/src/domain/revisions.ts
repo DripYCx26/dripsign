@@ -44,15 +44,6 @@ export interface FailedPreparation {
 
 const PREPARATION_ERROR_LENGTH = 500;
 
-/** A draft with no terms, PDF or signers yet. */
-export const EMPTY_DRAFT: Draft = {
-  source: null,
-  document: null,
-  signingFields: [],
-  signerIds: [],
-  preparation: { status: "empty", error: null, inputSha256: null, signerSetHash: null },
-};
-
 export function signerSetHash(signers: readonly LiveSigner[]): string {
   return canonicalSha256(signers.map(({ id, name, email }) => ({ id, name, email })));
 }
@@ -60,13 +51,14 @@ export function signerSetHash(signers: readonly LiveSigner[]): string {
 interface DraftInput {
   /** The renderer prints the agreement title, so it is part of the prepared input. */
   readonly title: string;
-  readonly source: DocumentSource | null;
+  readonly source: DocumentSource;
   readonly signers: readonly LiveSigner[];
 }
 
 /**
  * The draft after a title, terms or signer change, and the fence to enqueue (null when nothing
- * needs preparing). An unchanged fence that is ready or preparing keeps the prepared document.
+ * needs preparing). An unchanged fence that is ready or preparing keeps the prepared document;
+ * a null `current` always prepares.
  */
 function nextDraft(
   current: Draft | null,
@@ -74,7 +66,6 @@ function nextDraft(
 ): { readonly draft: Draft; readonly fence: PreparationFence | null } {
   const { title, source, signers } = input;
   const signerIds = signers.map((signer) => signer.id);
-  if (source === null) return { draft: { ...EMPTY_DRAFT, signerIds }, fence: null };
   const fence = {
     inputSha256: canonicalSha256({ title, source }),
     signerSetHash: signerSetHash(signers),
@@ -90,7 +81,12 @@ function nextDraft(
     return { draft: { ...current, source }, fence: null };
   }
   const preparation = { status: "preparing", error: null, ...fence } as const;
-  return { draft: { ...EMPTY_DRAFT, source, signerIds, preparation }, fence };
+  return { draft: { source, document: null, signingFields: [], signerIds, preparation }, fence };
+}
+
+/** A new agreement's first draft: its terms, before its recipients exist. */
+export function newDraft(title: string, source: DocumentSource): Draft {
+  return nextDraft(null, { title, source, signers: [] }).draft;
 }
 
 async function enqueuePreparation(
@@ -127,12 +123,14 @@ export async function stageDraft(
   agreement: AgreementRow,
   change: {
     readonly title?: string;
-    readonly source: DocumentSource | null;
+    readonly source: DocumentSource;
     readonly signers: readonly LiveSigner[];
     readonly dirty: boolean;
+    /** A new agreement's draft: no preparation is enqueued for it yet. */
+    readonly fresh?: boolean;
   },
 ): Promise<void> {
-  const { draft, fence } = nextDraft(agreement.draft, {
+  const { draft, fence } = nextDraft(change.fresh === true ? null : agreement.draft, {
     title: change.title ?? agreement.title,
     source: change.source,
     signers: change.signers,
@@ -180,7 +178,7 @@ export function retryPreparation(ctx: CommandContext): Promise<void> {
 export async function publish(ctx: CommandContext, command: CommandOf<"publish">): Promise<void> {
   const { db, agreement, state, actor } = ctx;
   const { document, source, signingFields, preparation } = agreement.draft;
-  if (document?.sha256 !== command.reviewedSha256 || source === null) {
+  if (document?.sha256 !== command.reviewedSha256) {
     throw conflict("The draft changed after you reviewed it. Review it again before publishing.");
   }
   // The reviewed PDF was prepared for exactly the live signers, in the one signer order.

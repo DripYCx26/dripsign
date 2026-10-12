@@ -66,9 +66,9 @@ parsed by [`config.ts`](../../packages/core/src/config.ts) and listed in
 | `DRIPSIGN_ANTHROPIC_API_KEY` | Key Vault secret `anthropic-api-key`, web and worker, only with `ai_enabled` |
 | `DRIPSIGN_HOST` | `host_integration`, web and worker, plain (public settings); unset when null |
 
-Not set, so the defaults apply: `DRIPSIGN_AI_MODEL`, `DRIPSIGN_AI_DAILY_LIMIT_USD`,
-`DRIPSIGN_JOBS_CONCURRENCY`, `DRIPSIGN_S3_*`, `AWS_REGION`, `DRIPSIGN_SMTP_URL`. Production refuses
-file storage, SMTP and the dev sign-in.
+Not set, so the defaults apply: `DRIPSIGN_AI_DAILY_LIMIT_USD`, `DRIPSIGN_JOBS_CONCURRENCY`,
+`DRIPSIGN_S3_*`, `AWS_REGION`, `DRIPSIGN_SMTP_URL`. Production refuses file storage, SMTP and the
+dev sign-in.
 
 ## What the operator supplies
 

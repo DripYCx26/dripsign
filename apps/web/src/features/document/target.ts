@@ -35,7 +35,7 @@ export function resolveTarget(
   return pick(currentNumber);
 }
 
-export function targetSource(target: DocumentTarget): DocumentSource | null {
+export function targetSource(target: DocumentTarget): DocumentSource {
   return target.kind === "draft" ? target.draft.source : target.revision.source;
 }
 

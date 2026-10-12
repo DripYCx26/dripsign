@@ -270,7 +270,6 @@ export async function loadState(
       publicationNeeded: agreement.draftDirty,
       preparation: agreement.draft.preparation.status,
       draftSignerCount: row.signers.length,
-      draftHasSource: agreement.draft.source !== null,
       pendingProposalBy: row.pending?.by ?? null,
       round: row.round?.status ?? null,
       aiEnabled: loadConfig().ai !== null,

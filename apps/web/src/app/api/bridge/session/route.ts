@@ -10,8 +10,8 @@ const FORM_TYPES = new Set(["application/x-www-form-urlencoded", "multipart/form
 const FORM_LIMIT = { bytes: 16 * 1024, ms: 10_000, tooLarge: "This sign-in request is too large." };
 
 /**
- * The host's signed entry, posted cross-site into its frame, so `requirePublicOrigin` does not
- * apply: core accepts only the configured host's Origin and a valid, unreplayed assertion.
+ * The host's signed entry, posted cross-site into its frame, so no same-origin check applies: core
+ * accepts only the configured host's Origin and a valid, unreplayed assertion.
  * Off unless a host is configured.
  */
 export async function POST(request: Request): Promise<Response> {

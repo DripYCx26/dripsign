@@ -1,5 +1,6 @@
 import { getPool } from "../db.ts";
 import { enqueue } from "./outbox.ts";
+import { failureCode } from "./runner.ts";
 
 const RETENTION_BATCH_SIZE = 1000;
 const RETENTION = [
@@ -89,8 +90,8 @@ export async function rescueArchives(): Promise<void> {
 export function startSweep(): { stop(): void } {
   let retaining = false;
   let rescuing = false;
-  const log = (): void => {
-    console.error("dripsign: sweep unavailable");
+  const log = (error: unknown): void => {
+    console.error("dripsign: sweep unavailable", { code: failureCode(error) });
   };
   const retention = (): void => {
     if (retaining) return;

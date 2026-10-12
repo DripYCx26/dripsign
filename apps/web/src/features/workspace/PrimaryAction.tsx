@@ -10,14 +10,13 @@ type PrimaryActionProps = Readonly<{
   /** True while any command of this workspace is in flight. */
   busy: boolean;
   onCommand: (command: Command) => void;
-  onReveal: (href: string) => void;
 }>;
 
 /**
  * The one primary action `nextStep` chose, in whatever form its kind calls for. The step's chip is
  * a status and sits beside the agreement's pill, not here.
  */
-export function PrimaryAction({ step, busy, onCommand, onReveal }: PrimaryActionProps) {
+export function PrimaryAction({ step, busy, onCommand }: PrimaryActionProps) {
   const { label, kind, command, href, disabled = false } = step;
   return (
     <span className={styles.action}>
@@ -25,16 +24,6 @@ export function PrimaryAction({ step, busy, onCommand, onReveal }: PrimaryAction
         <ButtonLink variant="ink" href={href}>
           {label}
         </ButtonLink>
-      )}
-      {label !== "" && kind === "scroll" && href !== undefined && (
-        <Button
-          variant="ink"
-          onClick={() => {
-            onReveal(href);
-          }}
-        >
-          {label}
-        </Button>
       )}
       {label !== "" && kind === "command" && command !== undefined && (
         <Button

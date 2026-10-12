@@ -24,15 +24,14 @@ type ProposalCardProps = Readonly<{
   onDecide: (decision: Decision, proposal: ProposalView) => Promise<void>;
 }>;
 
-type CardState = "pending" | "stale" | "accepted" | "declined" | "withdrawn";
+type CardState = "pending" | "accepted" | "declined" | "withdrawn";
 
-function cardState(view: AgreementView, proposal: ProposalView): CardState {
+function cardState(proposal: ProposalView): CardState {
   // A countered proposal folds into its successor's card, so a superseded card was withdrawn.
   if (proposal.status === "superseded") return "withdrawn";
   if (proposal.status === "accepted") return "accepted";
   if (proposal.status === "rejected") return "declined";
-  const current = view.agreement.currentRevisionNumber ?? proposal.baseRevisionNumber;
-  return proposal.baseRevisionNumber < current ? "stale" : "pending";
+  return "pending";
 }
 
 function canAnswer(view: AgreementView): boolean {
@@ -49,14 +48,10 @@ function OpenMark({ view, proposal }: MarkProps) {
 }
 
 function StateMark(props: MarkProps) {
-  const { view, capacity, proposal } = props;
-  switch (cardState(view, proposal)) {
+  const { capacity, proposal } = props;
+  switch (cardState(proposal)) {
     case "pending":
       return <OpenMark {...props} />;
-    case "stale":
-      return (
-        <Pill tone="attention">{`Based on revision ${String(proposal.baseRevisionNumber)}`}</Pill>
-      );
     case "declined":
       return <Pill tone="info">Declined</Pill>;
     case "accepted":
@@ -142,8 +137,8 @@ function Decisions({ view, proposal, busy, onDecide }: Omit<ProposalCardProps, "
 
 function ProposalBody(props: ProposalCardProps) {
   const { view, proposal, timed } = props;
-  const state = cardState(view, proposal);
-  const open = state === "pending" || state === "stale";
+  const state = cardState(proposal);
+  const open = state === "pending";
   const earlier = earlierVersions(view, proposal);
   const before = baseSourceOf(view, proposal);
   const diff = (
@@ -197,8 +192,8 @@ function ProposalBody(props: ProposalCardProps) {
  */
 export function ProposalCard(props: ProposalCardProps) {
   const { view, proposal } = props;
-  const state = cardState(view, proposal);
-  const open = state === "pending" || state === "stale";
+  const state = cardState(proposal);
+  const open = state === "pending";
   return (
     <article
       className={styles.card}

@@ -221,12 +221,11 @@ function roundView(actor: Actor, row: RoundRow) {
 }
 
 function suggestionView(row: SuggestionRow, state: AgreementState) {
-  const source = state.agreement.draft.source;
   return {
     ...row,
     createdAt: iso(row.createdAt),
     appliedAt: isoOrNull(row.appliedAt),
-    stale: source === null || canonicalSha256(source) !== row.baseSourceSha256,
+    stale: canonicalSha256(state.agreement.draft.source) !== row.baseSourceSha256,
   };
 }
 

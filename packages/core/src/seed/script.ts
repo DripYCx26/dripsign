@@ -95,7 +95,7 @@ async function runOpenJobs(handlers: Handlers): Promise<number> {
   const claimed = await claimJobs(getPool(), { limit: CLAIM_BATCH, leaseMs: LEASE_MS });
   for (const job of claimed) {
     if (RUN_KINDS.includes(job.payload.kind)) {
-      await executeJob(job, handlers, new AbortController().signal);
+      await executeJob(job, handlers);
     } else {
       await finishJob(getPool(), job);
     }

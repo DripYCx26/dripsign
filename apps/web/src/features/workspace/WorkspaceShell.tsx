@@ -85,7 +85,6 @@ export function WorkspaceShell({
         tab={tab}
         onTab={nav.selectTab}
         onPanel={open}
-        onReveal={nav.reveal}
         documentControls={
           doc.target === null ? null : <DocumentControls doc={doc} busy={pending} />
         }

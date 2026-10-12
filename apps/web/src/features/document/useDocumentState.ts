@@ -3,13 +3,7 @@
 import type { AgreementView, Capacity } from "@dripsign/core/types";
 import { useState } from "react";
 import type { RunCommand } from "@/features/workspace/commands.ts";
-import {
-  draftIsAhead,
-  resolveTarget,
-  targetSha,
-  targetSource,
-  type DocumentTarget,
-} from "./target.ts";
+import { draftIsAhead, resolveTarget, targetSha, type DocumentTarget } from "./target.ts";
 import { useDraftEdit } from "./useDraftEdit.ts";
 
 export type DocumentMode = "reading" | "pdf";
@@ -69,8 +63,7 @@ export function useDocumentState(
   // The PDF is built only once it is first chosen, then kept so switching back does not reload it.
   const [pdfOpened, setPdfOpened] = useState(false);
   const options = revisionOptions(view, capacity);
-  const hasBothForms =
-    target !== null && targetSource(target) !== null && targetSha(target) !== null;
+  const hasBothForms = target !== null && targetSha(target) !== null;
   return {
     target,
     draft,

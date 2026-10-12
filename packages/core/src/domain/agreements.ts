@@ -4,12 +4,12 @@ import type { Db } from "../db.ts";
 import type { CommandOf, NewAgreementInput } from "../schema.ts";
 import type { StaffActor } from "../types.ts";
 import { liveRecipients, notify } from "./notify.ts";
-import { EMPTY_DRAFT, stageDraft } from "./revisions.ts";
+import { newDraft, stageDraft } from "./revisions.ts";
 import { voidRound } from "./signing.ts";
 import { AGREEMENT_COLUMNS, liveSigners } from "./state.ts";
 import type { AgreementRow, CommandContext } from "./state.ts";
 
-/** Inserts the agreement and its recipients, then stages the draft for the live signers. */
+/** Inserts the agreement with its terms and its recipients, then prepares it for the signers. */
 export async function insertAgreement(
   db: Db,
   actor: StaffActor,
@@ -19,7 +19,13 @@ export async function insertAgreement(
     `INSERT INTO dripsign.agreement (tenant_id, id, title, draft, created_by)
      VALUES ($1, $2, $3, $4, $5)
      RETURNING ${AGREEMENT_COLUMNS}`,
-    [actor.tenantId, randomUUID(), input.title, JSON.stringify(EMPTY_DRAFT), actor.email],
+    [
+      actor.tenantId,
+      randomUUID(),
+      input.title,
+      JSON.stringify(newDraft(input.title, input.source)),
+      actor.email,
+    ],
   );
   const agreement = inserted.rows[0];
   if (agreement === undefined) throw new Error("Agreement insert returned no row");
@@ -42,6 +48,7 @@ export async function insertAgreement(
     source: input.source,
     signers: await liveSigners(db, agreement.tenantId, agreement.id),
     dirty: true,
+    fresh: true,
   });
   return agreement.id;
 }

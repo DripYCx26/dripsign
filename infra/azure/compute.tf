@@ -112,7 +112,7 @@ resource "azurerm_container_app" "web" {
       }
 
       dynamic "env" {
-        for_each = local.web_secret_env
+        for_each = local.app_secret_env
 
         content {
           name        = env.key
@@ -189,7 +189,7 @@ resource "azurerm_container_app" "worker" {
       }
 
       dynamic "env" {
-        for_each = local.worker_secret_env
+        for_each = local.app_secret_env
 
         content {
           name        = env.key

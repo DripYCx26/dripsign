@@ -8,11 +8,11 @@ import type {
 } from "@dripsign/core/types";
 import { fileUrl } from "../files.ts";
 
-export type NextStepKind = "command" | "navigate" | "scroll" | "none";
+export type NextStepKind = "command" | "navigate" | "none";
 
 /**
- * The one primary action of a workspace, decided from the live view. `scroll` targets an in-page
- * anchor in `href`; `none` with a `chip` is a status, with an empty label it is nothing to show.
+ * The one primary action of a workspace, decided from the live view. `none` with a `chip` is a
+ * status, with an empty label it is nothing to show.
  */
 export type NextStep = Readonly<{
   label: string;
@@ -22,12 +22,6 @@ export type NextStep = Readonly<{
   disabled?: boolean;
   chip?: string;
 }>;
-
-/** The element a `scroll` step lands on; the workspace puts this id on it. */
-export const DOCUMENT_PANE_ID = "document-pane";
-
-// No step scrolls here any more; the thread still marks its open proposal row with it, and goes
-// when that mark does.
 
 const NOTHING: NextStep = { label: "", kind: "none" };
 
@@ -71,7 +65,6 @@ export type StaffMove =
   | "answer"
   | "preparing"
   | "retry"
-  | "add_terms"
   | "publish"
   | "request_signatures"
   | "needs_signer"
@@ -85,7 +78,6 @@ export function staffMove(facts: StaffFacts): StaffMove {
   if (can("accept")) return "answer";
   if (facts.preparation === "preparing") return "preparing";
   if (can("retry_preparation")) return "retry";
-  if (facts.status === "draft" && facts.preparation === "empty") return "add_terms";
   if (can("publish")) return "publish";
   if (can("request_signatures")) return "request_signatures";
   if (facts.preparation === "ready" && facts.requiredSigners === 0) return "needs_signer";
@@ -93,15 +85,16 @@ export function staffMove(facts: StaffFacts): StaffMove {
   return "none";
 }
 
-/** The words of a staff move; publishing says whether recipients have seen a revision before. */
+/**
+ * The words of a staff move; publishing says whether recipients have seen a revision before. An
+ * answer has none here: the proposal's card carries it, and a list row names its author.
+ */
 export function staffMoveLabel(move: StaffMove, status: AgreementStatus): string {
   switch (move) {
     case "preparing":
       return "Preparing PDF…";
     case "retry":
       return "Retry preparation";
-    case "add_terms":
-      return "Add terms";
     case "publish":
       return status === "draft" ? "Review and publish" : "Review and publish changes";
     case "request_signatures":
@@ -111,7 +104,6 @@ export function staffMoveLabel(move: StaffMove, status: AgreementStatus): string
     case "awaiting_answer":
       return "Waiting for recipients to respond";
     case "answer":
-      return "Review the proposal";
     case "none":
       return "";
   }
@@ -120,7 +112,7 @@ export function staffMoveLabel(move: StaffMove, status: AgreementStatus): string
 function staffFacts(view: AgreementView): StaffFacts {
   return {
     status: view.agreement.status,
-    preparation: view.agreement.preparation?.status ?? "empty",
+    preparation: view.agreement.preparation?.status ?? "preparing",
     requiredSigners: view.recipients.filter((r) => r.isSigner && r.removedAt === null).length,
     allowedActions: view.allowedActions,
   };
@@ -140,8 +132,6 @@ function staffDraftStep(view: AgreementView): NextStep {
         kind: "command",
         command: { kind: "retry_preparation", expectedVersion: version },
       };
-    case "add_terms":
-      return { label, kind: "scroll", href: `#${DOCUMENT_PANE_ID}` };
     case "publish":
       return { label, kind: "navigate", href: `/staff/agreements/${view.agreement.id}/publish` };
     case "request_signatures":

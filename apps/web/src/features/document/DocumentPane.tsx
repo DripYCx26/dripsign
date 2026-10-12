@@ -99,7 +99,7 @@ type BodyProps = Readonly<{
   suggestable: boolean;
 }>;
 
-/** The reading view and the PDF, whichever the document has; both when it has both. */
+/** The reading view, and the PDF beside it once there is one. */
 function Body({ view, capacity, target, mode, pdfOpened, suggestable }: BodyProps) {
   const source = targetSource(target);
   const sha256 = targetSha(target);
@@ -113,7 +113,6 @@ function Body({ view, capacity, target, mode, pdfOpened, suggestable }: BodyProp
         people={view.recipients.map(({ id, name }) => ({ id, name }))}
       />
     );
-  if (source === null) return pdf;
   const reading = (
     <ReadingView
       source={source}

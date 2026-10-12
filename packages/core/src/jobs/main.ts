@@ -1,10 +1,9 @@
-import { loadConfig } from "../config.ts";
+import { loadConfig, type Config } from "../config.ts";
 import { closePool } from "../db.ts";
 import { startRunner } from "./runner.ts";
 import { startSweep } from "./sweep.ts";
 
-async function main(): Promise<void> {
-  const config = loadConfig();
+async function main(config: Config): Promise<void> {
   const runner = await startRunner({ concurrency: config.jobsConcurrency });
   const sweep = startSweep();
   console.info(
@@ -22,8 +21,7 @@ async function main(): Promise<void> {
     sweep.stop();
     void runner
       .stop()
-      .then(async (drained) => {
-        if (!drained) process.exit(0);
+      .then(async () => {
         await closePool();
         clearTimeout(deadline);
       })
@@ -36,7 +34,16 @@ async function main(): Promise<void> {
   process.once("SIGINT", stop);
 }
 
-await main().catch(() => {
+let config: Config;
+try {
+  config = loadConfig();
+} catch (error: unknown) {
+  // The message names the invalid keys, never their values.
+  console.error(error instanceof Error ? error.message : "dripsign: invalid configuration");
+  process.exit(1);
+}
+
+await main(config).catch(() => {
   console.error("dripsign: jobs startup failed");
   process.exit(1);
 });

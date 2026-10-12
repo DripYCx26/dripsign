@@ -14,14 +14,13 @@ type PrimaryProps = Readonly<{
   run: RunCommand;
   busy: boolean;
   onPanel: (panel: Panel) => void;
-  onReveal: (href: string) => void;
 }>;
 
 /**
  * The header's primary action, the one `nextStep` chose. Requesting signatures goes through its
  * confirmation dialog; other commands run at once.
  */
-export function WorkspacePrimary({ step, run, busy, onPanel, onReveal }: PrimaryProps) {
+export function WorkspacePrimary({ step, run, busy, onPanel }: PrimaryProps) {
   return (
     <PrimaryAction
       step={step}
@@ -30,7 +29,6 @@ export function WorkspacePrimary({ step, run, busy, onPanel, onReveal }: Primary
         if (command.kind === "request_signatures") onPanel("request");
         else void run(command, command.kind);
       }}
-      onReveal={onReveal}
     />
   );
 }

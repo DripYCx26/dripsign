@@ -52,6 +52,7 @@ export function SignFlow({ agreementId, initialView, needsVerification }: SignFl
       )}
       {flow.shown === "sign" && (
         <SignStep
+          consent={round.consent.text}
           grantName={grantName}
           name={flow.name}
           nameError={flow.nameError}

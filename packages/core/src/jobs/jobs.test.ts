@@ -6,7 +6,7 @@ import { closePool, getPool, tx } from "../db.ts";
 import { AI_RESERVATION_MICROS, askAi } from "../domain/ai.ts";
 import { loadState, lockAgreement, resolveAccess } from "../domain/state.ts";
 import type { StaffActor } from "../types.ts";
-import { canonicalJson } from "../schema.ts";
+import { canonicalJson, LIMITS } from "../schema.ts";
 import { getStorage, hashBytes, objectKey, readBytes } from "../adapters/storage.ts";
 import { completeArchive } from "../domain/signing.ts";
 import { enqueue, finishJob, retryJob } from "./outbox.ts";
@@ -17,7 +17,7 @@ import { parseConfig } from "../config.ts";
 import { rescueArchives } from "./sweep.ts";
 import {
   archiveFixture,
-  assertModelPrices,
+  assertModelPrice,
   assertRetention,
   claimOwnJobs,
   dueAgain,
@@ -85,7 +85,7 @@ describe("outbox execution", () => {
     ).toBe("lease_lost");
     expect((await row()).rows).toEqual(before.rows);
     await getPool().query("UPDATE dripsign.outbox SET attempts=1100 WHERE id=$1", [current.id]);
-    expect(await retryJob(getPool(), current, "storage_unavailable")).toBe("retrying");
+    expect(await retryJob(getPool(), current, "storage_unavailable")).toBe(true);
     const delay = await getPool().query<{ seconds: number }>(
       "SELECT extract(epoch FROM available_at - now())::float8 AS seconds FROM dripsign.outbox WHERE id=$1",
       [current.id],
@@ -93,7 +93,7 @@ describe("outbox execution", () => {
     expect(delay.rows[0]?.seconds).toBeGreaterThan(3590);
     expect(delay.rows[0]?.seconds).toBeLessThan(3601);
     await getPool().query(
-      "UPDATE dripsign.outbox SET status='failed',finished_at=now(),lease_token=NULL,lease_until=NULL WHERE id=$1",
+      "UPDATE dripsign.outbox SET status='failed',finished_at=now(),lease_token=NULL WHERE id=$1",
       [current.id],
     );
     await rescueArchives();
@@ -122,7 +122,7 @@ describe("outbox execution", () => {
       },
     });
     for (let attempt = 0; attempt < 3; attempt++) {
-      await executeJob(current, handlers, new AbortController().signal);
+      await executeJob(current, handlers);
       if (attempt < 2) {
         const state = await getPool().query<{ status: string; last_error: string }>(
           "SELECT status,last_error FROM dripsign.outbox WHERE id=$1",
@@ -158,7 +158,7 @@ describe("outbox execution", () => {
     }
   });
 
-  it("fences claims and AI spend, classifies retries, renews leases, prices models and batches retention", async () => {
+  it("fences claims and AI spend, classifies retries, renews leases, prices the model and batches retention", async () => {
     const concurrency = parseConfig({
       ...process.env,
       DRIPSIGN_JOBS_CONCURRENCY: "8",
@@ -226,7 +226,7 @@ describe("outbox execution", () => {
     expect((await foreignRow()).rows).toEqual(foreignBefore.rows);
     const provider = vi.fn().mockRejectedValue(new Error("Synthetic provider refusal"));
     vi.stubGlobal("fetch", provider);
-    await executeJob(reclaimed, createHandlers(), new AbortController().signal);
+    await executeJob(reclaimed, createHandlers());
     expect(provider).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
     const state = await getPool().query<{ status: string; cost_micros: string; total: string }>(
@@ -241,54 +241,62 @@ describe("outbox execution", () => {
       [aiId],
     );
     expect(outbox.rows[0]?.status).toBe("failed");
-    await assertModelPrices();
+    await assertModelPrice();
     const handlers = createHandlers();
-    let emailJob = [...first, ...second].find((job) => job.id === emailId);
-    if (!emailJob) throw new Error("Email job not claimed");
-    await getPool().query("UPDATE dripsign.outbox SET attempts=9 WHERE id=$1", [emailJob.id]);
-    expect(await retryJob(getPool(), emailJob, "synthetic_mail_retry")).toBe("retrying");
-    emailJob = await dueAgain(emailJob);
+    const claimedEmail = [...first, ...second].find((job) => job.id === emailId);
+    if (!claimedEmail) throw new Error("Email job not claimed");
+    const emailJob = await dueAgain(claimedEmail);
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const renew = vi
       .spyOn(outboxModule, "renewLease")
       .mockRejectedValueOnce(
         Object.assign(new Error("Private database failure"), { code: "08006" }),
       )
+      .mockReturnValueOnce(new Promise<boolean>(() => undefined))
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(false);
-    vi.useFakeTimers();
     let jobSignal: AbortSignal | undefined;
-    let release: (() => void) | undefined;
-    const blocked = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const running = executeJob(
-      emailJob,
-      {
+    // The handler holds the job until its signal aborts, as a real effect would stop.
+    const run = () =>
+      executeJob(emailJob, {
         ...handlers,
         email: {
           ...handlers.email,
           handler: async (_job, signal) => {
             jobSignal = signal;
-            await blocked;
+            await new Promise((resolve) => {
+              signal.addEventListener("abort", resolve);
+            });
           },
         },
-      },
-      new AbortController().signal,
-    );
-    await vi.advanceTimersByTimeAsync(30_000);
-    expect(jobSignal?.aborted).toBe(false);
-    await vi.advanceTimersByTimeAsync(30_000);
+      });
+    vi.useFakeTimers();
+    let running = run();
+    // A failed renewal keeps the job, and one that never answers ends it at the claimed lease.
+    await vi.advanceTimersByTimeAsync(90_000);
     expect(jobSignal?.aborted).toBe(false);
     await vi.advanceTimersByTimeAsync(30_000);
     expect(jobSignal?.aborted).toBe(true);
-    expect(renew).toHaveBeenCalledTimes(3);
     expect(log).toHaveBeenCalledWith("dripsign: lease renewal failed", {
       id: emailJob.id,
       code: "08006",
     });
     vi.useRealTimers();
-    release?.();
+    await running;
+    const scrubbed = await getPool().query<{ params: unknown }>(
+      "SELECT payload->'params' AS params FROM dripsign.outbox WHERE id=$1",
+      [emailId],
+    );
+    expect(scrubbed.rows[0]?.params).toEqual({});
+    // A confirmed renewal keeps the job; a lost lease ends it.
+    vi.useFakeTimers();
+    running = run();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(jobSignal?.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(jobSignal?.aborted).toBe(true);
+    expect(renew).toHaveBeenCalledTimes(4);
+    vi.useRealTimers();
     await running;
     await assertRetention(context, suggestionId);
   });
@@ -304,10 +312,11 @@ describe("outbox execution", () => {
       verifiedAt: new Date().toISOString(),
       role: "admin",
     };
-    const ask = (agreementId: string) =>
+    const ask = (agreementId: string, terms = source) =>
       tx(async (db) => {
         const access = await resolveAccess(db, actor, agreementId);
-        const agreement = await lockAgreement(db, first.tenantId, agreementId, null);
+        const locked = await lockAgreement(db, first.tenantId, agreementId, null);
+        const agreement = { ...locked, draft: { ...locked.draft, source: terms } };
         const state = await loadState(db, agreement, actor);
         await askAi(
           { db, actor, agreement, access, state },
@@ -319,6 +328,10 @@ describe("outbox execution", () => {
     const refused = results.find((result) => result.status === "rejected");
     if (!refused) throw new Error("Concurrent AI request was not refused");
     expect(refused.reason).toMatchObject({ code: "rate_limited" });
+    // Terms longer than the assistant can return are refused before any spend is reserved.
+    const paragraphs = ["x".repeat(LIMITS.paragraph), "y".repeat(LIMITS.paragraph)];
+    const long = { ...source, sections: [{ id: "long", heading: "Long", paragraphs }] };
+    await expect(ask(second.agreementId, long)).rejects.toMatchObject({ code: "invalid" });
     const suggestions = await getPool().query<{ count: string; total: string }>(
       "SELECT count(*)::text AS count, sum(reserved_micros)::text AS total FROM dripsign.ai_suggestion WHERE tenant_id=$1",
       [first.tenantId],

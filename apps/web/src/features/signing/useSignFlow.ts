@@ -1,16 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { SIGNING_CONSENT, type CommandOf } from "@dripsign/core/schema";
+import type { CommandOf } from "@dripsign/core/schema";
 import type { AgreementView, RoundView } from "@dripsign/core/types";
 import { useCommand } from "@/features/command/useCommand.ts";
 import { useNameCheck } from "./useNameCheck.ts";
 
-/** What the signer reviewed: signing binds exactly this round, revision and document hash. */
+/** What the signer reviewed: signing binds exactly this round, revision, document and consent. */
 interface Reviewed {
   readonly roundId: string;
   readonly revisionId: string;
   readonly documentSha256: string;
+  readonly consentVersion: string;
+  readonly consentHash: string;
 }
 
 export type Stage = "verify" | "review" | "sign";
@@ -19,6 +21,8 @@ const freeze = (round: RoundView): Reviewed => ({
   roundId: round.id,
   revisionId: round.revisionId,
   documentSha256: round.documentSha256,
+  consentVersion: round.consent.version,
+  consentHash: round.consent.sha256,
 });
 
 const isCurrent = (reviewed: Reviewed, round: RoundView): boolean =>
@@ -54,8 +58,6 @@ const signCommand = (reviewed: Reviewed, typedName: string): CommandOf<"sign"> =
   kind: "sign",
   ...reviewed,
   typedName,
-  consentVersion: SIGNING_CONSENT.version,
-  consentHash: SIGNING_CONSENT.sha256,
 });
 
 /** What the signer has done so far; it outlives a step change, a step-up and a refresh. */

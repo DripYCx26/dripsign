@@ -64,8 +64,7 @@ const STAFF_MOVE_GROUP: Readonly<Record<StaffMove, StaffGroup>> = {
   publish: "needs",
   request_signatures: "needs",
   needs_signer: "needs",
-  preparing: "drafts",
-  add_terms: "drafts",
+  preparing: "waiting",
   awaiting_answer: "waiting",
   none: "waiting",
 };
@@ -77,7 +76,9 @@ function staffStanding(item: StaffListItem): Standing<StaffGroup> {
     ...item,
     requiredSigners: item.recipients.filter((recipient) => recipient.isSigner).length,
   });
-  const group = move === "none" && item.status === "draft" ? "drafts" : STAFF_MOVE_GROUP[move];
+  // A draft that needs nothing from staff now waits under Drafts, whatever it waits on.
+  const byMove = STAFF_MOVE_GROUP[move];
+  const group = byMove === "waiting" && item.status === "draft" ? "drafts" : byMove;
   const who = item.pendingProposalAuthor;
   const phrase =
     move === "answer" && who !== null

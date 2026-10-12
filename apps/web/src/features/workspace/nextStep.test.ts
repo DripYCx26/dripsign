@@ -90,12 +90,6 @@ const signed = (as: Capacity): NextStep => ({
 // One row per line of the primary-action table (UX proposal A, section 2), both capacities.
 const ROWS: readonly (readonly [string, Capacity, Scenario, NextStep])[] = [
   [
-    "staff: draft without terms",
-    "staff",
-    { status: "draft", preparation: "empty", revision: null },
-    { label: "Add terms", kind: "scroll", href: "#document-pane" },
-  ],
-  [
     "staff: preparing",
     "staff",
     { status: "draft", preparation: "preparing", revision: null },

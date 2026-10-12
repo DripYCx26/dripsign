@@ -1,11 +1,12 @@
 // The private staff assistant. Spend is reserved against the tenant's daily limit before the job
 // exists; suggestions apply to the draft only while it still has the source they were based on.
 import { randomUUID } from "node:crypto";
+import { AI_MODEL } from "../adapters/anthropic.ts";
 import { loadConfig } from "../config.ts";
 import type { Db } from "../db.ts";
 import { DomainError, notFound } from "../errors.ts";
 import { enqueue } from "../jobs/outbox.ts";
-import { aiSuggestionResultSchema } from "../schema.ts";
+import { aiSuggestionResultSchema, LIMITS } from "../schema.ts";
 import type { AiSuggestionResult, CommandOf, DocumentSource } from "../schema.ts";
 import { canonicalSha256 } from "./receipts.ts";
 import { stageDraft } from "./revisions.ts";
@@ -13,8 +14,8 @@ import { conflict } from "./state.ts";
 import type { CommandContext } from "./state.ts";
 
 /**
- * Reserved per request: an upper bound for one call (a 500 KB source is about 150k input tokens
- * plus 8k output tokens at Sonnet prices). The actual cost replaces it when the call finishes.
+ * Reserved per request: an upper bound for one call (an admitted source, the instruction and a
+ * proposal are under 15k input tokens, plus 8k output tokens). The actual cost replaces it.
  */
 export const AI_RESERVATION_MICROS = 1_000_000;
 
@@ -28,7 +29,11 @@ export async function askAi(ctx: CommandContext, command: CommandOf<"ask_ai">): 
   const { db, agreement, actor } = ctx;
   const ai = loadConfig().ai;
   const source = agreement.draft.source;
-  if (ai === null || source === null) throw conflict();
+  if (ai === null) throw conflict();
+  // The reply carries the whole revised source, so a longer one could never come back whole.
+  if (new TextEncoder().encode(JSON.stringify(source)).length > LIMITS.aiSourceBytes) {
+    throw new DomainError("invalid", "These terms are too long for the assistant.");
+  }
   if (command.proposalId !== undefined) await requireProposal(ctx, command.proposalId);
   // One lock per tenant serialises reservations, so concurrent requests cannot overspend.
   await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
@@ -59,7 +64,7 @@ export async function askAi(ctx: CommandContext, command: CommandOf<"ask_ai">): 
       command.proposalId ?? null,
       JSON.stringify(source),
       canonicalSha256(source),
-      ai.model,
+      AI_MODEL,
       AI_RESERVATION_MICROS,
     ],
   );
@@ -89,8 +94,7 @@ export async function applyAi(ctx: CommandContext, command: CommandOf<"apply_ai"
   );
   const suggestion = found.rows[0];
   if (suggestion === undefined) throw conflict("This suggestion is no longer available.");
-  const source = agreement.draft.source;
-  if (source === null || canonicalSha256(source) !== suggestion.baseSourceSha256) {
+  if (canonicalSha256(agreement.draft.source) !== suggestion.baseSourceSha256) {
     throw conflict("The draft changed after this suggestion was prepared. Ask again.");
   }
   await stageDraft(db, agreement, {

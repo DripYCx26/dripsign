@@ -11,7 +11,6 @@ export interface PolicySnapshot {
   readonly preparation: PreparationStatus;
   /** Live required signers in the draft. */
   readonly draftSignerCount: number;
-  readonly draftHasSource: boolean;
   readonly pendingProposalBy: Capacity | null;
   readonly round: "active" | "finalizing" | null;
   readonly aiEnabled: boolean;
@@ -124,16 +123,16 @@ function addDraftActions(snapshot: PolicySnapshot, allowed: Set<AgreementAction>
   allowed.add("remove_recipient");
   allowed.add("set_signer");
   if (snapshot.preparation === "failed") allowed.add("retry_preparation");
-  // A recipient's open proposal is answered first: publishing would leave it on an old revision.
+  // An open proposal is answered or withdrawn first.
   if (
     snapshot.preparation === "ready" &&
     snapshot.publicationNeeded &&
     snapshot.draftSignerCount > 0 &&
-    snapshot.pendingProposalBy !== "recipient"
+    snapshot.pendingProposalBy === null
   ) {
     allowed.add("publish");
   }
-  if (snapshot.aiEnabled && snapshot.draftHasSource) allowed.add("ask_ai");
+  if (snapshot.aiEnabled) allowed.add("ask_ai");
   if (snapshot.readyAiSuggestions > 0) allowed.add("apply_ai");
 }
 

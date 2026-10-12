@@ -26,7 +26,6 @@ const INBOX_LIMIT = 200;
 const POLICY_COLUMNS = `a.status, a.draft_dirty AS "draftDirty",
   a.current_revision_id IS NOT NULL AS "hasRevision",
   a.draft->'preparation'->>'status' AS preparation,
-  jsonb_typeof(a.draft->'source') = 'object' AS "hasSource",
   (SELECT count(*)::int FROM dripsign.recipient s
    WHERE s.tenant_id = a.tenant_id AND s.agreement_id = a.id AND s.is_signer
      AND s.revoked_at IS NULL) AS "draftSigners",
@@ -67,7 +66,6 @@ interface PolicyRow {
   draftDirty: boolean;
   hasRevision: boolean;
   preparation: PreparationStatus;
-  hasSource: boolean;
   draftSigners: number;
   readyAi: number;
   pendingBy: Capacity | null;
@@ -83,7 +81,6 @@ function policySnapshot(row: PolicyRow): PolicySnapshot {
     publicationNeeded: row.draftDirty,
     preparation: row.preparation,
     draftSignerCount: row.draftSigners,
-    draftHasSource: row.hasSource,
     pendingProposalBy: row.pendingBy,
     round: round === "active" || round === "finalizing" ? round : null,
     aiEnabled: loadConfig().ai !== null,

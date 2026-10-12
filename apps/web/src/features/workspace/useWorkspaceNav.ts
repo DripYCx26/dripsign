@@ -12,11 +12,7 @@ function writeTab(tab: WorkspaceTab): void {
   window.history.replaceState(window.history.state, "", url);
 }
 
-/**
- * Which tab the workspace shows and how a `scroll` step reaches the document: it first switches to
- * the tab that holds it (on a phone the other pane is not rendered), then scrolls there and moves
- * focus.
- */
+/** Which tab the workspace shows. */
 export function useWorkspaceNav(initialTab: WorkspaceTab) {
   const [tab, setTab] = useState<WorkspaceTab>(initialTab);
   const intent = useProposalIntent();
@@ -26,15 +22,6 @@ export function useWorkspaceNav(initialTab: WorkspaceTab) {
     writeTab(next);
   }
 
-  function reveal(href: string) {
-    selectTab("document");
-    window.requestAnimationFrame(() => {
-      const target = document.getElementById(href.slice(1));
-      target?.scrollIntoView({ block: "start" });
-      target?.focus({ preventScroll: true });
-    });
-  }
-
   // A proposal started from the document lands in the composer, which lives in the chat pane.
-  return { tab: intent === null ? tab : "chat", selectTab, reveal };
+  return { tab: intent === null ? tab : "chat", selectTab };
 }

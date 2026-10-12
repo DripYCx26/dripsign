@@ -15,6 +15,8 @@ export const LIMITS = {
   sections: 100,
   paragraphsPerSection: 100,
   sourceBytes: 500_000,
+  /** The assistant returns the whole source within its 8,000 output tokens and 90 s timeout. */
+  aiSourceBytes: 16_000,
   draftBytes: 600_000,
   /** The largest PDF the app renders or stores: a revision, a signed PDF or an audit record. */
   pdfBytes: 20 * 1024 * 1024,
@@ -154,7 +156,7 @@ export const signingFieldSchema = z
   })
   .refine((field) => field.x + field.width <= 1 && field.y + field.height <= 1);
 
-export const PREPARATION_STATUSES = ["empty", "preparing", "ready", "failed"] as const;
+export const PREPARATION_STATUSES = ["preparing", "ready", "failed"] as const;
 
 /**
  * The private working draft stored in `agreement.draft`. `preparation.inputSha256` and
@@ -162,15 +164,15 @@ export const PREPARATION_STATUSES = ["empty", "preparing", "ready", "failed"] as
  */
 export const draftSchema = z
   .strictObject({
-    source: documentSourceSchema.nullable(),
+    source: documentSourceSchema,
     document: documentAssetSchema.nullable(),
     signingFields: z.array(signingFieldSchema).max(LIMITS.requiredSigners * 2),
     signerIds: z.array(uuidSchema).max(LIMITS.requiredSigners),
     preparation: z.strictObject({
       status: z.enum(PREPARATION_STATUSES),
       error: z.string().max(500).nullable(),
-      inputSha256: sha256Schema.nullable(),
-      signerSetHash: sha256Schema.nullable(),
+      inputSha256: sha256Schema,
+      signerSetHash: sha256Schema,
     }),
   })
   .refine(

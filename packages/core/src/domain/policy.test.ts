@@ -9,7 +9,6 @@ const negotiating: PolicySnapshot = {
   publicationNeeded: false,
   preparation: "ready",
   draftSignerCount: 1,
-  draftHasSource: true,
   pendingProposalBy: null,
   round: null,
   aiEnabled: true,
@@ -69,6 +68,14 @@ const rows: readonly Row[] = [
     capacity: "staff",
     includes: ["accept", "counter", "reject"],
     excludes: ["propose", "request_signatures", "publish", "withdraw"],
+  },
+  {
+    rule: "staff withdraw their own pending proposal before publishing or signing",
+    snapshot: { ...negotiating, pendingProposalBy: "staff", publicationNeeded: true },
+    capacity: "staff",
+    viewer: { ...observer, ownsPendingProposal: true },
+    includes: ["withdraw"],
+    excludes: ["publish", "request_signatures"],
   },
   {
     rule: "an observer may only message during signing",

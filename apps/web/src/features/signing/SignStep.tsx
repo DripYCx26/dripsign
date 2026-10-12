@@ -1,12 +1,14 @@
 "use client";
 
-import { LIMITS, SIGNING_CONSENT } from "@dripsign/core/schema";
+import { LIMITS } from "@dripsign/core/schema";
 import { Button, Checkbox, Notice, TextField } from "@/ui";
 import { SignaturePreview } from "./SignaturePreview.tsx";
 import { StepActions, StepFrame } from "./StepFrame.tsx";
 import styles from "./SignStep.module.css";
 
 type SignStepProps = Readonly<{
+  /** The live round's frozen consent text: the words the signature binds. */
+  consent: string;
   /** The name on the recipient's grant, offered as the field's placeholder, never as a value. */
   grantName: string;
   name: string;
@@ -52,7 +54,7 @@ export function SignStep(props: SignStepProps) {
             if (canSign) props.onSign();
           }}
         >
-          <p className={styles.consent}>{SIGNING_CONSENT.text}</p>
+          <p className={styles.consent}>{props.consent}</p>
           <Checkbox
             label="I agree to sign electronically."
             checked={agreed}

@@ -22,14 +22,15 @@ interface RunnerState {
   readonly pool: pg.Pool;
   readonly concurrency: number;
   readonly handlers: ReturnType<typeof createHandlers>;
-  readonly active: Map<string, { promise: Promise<void>; controller: AbortController }>;
+  readonly active: Map<string, Promise<void>>;
   stopped: boolean;
   pump: Promise<void> | null;
   listener: { client: pg.PoolClient; notification: () => void; error: () => void } | null;
   connecting: Promise<void> | null;
 }
 
-function failureCode(error: unknown): string {
+/** A loggable code for a failure: a database code, a domain code, or `handler_failed`. */
+export function failureCode(error: unknown): string {
   for (let depth = 0; depth < 4 && error instanceof Error; depth++) {
     const code = pgErrorCode(error);
     if (code && /^[0-9A-Z]{5}$/u.test(code)) return code;
@@ -46,7 +47,6 @@ function logFailure(error?: unknown): void {
 export async function executeJob(
   job: ClaimedJob,
   handlers: ReturnType<typeof createHandlers>,
-  signal: AbortSignal,
 ): Promise<void> {
   const definition = handlers[job.payload.kind];
   const maxAttempts = JOB_MAX_ATTEMPTS[job.payload.kind];
@@ -58,12 +58,12 @@ export async function executeJob(
   const stopHeartbeat = keepLease(job, controller);
   try {
     // Each handler checks cancellation before its effect; AI also records whether it called out.
-    await definition.handler(job, AbortSignal.any([signal, controller.signal]));
+    await definition.handler(job, controller.signal);
     await finishJob(getPool(), job);
   } catch (error: unknown) {
     const code = failureCode(error);
     console.error("dripsign: job failed", { id: job.id, code });
-    if (maxAttempts === null || (definition.retryable(error) && job.attempts < maxAttempts)) {
+    if (maxAttempts === null || (definition.retryable?.(error) && job.attempts < maxAttempts)) {
       await retryJob(getPool(), job, code);
     } else await finalFailure(job, definition, code, error);
   } finally {
@@ -79,7 +79,7 @@ async function finalFailure(
 ): Promise<void> {
   await tx(async (db) => {
     // Hooks lock their agreement first; a lost lease rolls their effects back in this same tx.
-    await definition.onFinalFailure(db, job, code, error);
+    await definition.onFinalFailure?.(db, job, code, error);
     if (!(await lockLease(db, job))) throw new Error("Job lease lost");
     await failJob(db, job, code);
   });
@@ -133,14 +133,13 @@ function keepLease(job: ClaimedJob, controller: AbortController): () => void {
 }
 
 function launch(state: RunnerState, job: ClaimedJob): void {
-  const controller = new AbortController();
-  const promise = executeJob(job, state.handlers, controller.signal)
+  const promise = executeJob(job, state.handlers)
     .catch(logFailure)
     .finally(() => {
       state.active.delete(job.id);
       wake(state);
     });
-  state.active.set(job.id, { promise, controller });
+  state.active.set(job.id, promise);
 }
 
 function wake(state: RunnerState): void {
@@ -212,29 +211,13 @@ async function drain(state: RunnerState): Promise<void> {
     listener.client.removeListener("error", listener.error);
     listener.client.release();
   }
-  await Promise.all([...state.active.values()].map((item) => item.promise));
-}
-
-async function stopRunner(state: RunnerState): Promise<boolean> {
-  state.stopped = true;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const drained = await Promise.race([
-    drain(state).then(() => true),
-    new Promise<false>((resolve) => {
-      timer = setTimeout(() => {
-        resolve(false);
-      }, 25_000);
-    }),
-  ]);
-  if (timer) clearTimeout(timer);
-  if (!drained) for (const item of state.active.values()) item.controller.abort();
-  return drained;
+  await Promise.all(state.active.values());
 }
 
 export async function startRunner(options: {
   concurrency: number;
   handlers?: ReturnType<typeof createHandlers>;
-}): Promise<{ stop(): Promise<boolean> }> {
+}): Promise<{ stop(): Promise<void> }> {
   const pool = getPool();
   if (
     !Number.isInteger(options.concurrency) ||
@@ -260,9 +243,11 @@ export async function startRunner(options: {
   wake(state);
   await Promise.all([state.connecting, state.pump]);
   return {
+    // Unbounded: the caller's shutdown deadline is the one bound.
     stop: () => {
       clearInterval(poll);
-      return stopRunner(state);
+      state.stopped = true;
+      return drain(state);
     },
   };
 }

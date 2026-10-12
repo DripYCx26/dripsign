@@ -93,7 +93,6 @@ export async function claimJobs(
      SET status = 'running',
          attempts = o.attempts + 1,
          lease_token = gen_random_uuid(),
-         lease_until = now() + $2::float8 * interval '1 millisecond',
          available_at = now() + $2::float8 * interval '1 millisecond'
      FROM due
      WHERE o.id = due.id
@@ -143,7 +142,6 @@ export async function finishJob(db: Db, lease: JobLease): Promise<boolean> {
      SET status = 'done',
          finished_at = now(),
          lease_token = NULL,
-         lease_until = NULL,
          last_error = NULL,
          payload = CASE WHEN kind = 'email'
            THEN jsonb_set(payload, '{params}', '{}'::jsonb) ELSE payload END
@@ -153,28 +151,21 @@ export async function finishJob(db: Db, lease: JobLease): Promise<boolean> {
   return finished.rowCount === 1;
 }
 
-export type RetryOutcome = "retrying" | "failed" | "lost";
-
 /**
- * Schedules another attempt with backoff min(10s * 2^(attempts-1), 1h) plus up to 1s jitter, or
- * fails the job once its kind's attempts are spent.
+ * Schedules another attempt with backoff min(10s * 2^(attempts-1), 1h) plus up to 1s jitter. The
+ * runner decides whether attempts remain. False when the lease was lost.
  */
-export async function retryJob(db: Db, job: ClaimedJob, error: string): Promise<RetryOutcome> {
-  const retried = await db.query<{ status: "pending" | "failed" }>(
+export async function retryJob(db: Db, lease: JobLease, error: string): Promise<boolean> {
+  const retried = await db.query(
     `UPDATE dripsign.outbox
-     SET status = CASE WHEN attempts >= $3::integer THEN 'failed' ELSE 'pending' END,
-         finished_at = CASE WHEN attempts >= $3::integer THEN now() END,
+     SET status = 'pending',
          available_at = now() + make_interval(secs => least(10 * power(2, least(attempts - 1, 9)), 3600) + random()),
          lease_token = NULL,
-         lease_until = NULL,
-         last_error = left($4, 2000)
-     WHERE id = $1 AND lease_token = $2 AND status = 'running'
-     RETURNING status`,
-    [job.id, job.leaseToken, JOB_MAX_ATTEMPTS[job.payload.kind], error],
+         last_error = left($3, 2000)
+     WHERE id = $1 AND lease_token = $2 AND status = 'running'`,
+    [lease.id, lease.leaseToken, error],
   );
-  const status = retried.rows[0]?.status;
-  if (status === undefined) return "lost";
-  return status === "failed" ? "failed" : "retrying";
+  return retried.rowCount === 1;
 }
 
 export async function failJob(db: Db, lease: JobLease, error: string): Promise<boolean> {
@@ -183,7 +174,6 @@ export async function failJob(db: Db, lease: JobLease, error: string): Promise<b
      SET status = 'failed',
          finished_at = now(),
          lease_token = NULL,
-         lease_until = NULL,
          last_error = left($3, 2000)
      WHERE id = $1 AND lease_token = $2 AND status = 'running'`,
     [lease.id, lease.leaseToken, error],
@@ -195,8 +185,7 @@ export async function failJob(db: Db, lease: JobLease, error: string): Promise<b
 export async function renewLease(db: Db, lease: JobLease, leaseMs: number): Promise<boolean> {
   const renewed = await db.query(
     `UPDATE dripsign.outbox
-     SET lease_until = now() + $3::float8 * interval '1 millisecond',
-         available_at = now() + $3::float8 * interval '1 millisecond'
+     SET available_at = now() + $3::float8 * interval '1 millisecond'
      WHERE id = $1 AND lease_token = $2 AND status = 'running'`,
     [lease.id, lease.leaseToken, leaseMs],
   );
