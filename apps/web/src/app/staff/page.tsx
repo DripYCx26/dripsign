@@ -2,11 +2,12 @@ import { listStaffAgreements } from "@dripsign/core/domain/view";
 import type { Metadata } from "next";
 import { ListControls } from "@/features/list/ListControls.tsx";
 import { parseSearch } from "@/features/list/query.ts";
+import { NewAgreementButton } from "@/features/list/NewAgreementButton.tsx";
 import { StaffAgreementList } from "@/features/list/StaffAgreementList.tsx";
 import { AppShell } from "@/features/shell/AppShell.tsx";
 import { PageContainer } from "@/features/shell/PageContainer.tsx";
 import { requireStaff } from "@/server/session.ts";
-import { ButtonLink, PageHeader } from "@/ui";
+import { PageHeader } from "@/ui";
 
 export const metadata: Metadata = { title: "Agreements" };
 
@@ -19,16 +20,9 @@ export default async function StaffDashboardPage({ searchParams }: Props) {
   return (
     <AppShell session={session} home="staff">
       <PageContainer>
-        <PageHeader
-          title="Agreements"
-          actions={
-            <ButtonLink variant="ink" href="/staff/new">
-              New agreement
-            </ButtonLink>
-          }
-        />
+        <PageHeader title="Agreements" actions={<NewAgreementButton />} />
         <ListControls q={q} />
-        <StaffAgreementList initial={page} q={q} />
+        <StaffAgreementList initial={page} q={q} empty={<NewAgreementButton />} />
       </PageContainer>
     </AppShell>
   );

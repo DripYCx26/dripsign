@@ -29,7 +29,7 @@ export function Starters({ view, run, busy }: StartersProps) {
   return (
     <div className={styles.starters}>
       <div className={styles.row} role="group" aria-label="Start from a template">
-        {TEMPLATE_OPTIONS.filter((option) => option.value !== "blank").map((option) => (
+        {TEMPLATE_OPTIONS.map((option) => (
           <Button
             key={option.value}
             variant="secondary"

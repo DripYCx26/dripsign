@@ -1,15 +1,20 @@
 "use client";
 
 import type { Page, StaffListItem } from "@dripsign/core/types";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { settle } from "@/features/shell/settle.ts";
 import { listStaff } from "@/server/actions/agreements.ts";
-import { Button, ButtonLink, EmptyState, Notice } from "@/ui";
+import { Button, EmptyState, Notice } from "@/ui";
 import { AgreementList } from "./AgreementList.tsx";
 import styles from "./StaffAgreementList.module.css";
 import { flatStaffRows, groupStaffRows } from "./rows.ts";
 
-type Props = Readonly<{ initial: Page<StaffListItem>; q: string }>;
+type Props = Readonly<{
+  initial: Page<StaffListItem>;
+  q: string;
+  /** The way to start the first agreement, shown when there is nothing to list. */
+  empty: ReactNode;
+}>;
 
 type More = Readonly<{
   /** The first page these rows were fetched after; a new first page makes them stale. */
@@ -22,7 +27,7 @@ type More = Readonly<{
  * The dashboard's list: the server's first page for the URL's search, then "Load more" pages
  * fetched with the same search and cursor. Grouped when not searching, flat when searching.
  */
-export function StaffAgreementList({ initial, q }: Props) {
+export function StaffAgreementList({ initial, q, empty }: Props) {
   const [more, setMore] = useState<More | null>(null);
   const [loading, setLoading] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -56,14 +61,7 @@ export function StaffAgreementList({ initial, q }: Props) {
     return searching ? (
       <EmptyState message="Nothing matches this search." />
     ) : (
-      <EmptyState
-        message="No agreements yet."
-        action={
-          <ButtonLink variant="ink" href="/staff/new">
-            New agreement
-          </ButtonLink>
-        }
-      />
+      <EmptyState message="No agreements yet." action={empty} />
     );
   }
   return (

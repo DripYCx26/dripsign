@@ -28,14 +28,19 @@ test("a staff member publishes, a recipient signs, and the signed PDF downloads"
   await signInAs(page, "Avery Chen");
 
   await page.goto("/staff");
-  await page.getByRole("link", { name: "New agreement" }).first().click();
-  await page.getByLabel("Title").fill(`E2E services ${String(Date.now())}`);
-  await page.getByRole("button", { name: "Services agreement" }).click();
-  await page.getByLabel("Name").fill("Jordan Lee");
-  await page.getByLabel("Email").fill("jordan@client.test");
-  await expect(page.getByLabel("Required signer")).toBeChecked();
-  await page.getByRole("button", { name: "Create draft" }).click();
+  await page.getByRole("button", { name: "New agreement" }).first().click();
   await expect(page).toHaveURL(/\/staff\/agreements\/[^/]+$/u);
+  // The starter is the AI-off path: choosing it sends no prompt, so the smoke never spends.
+  await page.getByRole("button", { name: "Services agreement" }).click();
+  await page.getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("menuitem", { name: "Recipients" }).click();
+  const recipients = page.getByRole("dialog", { name: "Recipients" });
+  await recipients.getByLabel("Name", { exact: true }).fill("Jordan Lee");
+  await recipients.getByLabel("Email", { exact: true }).fill("jordan@client.test");
+  await expect(recipients.getByLabel("Required signer")).toBeChecked();
+  await recipients.getByRole("button", { name: "Add recipient" }).click();
+  await expect(recipients.getByText("jordan@client.test")).toBeVisible();
+  await page.keyboard.press("Escape");
   const agreementId = new URL(page.url()).pathname.split("/").at(-1) ?? "";
 
   const review = page.getByRole("link", { name: "Review and publish" });

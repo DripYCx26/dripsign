@@ -1,11 +1,11 @@
-import { emptySection, type EditableSection } from "../document/sections.ts";
+import type { EditableSection } from "../document/sections.ts";
 import { randomId } from "../document/ids.ts";
 
-export type TemplateId = "blank" | "nda" | "services";
+export type TemplateId = "nda" | "services";
 
 interface Template {
   readonly label: string;
-  /** The agreement title offered when the title is still empty. */
+  /** The agreement title the starter sets. */
   readonly title: string;
   readonly sections: readonly Readonly<{ heading: string; paragraphs: readonly string[] }>[];
 }
@@ -13,7 +13,7 @@ interface Template {
 /** Shown wherever a starter template is in use. */
 export const TEMPLATE_NOTE = "Starter text. Have it reviewed before you rely on it.";
 
-const TEMPLATES: Readonly<Record<Exclude<TemplateId, "blank">, Template>> = {
+const TEMPLATES: Readonly<Record<TemplateId, Template>> = {
   nda: {
     label: "Mutual NDA",
     title: "Mutual non-disclosure agreement",
@@ -131,14 +131,12 @@ const TEMPLATES: Readonly<Record<Exclude<TemplateId, "blank">, Template>> = {
 };
 
 export const TEMPLATE_OPTIONS: readonly Readonly<{ value: TemplateId; label: string }>[] = [
-  { value: "blank", label: "Blank" },
   { value: "nda", label: TEMPLATES.nda.label },
   { value: "services", label: TEMPLATES.services.label },
 ];
 
 /** Fresh sections, with new ids, so two agreements never share a section id. */
 export function templateSections(id: TemplateId): EditableSection[] {
-  if (id === "blank") return [emptySection()];
   return TEMPLATES[id].sections.map((section) => ({
     id: randomId(),
     heading: section.heading,
@@ -147,5 +145,5 @@ export function templateSections(id: TemplateId): EditableSection[] {
 }
 
 export function templateTitle(id: TemplateId): string {
-  return id === "blank" ? "" : TEMPLATES[id].title;
+  return TEMPLATES[id].title;
 }

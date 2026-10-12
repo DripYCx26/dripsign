@@ -24,8 +24,8 @@ export function AgreementList({ groups }: Readonly<{ groups: readonly RowGroup[]
               </h2>
             )}
             <ul className={styles.rows}>
-              {group.rows.map((row) => (
-                <AgreementRow key={row.id} row={row} />
+              {group.rows.map((row, index) => (
+                <AgreementRow key={row.id} row={row} index={index} />
               ))}
             </ul>
           </section>

@@ -3,6 +3,28 @@
 Dated product and architecture decisions. A newer entry supersedes an older one where they
 conflict; superseded text is deleted rather than kept as history (Git holds it).
 
+## 2026-10-11: Drip themes and an assistant-led draft
+
+**Colour.** Three themes from one hue set: Drip Light (the Dreach palette), Drip Dark (the same
+hues on warm near-black) and Drip Night (a cool steel-indigo night). The account menu picks one
+or follows the device; the choice is the `dripsign-theme` cookie, written by a server action and
+read by the root layout, so the first paint is themed and no script runs before hydration. One
+steel-blue accent does all the pointing. Teal means verified evidence only: the `Signed` pill,
+`Email verified`, the recorded-signature check and the signed sheet's evidence line. Newsreader
+stays the display and signature face; the PDF page stays white in every theme.
+
+**Creating.** "New agreement" is a server form that creates a signerless one-section draft and
+opens its workspace; there is no create page. While an agreement is a draft the thread rail is the
+assistant: describe, get a plan, confirm, preview the draft on the sheet, refine, apply. Each turn
+is an `ai_suggestion` row with a mode (`plan` or `draft`); only a draft can be applied. With no
+assistant configured the rail offers the two starter texts (Mutual NDA, Services agreement) and
+the manual editor. People are added in the Recipients drawer, and publishing waits for a required
+signer. Supersedes "the visual language shared with Dreach" and the hidden rail on a draft below.
+
+**Rejected.** A second create page for the AI-off path (two template homes); a PDF per candidate
+(a render per turn; the sheet previews it); the model choosing plan or draft (spend must follow a
+forced mode); Playfair (a headline face, and a PDF asset for a brand nicety).
+
 ## 2026-10-11: Web and PDF share the signature face
 
 A typed signature is drawn in Newsreader Italic on the web (the sign preview and the reading
@@ -55,7 +77,7 @@ and roster gaps; a design pass then reworked the workspace.
   `DRIPSIGN_EMAIL_TRANSPORT`.
 
 **Decided: design.** A full-height workspace of two regions: the thread rail
-`clamp(440px, 36vw, 640px)` (320 px when only history remains; hidden on a closed draft) beside the document. A chat-style composer starts proposals. Status
+`clamp(440px, 36vw, 640px)` (320 px when only history remains; the assistant while the agreement is a draft) beside the document. A chat-style composer starts proposals. Status
 tabs are gone from the lists. Completion is a single-line strip. On a phone the open tab derives
 from state: the document when the chat has nothing to offer, else chat.
 
@@ -98,7 +120,7 @@ One app with role-prefixed routes; a status-driven primary action from one pure 
 reading view plus the exact PDF rendered with pdf.js and signature field markers; a focused
 review-and-sign flow with a live signature preview in the font the signed PDF embeds;
 re-verification as an inline code step; workspace tab and revision in the URL; the visual
-language shared with Dreach under DripSign's own name.
+language shared with Dreach under DripSign's own name (colour: see "Drip themes" above).
 
 ## 2026-10-08: A host app frames the staff workspace through a signed staff session bridge
 

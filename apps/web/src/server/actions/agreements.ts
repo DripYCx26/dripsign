@@ -1,11 +1,12 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
+import { redirect } from "next/navigation";
 import { z } from "zod";
-import { createAgreement as create, executeCommand } from "@dripsign/core/domain/commands";
+import { createAgreement, executeCommand } from "@dripsign/core/domain/commands";
 import { listStaffAgreements, loadAgreementView } from "@dripsign/core/domain/view";
 import {
   commandSchema,
-  newAgreementInputSchema,
   receiptKeySchema,
   staffListQuerySchema,
   uuidSchema,
@@ -24,10 +25,32 @@ export const runCommand = action(
     executeCommand(await actorFor(capacity, agreementId), agreementId, receiptKey, command),
 );
 
-export const createAgreement = action(
-  z.strictObject({ receiptKey: receiptKeySchema, input: newAgreementInputSchema }),
-  async ({ receiptKey, input }) => ({ id: await create(await staffActor(), receiptKey, input) }),
+const startDraft = action(
+  z.strictObject({ receiptKey: receiptKeySchema }),
+  async ({ receiptKey }) =>
+    createAgreement(await staffActor(), receiptKey, {
+      source: {
+        title: "Untitled agreement",
+        sections: [
+          {
+            id: randomUUID(),
+            heading: "Terms",
+            paragraphs: ["Write the terms here, or start from a template."],
+          },
+        ],
+      },
+      recipients: [],
+    }),
 );
+
+/** The "New agreement" form: a signerless one-section draft, then its workspace. */
+export async function startAgreement(formData: FormData): Promise<void> {
+  const key = formData.get("receiptKey");
+  const started = await startDraft({ receiptKey: typeof key === "string" ? key : "" });
+  // The error boundary words it; toFailure already logged the cause by id.
+  if (!started.ok) throw new Error(started.message);
+  redirect(`/staff/agreements/${started.value}`);
+}
 
 export const refreshView = action(z.strictObject(workspace), async ({ agreementId, capacity }) =>
   loadAgreementView(await actorFor(capacity, agreementId), agreementId),

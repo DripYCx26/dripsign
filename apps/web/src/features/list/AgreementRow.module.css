@@ -2,6 +2,11 @@
    column so every row's middle starts at the same place) at the list row height; stacked under
    640. The whole row is the link, so its focus ring surrounds all of it. */
 
+.item {
+  animation: var(--ds-anim-rise);
+  animation-delay: calc(var(--ds-motion-stagger) * min(var(--rise-index, 0), 8));
+}
+
 .row {
   display: grid;
   min-height: var(--ds-row-height);
