@@ -31,7 +31,13 @@ export function WorkspacePanes({ view, capacity, run, busy, rail, tab, doc }: Wo
     <div className={styles.panes} data-tab={tab} data-rail={rail}>
       {rail === "draft" && (
         <section className={styles.rail} aria-label="Assistant">
-          <AssistantThread view={view} run={run} busy={busy} preview={doc.preview} />
+          {/* Applying or starting while the terms form is open would strand its typed text. */}
+          <AssistantThread
+            view={view}
+            run={run}
+            busy={busy || doc.draft.edit !== null}
+            preview={doc.preview}
+          />
         </section>
       )}
       {(rail === "full" || rail === "narrow") && (

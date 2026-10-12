@@ -13,6 +13,7 @@ import type { NewAgreementInput, NewRecipient } from "../schema.ts";
 import type { Actor, AgreementView, RecipientActor, RevisionView, StaffActor } from "../types.ts";
 import { createAgreement, executeCommand } from "./commands.ts";
 import { sha256Hex } from "./receipts.ts";
+import { applyPreparedDraft } from "./revisions.ts";
 import { addStaff, revokeStaff, upsertStaff } from "./staff.ts";
 import { loadArchiveEvidence } from "./archive.ts";
 import { renderAuditRecord } from "../pdf/archive.ts";
@@ -160,9 +161,13 @@ async function publish(staff: StaffActor, agreementId: string): Promise<Agreemen
   const prepare = job({ kind: "pdf_prepare", ...fence }, staff, agreementId);
   await createHandlers().pdf_prepare.handler(prepare, new AbortController().signal);
   const prepared = await loadAgreementView(staff, agreementId);
+  const fenced = { kind: "publish", expectedVersion: prepared.agreement.version } as const;
+  // Only the PDF the client reviewed publishes.
+  await expect(
+    run(staff, agreementId, { ...fenced, reviewedSha256: "0".repeat(64) }),
+  ).rejects.toMatchObject({ code: "conflict" });
   return run(staff, agreementId, {
-    kind: "publish",
-    expectedVersion: prepared.agreement.version,
+    ...fenced,
     reviewedSha256: must(prepared.draft?.document).sha256,
   });
 }
@@ -238,6 +243,18 @@ it("negotiates, publishes, collects every signature and archives the signed agre
     expectedDraftVersion: must(created.agreement.draftVersion),
     source: terms("Ten months."),
   });
+  // The worker commits a PDF only under the fence the draft still expects.
+  const { preparation } = must((await loadAgreementView(staff, id)).draft);
+  const stray = "a".repeat(64);
+  const strayCommit = applyPreparedDraft(getPool(), {
+    tenantId: staff.tenantId,
+    agreementId: id,
+    fence: { inputSha256: "0".repeat(64), signerSetHash: must(preparation.signerSetHash) },
+    document: { key: objectKey(staff.tenantId, stray), sha256: stray, byteLength: 1 },
+    fields: [],
+    pageCount: 1,
+  });
+  expect(await strayCommit).toBe(false);
   let view = await publish(staff, id);
   expect(view.agreement.status).toBe("negotiating");
 
@@ -258,12 +275,15 @@ it("negotiates, publishes, collects every signature and archives the signed agre
       }),
     ).rejects.toMatchObject({ code: "invalid", message: "A proposal changes one section." });
   }
-  view = await run(jordanActor, id, {
-    kind: "propose",
-    expectedVersion: view.agreement.version,
+  const shorter = {
+    kind: "propose" as const,
     text: "Shorter term.",
     replacementSource: terms("Six months."),
-  });
+  };
+  await expect(
+    run(jordanActor, id, { ...shorter, expectedVersion: view.agreement.version - 1 }),
+  ).rejects.toMatchObject({ code: "conflict" });
+  view = await run(jordanActor, id, { ...shorter, expectedVersion: view.agreement.version });
   view = await run(staff, id, {
     kind: "counter",
     expectedVersion: view.agreement.version,
@@ -333,6 +353,8 @@ it("negotiates, publishes, collects every signature and archives the signed agre
   await verifiedAgo(jordanActor, 0);
   const unfenced = { ...signCommand(signing, "Jordan Lee"), documentSha256: "0".repeat(64) };
   await expect(run(jordanActor, id, unfenced)).rejects.toMatchObject({ code: "conflict" });
+  const unconsented = { ...signCommand(signing, "Jordan Lee"), consentHash: "0".repeat(64) };
+  await expect(run(jordanActor, id, unconsented)).rejects.toMatchObject({ code: "conflict" });
   await run(jordanActor, id, signCommand(signing, "Jordan Lee"));
   expect((await signatures()).rowCount).toBe(1);
 
