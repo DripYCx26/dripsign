@@ -13,7 +13,17 @@ const RUNNING = "A delivery attempt is running now. Try again in a few minutes."
 
 type Props = Readonly<{ items: readonly UndeliveredCompletion[]; deliveryEnabled: boolean }>;
 
-/** Executed events the host has not acknowledged; a stopped one can be sent again as frozen. */
+const STATE_LABEL: Readonly<Record<UndeliveredCompletion["state"], string>> = {
+  queued: "Sending",
+  failed: "Delivery stopped",
+  held: "Not sent: the settings didn’t match this server",
+};
+
+/**
+ * Executed agreements the host has not acknowledged. A stopped event is sent again as frozen; a
+ * held one (completed under settings this server could not deliver) is frozen and sent once the
+ * settings are fixed.
+ */
 export function UndeliveredExports({ items, deliveryEnabled }: Props) {
   const router = useRouter();
   const [retrying, setRetrying] = useState<string | null>(null);
@@ -50,15 +60,15 @@ export function UndeliveredExports({ items, deliveryEnabled }: Props) {
                   <span aria-hidden="true">
                     {item.state === "queued" ? <Clock size={14} /> : <OctagonAlert size={14} />}
                   </span>
-                  {item.state === "queued" ? "Sending" : "Delivery stopped"}
+                  {STATE_LABEL[item.state]}
                 </span>
                 <span>
                   signed <Moment value={item.completedAt} format="absolute" />
                 </span>
               </p>
-              <p className={styles.pins}>event {item.eventId}</p>
+              {item.eventId !== null && <p className={styles.pins}>event {item.eventId}</p>}
             </div>
-            {item.state === "failed" && deliveryEnabled && (
+            {item.state !== "queued" && deliveryEnabled && (
               <Button
                 variant="secondary"
                 loading={retrying === item.roundId}
@@ -66,7 +76,7 @@ export function UndeliveredExports({ items, deliveryEnabled }: Props) {
                   void retry(item.roundId);
                 }}
               >
-                Send again
+                {item.state === "held" ? "Send" : "Send again"}
               </Button>
             )}
           </li>

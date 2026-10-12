@@ -10,10 +10,14 @@ import { SectionDiff } from "./SectionDiff.tsx";
 
 const SHORT_LENGTH = 12;
 
-function fieldWords(field: SigningField): string {
-  return `${field.type === "signature" ? "Signature" : "Date"} · page ${String(field.page)}`;
+function fieldWords(fields: readonly SigningField[]): string {
+  if (fields.length === 0) return "No signature field";
+  const types = fields.map((field) => (field.type === "signature" ? "Signature" : "Date"));
+  const pages = [...new Set(fields.map((field) => field.page))];
+  return `${types.join(", ")} · ${pages.length === 1 ? "page" : "pages"} ${pages.join(", ")}`;
 }
 
+/** One quiet line under the PDF's toolbar: who signs, which fields, and who stopped signing. */
 function SignerFields({
   view,
   previous,
@@ -23,33 +27,20 @@ function SignerFields({
   const nameOf = (id: string) => view.recipients.find((item) => item.id === id)?.name ?? "Signer";
   const removed = (previous?.signerIds ?? []).filter((id) => !draft.signerIds.includes(id));
   return (
-    <section className={styles.part} aria-labelledby="signer-fields">
-      <h2 id="signer-fields">Signature fields</h2>
-      {draft.signerIds.length === 0 ? (
-        <p className={styles.muted}>No required signers.</p>
-      ) : (
-        <ul className={styles.signers}>
-          {draft.signerIds.map((id) => {
-            const fields = draft.signingFields.filter((field) => field.recipientId === id);
-            const isNew = previous !== undefined && !previous.signerIds.includes(id);
-            return (
-              <li key={id} className={styles.signer}>
-                <span className={styles.name}>
-                  {nameOf(id)}
-                  {isNew && <Pill tone="info">New signer</Pill>}
-                </span>
-                <span className={styles.muted}>
-                  {fields.length === 0 ? "No signature field" : fields.map(fieldWords).join(", ")}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      {removed.length > 0 && (
-        <p className={styles.muted}>{`No longer signing: ${removed.map(nameOf).join(", ")}.`}</p>
-      )}
-    </section>
+    <ul className={styles.signers} aria-label="Signature fields">
+      {draft.signerIds.length === 0 && <li>No required signers.</li>}
+      {draft.signerIds.map((id) => {
+        const fields = draft.signingFields.filter((field) => field.recipientId === id);
+        const isNew = previous !== undefined && !previous.signerIds.includes(id);
+        return (
+          <li key={id}>
+            {`${nameOf(id)} — ${fieldWords(fields)}`}
+            {isNew && <Pill tone="info">New signer</Pill>}
+          </li>
+        );
+      })}
+      {removed.length > 0 && <li>{`No longer signing: ${removed.map(nameOf).join(", ")}.`}</li>}
+    </ul>
   );
 }
 
@@ -90,8 +81,9 @@ function WhatChanged({
 
 /**
  * The last look before a revision is published: what changed since the current revision (a first
- * revision has nothing to compare), who signs where, and the exact PDF that will be published with its SHA. Publishing needs the
- * reviewer's word that they read the PDF, and a different PDF asks for it again.
+ * revision has nothing to compare), and the exact PDF that will be published with its SHA and who
+ * signs where. Publishing needs the reviewer's word that they read the PDF, and a different PDF
+ * asks for it again.
  */
 export function PublishReview({ view }: Readonly<{ view: AgreementView }>) {
   const { draft } = view;
@@ -115,16 +107,13 @@ export function PublishReview({ view }: Readonly<{ view: AgreementView }>) {
   const isFirst = previous === undefined;
   return (
     <div className={styles.review}>
-      <div className={styles.left}>
-        {previous !== undefined && (
-          <section className={styles.part} aria-labelledby="what-changed">
-            <h2 id="what-changed">{`What changed since revision ${String(previous.number)}`}</h2>
-            <WhatChanged draft={draft} document={document} previous={previous} />
-          </section>
-        )}
-        <SignerFields view={view} previous={previous} />
-      </div>
-      <section className={styles.pdf} aria-label="The PDF that will be published">
+      {previous !== undefined && (
+        <section className={styles.changes} aria-labelledby="what-changed">
+          <h2 id="what-changed">{`What changed since revision ${String(previous.number)}`}</h2>
+          <WhatChanged draft={draft} document={document} previous={previous} />
+        </section>
+      )}
+      <section aria-label="The PDF that will be published">
         <PdfView
           src={fileUrl(view.agreement.id, "draft", { as: "staff" })}
           sha256={document.sha256}
@@ -132,6 +121,7 @@ export function PublishReview({ view }: Readonly<{ view: AgreementView }>) {
           viewerRecipientId={null}
           people={view.recipients.map(({ id, name }) => ({ id, name }))}
           lead={<CopyHash sha256={document.sha256} label="SHA-256" />}
+          note={<SignerFields view={view} previous={previous} />}
         />
       </section>
       <PublishAction

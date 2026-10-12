@@ -119,7 +119,7 @@ function useFocusOnMount(field: RefObject<HTMLTextAreaElement | null>) {
 
 /** A PDF cannot be edited in the browser, so the change is described in words. */
 function PdfProposal({ view, scope, target, run, busy, onSent }: ProposalComposerProps) {
-  const [stored, setStored] = useStoredText(scope, `${target?.id ?? "propose"}:text`);
+  const [stored, setStored, clearSent] = useStoredText(scope, `${target?.id ?? "propose"}:text`);
   const text = stored ?? "";
   const field = useAutosize(text);
   useFocusOnMount(field);
@@ -129,7 +129,7 @@ function PdfProposal({ view, scope, target, run, busy, onSent }: ProposalCompose
     if (!ready) return;
     const intent = target === null ? "propose" : `counter:${target.id}`;
     if (await run(proposalCommand(view, target, text.trim(), null), intent)) {
-      setStored(null);
+      clearSent(stored);
       onSent();
       leave();
     }
@@ -214,8 +214,11 @@ type SectionFormProps = ProposalComposerProps &
 function SectionForm(props: SectionFormProps) {
   const { view, scope, target, source, section, initial, run, busy, onSent } = props;
   const prefix = target === null ? "propose" : `counter:${target.id}`;
-  const [storedWording, setWording] = useStoredText(scope, `${prefix}:${section.id}:wording`);
-  const [storedReason, setReason] = useStoredText(scope, `${prefix}:reason`);
+  const [storedWording, setWording, clearWording] = useStoredText(
+    scope,
+    `${prefix}:${section.id}:wording`,
+  );
+  const [storedReason, setReason, clearReason] = useStoredText(scope, `${prefix}:reason`);
   const wording = storedWording ?? initial;
   const reason = storedReason ?? "";
   const wordingField = useAutosize(wording);
@@ -231,8 +234,8 @@ function SectionForm(props: SectionFormProps) {
     if (!ready) return;
     const intentId = target === null ? "propose" : `counter:${target.id}`;
     if (await run(proposalCommand(view, target, reason.trim(), replacement), intentId)) {
-      setWording(null);
-      setReason(null);
+      clearWording(storedWording);
+      clearReason(storedReason);
       onSent();
       leave();
     }
@@ -263,7 +266,7 @@ function SectionForm(props: SectionFormProps) {
       )}
       {changed && replacement !== null && (
         <section className={styles.preview} aria-label="Your proposed change">
-          <SectionDiff before={source} after={replacement} />
+          <SectionDiff before={source} after={replacement} namedSectionId={section.id} />
         </section>
       )}
       <textarea

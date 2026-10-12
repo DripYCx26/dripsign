@@ -1,6 +1,6 @@
 import type { DocumentSource } from "@dripsign/core/schema";
 import { describe, expect, it } from "vitest";
-import { diffSources, type WordOp } from "./diff.ts";
+import { diffSources, showsHeading, type WordOp } from "./diff.ts";
 
 const source = (title: string, ...sections: [string, string, string][]): DocumentSource => ({
   title,
@@ -77,5 +77,15 @@ describe("diffSources", () => {
     ],
   ])("%s", (_name, before, after, expected) => {
     expect(show(before, after)).toEqual(expected);
+  });
+
+  it("names each section edited in place unless the caller already names it", () => {
+    const after = source("Deal", ["a", "Term", "Two years."], fees, ["c", "Law", "Texas."]);
+    const headings = (named?: string) =>
+      diffSources(source("Deal", term, fees, law), after)
+        .sections.filter((item) => item.change === "changed" && showsHeading(item, named))
+        .map((item) => mark(item.heading).join(" "));
+    expect(headings()).toEqual(["Term", "Law"]);
+    expect(headings("a")).toEqual(["Law"]);
   });
 });

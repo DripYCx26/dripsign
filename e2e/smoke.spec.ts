@@ -1,8 +1,9 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const WORKER_TIMEOUT_MS = 60_000;
 const TEST_TIMEOUT_MS = 3 * WORKER_TIMEOUT_MS;
 const POLL_INTERVAL_MS = 1_000;
+const RENDER_TIMEOUT_MS = 5_000;
 
 async function signInAs(page: Page, name: string) {
   await page.goto("/dev/sign-in");
@@ -11,10 +12,11 @@ async function signInAs(page: Page, name: string) {
 }
 
 /** Reloads until `ready` shows: the worker prepares and archives the PDFs in the background. */
-async function reloadUntilVisible(page: Page, ready: () => Promise<boolean>) {
+async function reloadUntilVisible(page: Page, target: Locator) {
   await expect(async () => {
     await page.reload();
-    expect(await ready()).toBe(true);
+    // Wait for the streamed page, not just the loading fallback, before judging.
+    await expect(target).toBeVisible({ timeout: RENDER_TIMEOUT_MS });
   }).toPass({ timeout: WORKER_TIMEOUT_MS, intervals: [POLL_INTERVAL_MS] });
 }
 
@@ -37,7 +39,7 @@ test("a staff member publishes, a recipient signs, and the signed PDF downloads"
   const agreementId = new URL(page.url()).pathname.split("/").at(-1) ?? "";
 
   const review = page.getByRole("link", { name: "Review and publish" });
-  await reloadUntilVisible(page, () => review.isVisible());
+  await reloadUntilVisible(page, review);
   await review.click();
   await expect(page).toHaveURL(/\/publish$/u);
   await expect(page.locator("canvas").first()).toBeVisible({ timeout: WORKER_TIMEOUT_MS });
@@ -64,7 +66,7 @@ test("a staff member publishes, a recipient signs, and the signed PDF downloads"
 
   await page.goto(`/agreements/${agreementId}`);
   const signedPdf = page.getByRole("link", { name: /signed PDF/i });
-  await reloadUntilVisible(page, () => signedPdf.isVisible());
+  await reloadUntilVisible(page, signedPdf);
   const href = await signedPdf.getAttribute("href");
   expect(href).not.toBeNull();
   const response = await page.request.get(href ?? "");

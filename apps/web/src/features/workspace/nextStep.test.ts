@@ -124,6 +124,17 @@ const ROWS: readonly (readonly [string, Capacity, Scenario, NextStep])[] = [
     { label: "Review and publish", kind: "none", disabled: true, chip: "Needs a required signer" },
   ],
   [
+    "staff: in review, ready but no required signer",
+    "staff",
+    {},
+    {
+      label: "Review and publish changes",
+      kind: "none",
+      disabled: true,
+      chip: "Needs a required signer",
+    },
+  ],
+  [
     "staff: publication needed",
     "staff",
     { allowed: ["publish"] },

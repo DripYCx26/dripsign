@@ -1,6 +1,5 @@
-/* Spans both columns and is pinned to the foot of the screen, so it stays in reach under a long PDF. */
+/* Pinned to the foot of the screen, so it stays in reach under a long PDF. */
 .action {
-  grid-column: 1 / -1;
   position: sticky;
   bottom: 0;
   z-index: 1;

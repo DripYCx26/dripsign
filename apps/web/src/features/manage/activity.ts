@@ -1,7 +1,7 @@
 import type { TimelineItem, TimelineKind, ViewerView } from "@dripsign/core/types";
 
 /** What a milestone's wording depends on besides the timeline row itself. */
-export type MilestoneContext = Readonly<{ viewer: ViewerView; voidReason: string | null }>;
+export type MilestoneContext = Readonly<{ viewer: ViewerView }>;
 
 type Describe = (item: TimelineItem, context: MilestoneContext) => string;
 
@@ -25,9 +25,8 @@ const MILESTONES: Readonly<Partial<Record<TimelineKind, Describe>>> = {
   signing_requested: () => "Signatures requested",
   signature_recorded: signed,
   signing_completed: () => "Everyone signed",
-  // The reason lives on the agreement, not the timeline row; one reason, so it rides on the one row.
-  agreement_voided: (_item, { voidReason }) =>
-    voidReason === null ? "Voided" : `Voided · ${voidReason}`,
+  // The reason lives on the agreement and the workspace header shows it, once.
+  agreement_voided: () => "Voided",
 };
 
 /** One short line for a milestone, or null when the timeline row is not one. */

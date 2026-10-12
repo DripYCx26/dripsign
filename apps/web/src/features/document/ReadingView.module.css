@@ -21,7 +21,7 @@
    it; the paragraphs below take the full width. */
 .section {
   margin-bottom: var(--ds-space-6);
-  scroll-margin-top: calc(var(--ds-layout-doc-header) + var(--ds-space-4));
+  scroll-margin-top: var(--ds-space-4);
 }
 
 .section[data-suggestable] {
@@ -99,4 +99,11 @@
   font-size: var(--ds-display-sm);
   line-height: var(--ds-display-sm-leading);
   overflow-wrap: anywhere;
+}
+
+/* The signing time reads in the sheet's face, not the evidence mono; the digits stay aligned. */
+.signed time {
+  font-family: inherit;
+  font-size: inherit;
+  font-variant-numeric: tabular-nums;
 }

@@ -1,0 +1,59 @@
+/* A live proposal's history folds under it: one line to open the list, one line per version. */
+
+.earlier {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.summary {
+  display: flex;
+  min-height: var(--ds-size-control-sm);
+  align-items: center;
+  gap: var(--ds-space-1);
+  color: var(--ds-text-secondary);
+  cursor: pointer;
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+  white-space: nowrap;
+}
+
+.summary > svg,
+.show > svg {
+  width: var(--ds-size-icon);
+  height: var(--ds-size-icon);
+  stroke-width: var(--ds-icon-stroke);
+  transition: transform var(--ds-motion-quick) var(--ds-ease-enter);
+}
+
+details[open] > .summary > svg {
+  transform: rotate(90deg);
+}
+
+.show {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ds-text-tertiary);
+}
+
+.list {
+  display: grid;
+  gap: var(--ds-space-1);
+  margin: 0;
+  padding: 0 0 0 var(--ds-space-3);
+  list-style: none;
+}
+
+.version[open] > .summary .show {
+  display: none;
+}
+
+.body {
+  display: grid;
+  gap: var(--ds-space-2);
+  padding-block: var(--ds-space-1) var(--ds-space-2);
+}
+
+.text {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}

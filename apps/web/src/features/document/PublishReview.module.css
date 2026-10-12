@@ -1,44 +1,16 @@
 .review {
   display: grid;
-  grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
-  align-items: start;
+  min-width: 0;
   gap: var(--ds-space-6);
 }
 
-/* One column: the PDF is what the reviewer came for, so it comes first. */
-@media (max-width: 1023px) {
-  .review {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .pdf {
-    order: -1;
-  }
-}
-
-/* One card for the changes (from revision 2) and the signature fields; the PDF fills the other column. */
-.left {
+.changes {
   display: grid;
-  min-width: 0;
-  gap: var(--ds-space-4);
+  gap: var(--ds-space-3);
   padding: var(--ds-space-4);
   border: var(--ds-hairline);
   border-radius: var(--ds-radius-card);
   background: var(--ds-surface);
-}
-
-.part {
-  display: grid;
-  gap: var(--ds-space-3);
-}
-
-.part + .part {
-  padding-top: var(--ds-space-4);
-  border-top: var(--ds-hairline);
-}
-
-.pdf {
-  min-width: 0;
 }
 
 .muted {
@@ -47,24 +19,20 @@
 }
 
 .signers {
-  display: grid;
-  gap: var(--ds-space-3);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-1) var(--ds-space-4);
   margin: 0;
   padding: 0;
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
   list-style: none;
 }
 
-.signer {
-  display: grid;
-  gap: var(--ds-space-half);
-}
-
-.name {
-  display: flex;
-  flex-wrap: wrap;
+.signers li {
+  display: inline-flex;
   align-items: center;
   gap: var(--ds-space-2);
-  font-weight: var(--ds-weight-medium);
 }
 
 .facts {

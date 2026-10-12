@@ -109,7 +109,11 @@ export function AssistantDrawer({ open, view, run, busy, notice, onClose }: Pane
   );
 
   async function ask() {
-    if (await run({ kind: "ask_ai", instruction }, "ask_ai")) setInstruction("");
+    const sent = instruction;
+    if (await run({ kind: "ask_ai", instruction: sent }, "ask_ai")) {
+      // Words typed while the request was in flight are kept.
+      setInstruction((current) => (current === sent ? "" : current));
+    }
   }
 
   return (

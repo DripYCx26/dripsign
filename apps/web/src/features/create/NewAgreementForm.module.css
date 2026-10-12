@@ -34,7 +34,7 @@
 /* The recipients and the submit button sit beside the terms, and stay in view while they scroll. */
 @media (min-width: 1024px) {
   .form {
-    grid-template-columns: minmax(0, 1fr) 360px;
+    grid-template-columns: minmax(0, 1fr) var(--ds-layout-form-side);
     align-items: start;
   }
 

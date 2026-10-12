@@ -6,12 +6,14 @@ import { currentSession } from "@/server/session.ts";
 /**
  * The signed-in person for the inbox: their email as a recipient actor, which carries no agreement
  * standing. `listInbox` reads the live recipient rows for that email; each agreement page still
- * resolves its own grant. Signed out goes to sign-in.
+ * resolves its own grant. Signed out goes to sign-in; a host bridge session is staff-only, so it
+ * goes to its workspace, which re-resolves the staff standing.
  */
 export async function requireInbox(): Promise<{ session: SessionView; actor: RecipientActor }> {
   const current = await currentSession();
   if (current === null) return redirect("/sign-in");
   const { session, view } = current.resolved;
+  if (session.embed) return redirect("/staff");
   return {
     session: view,
     actor: {

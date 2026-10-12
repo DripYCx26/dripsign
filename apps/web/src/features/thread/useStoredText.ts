@@ -68,7 +68,8 @@ function read(key: string): string | null {
   return stored;
 }
 
-function write(key: string, value: string | null): void {
+/** Sets a stored field; null forgets it. */
+export function storeText(key: string, value: string | null): void {
   cache.set(key, value);
   try {
     if (value === null) window.sessionStorage.removeItem(key);
@@ -77,6 +78,16 @@ function write(key: string, value: string | null): void {
     // Storage is blocked or full; the in-memory copy keeps the text for this page.
   }
   for (const listener of listeners) listener();
+}
+
+/**
+ * Clears a field once the send that carried `sent` succeeded, unless the person typed on while it
+ * was in flight. Returns whether it cleared.
+ */
+export function clearStoredText(key: string, sent: string | null): boolean {
+  if (read(key) !== sent) return false;
+  storeText(key, null);
+  return true;
 }
 
 function subscribe(listener: () => void): () => void {
@@ -91,12 +102,13 @@ const serverSnapshot = (): null => null;
 /**
  * A text field's value that outlives the page. `null` means untouched (nothing stored), which is
  * different from the empty string a person typed. The server and the first client render see
- * `null`, so hydration agrees; the stored text appears right after.
+ * `null`, so hydration agrees; the stored text appears right after. The third item clears the
+ * field after a successful send of the given value (`clearStoredText`).
  */
 export function useStoredText(
   scope: TextScope,
   field: string,
-): readonly [string | null, (value: string | null) => void] {
+): readonly [string | null, (value: string | null) => void, (sent: string | null) => void] {
   const { email, capacity } = scope;
   const key = storageKey(scope, field);
   const value = useSyncExternalStore(subscribe, () => read(key), serverSnapshot);
@@ -105,9 +117,15 @@ export function useStoredText(
   }, [email, capacity]);
   const set = useCallback(
     (next: string | null) => {
-      write(key, next);
+      storeText(key, next);
     },
     [key],
   );
-  return [value, set];
+  const clearSent = useCallback(
+    (sent: string | null) => {
+      clearStoredText(key, sent);
+    },
+    [key],
+  );
+  return [value, set, clearSent];
 }

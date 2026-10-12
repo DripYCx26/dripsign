@@ -60,6 +60,8 @@ export function NewAgreementForm() {
       <div className={styles.main}>
         <TextField
           label="Title"
+          hideLabel
+          placeholder="Title"
           name="title"
           value={title}
           maxLength={LIMITS.title}

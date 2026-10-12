@@ -22,7 +22,7 @@
 
 .title {
   min-width: 0;
-  flex: 1 1 12ch;
+  flex: 1 1 var(--ds-measure-title-min);
   font-weight: var(--ds-weight-semibold);
   overflow-wrap: anywhere;
 }
@@ -32,8 +32,7 @@
   white-space: pre-wrap;
 }
 
-.change > summary,
-.summary {
+.change > summary {
   cursor: pointer;
   color: var(--ds-text-secondary);
   font-size: var(--ds-text-sm);
@@ -47,18 +46,20 @@
 /* The change sits flat in the card behind a thin rule, not in a card of its own. */
 .diff {
   padding-inline-start: var(--ds-space-3);
-  border-inline-start: 2px solid var(--ds-border-strong);
+  border-inline-start: var(--ds-rule-quote) solid var(--ds-border-strong);
 }
 
 .foot {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--ds-space-2);
 }
 
 .time {
+  /* Level with the summary and the buttons, which are taller than the line. */
+  align-self: center;
   color: var(--ds-text-tertiary);
   font-size: var(--ds-text-xs);
   line-height: var(--ds-leading-xs);
@@ -69,34 +70,4 @@
   flex-wrap: wrap;
   gap: var(--ds-space-2);
   margin-inline-start: auto;
-}
-
-/* A countered proposal folds into one indented row that opens to the card it was. */
-.superseded {
-  display: grid;
-  gap: var(--ds-space-1);
-  margin-inline-start: var(--ds-space-6);
-}
-
-.summary {
-  display: flex;
-  min-height: var(--ds-size-control-md);
-  align-items: center;
-  gap: var(--ds-space-2);
-}
-
-.show {
-  display: inline-flex;
-  align-items: center;
-  color: var(--ds-text-secondary);
-}
-
-.show > svg {
-  width: var(--ds-size-icon);
-  height: var(--ds-size-icon);
-  stroke-width: var(--ds-icon-stroke);
-}
-
-.superseded[open] .show {
-  display: none;
 }

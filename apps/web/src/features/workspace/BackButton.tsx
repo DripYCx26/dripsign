@@ -1,7 +1,6 @@
-"use client";
-
-import { useRouter } from "next/navigation";
-import { ChevronLeft, IconButton } from "@/ui";
+import Link from "next/link";
+import { ChevronLeft } from "@/ui";
+import styles from "./BackButton.module.css";
 
 type BackButtonProps = Readonly<{
   /** Where it goes and what it says ("Back to agreements"); the glyph alone names nothing. */
@@ -11,15 +10,9 @@ type BackButtonProps = Readonly<{
 
 /** The chevron that leaves a workspace, the publish review or the signing flow for its parent. */
 export function BackButton({ label, href }: BackButtonProps) {
-  const router = useRouter();
   return (
-    <IconButton
-      label={label}
-      icon={<ChevronLeft />}
-      shape="round"
-      onClick={() => {
-        router.push(href);
-      }}
-    />
+    <Link href={href} className={styles.back} aria-label={label}>
+      <ChevronLeft aria-hidden="true" />
+    </Link>
   );
 }

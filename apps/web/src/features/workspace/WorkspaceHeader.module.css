@@ -1,6 +1,7 @@
-/* One 56 px row: back, title, chip, primary action, menu. Under 1024 px a second row holds the
-   Chat | Document switch, the chip and the primary action, so the switch is the only one on the
-   page. The row is a flex wrap, so its widths never resize the first row's title. */
+/* One 56 px row: back, title (with its status, chip and void reason), the document's controls, the
+   primary action, menu. Under 1024 px a second row holds the Chat | Document switch, the document
+   controls and the primary action, so the switch is the only one on the page. The row is a flex
+   wrap, so its widths never resize the first row's title. */
 
 .header {
   display: flex;
@@ -32,19 +33,30 @@
   white-space: nowrap;
 }
 
-.from {
-  flex: none;
+.from,
+.note {
   color: var(--ds-text-secondary);
   font-size: var(--ds-text-sm);
   line-height: var(--ds-leading-sm);
   white-space: nowrap;
 }
 
+.from {
+  flex: none;
+}
+
+/* Why it was voided: the one place the reason is shown, cut short with the whole of it on hover. */
+.note {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .toggle {
   display: none;
 }
 
-.chip {
+.document {
   flex: none;
 }
 
@@ -91,8 +103,13 @@
     order: 5;
   }
 
-  .chip {
+  .document {
     order: 6;
+  }
+
+  /* On the chat tab there is no document in view to control. */
+  .header[data-tab="chat"] .document {
+    display: none;
   }
 
   .primary {
@@ -114,7 +131,7 @@
     line-height: var(--ds-leading-xl);
   }
 
-  .title > :not(h1) {
+  .title > :not(h1, .note) {
     flex: none;
   }
 

@@ -2,6 +2,8 @@ import styles from "./Switch.module.css";
 
 type SwitchProps = Readonly<{
   label: string;
+  /** Whose setting it is, read after the label so a list of switches has distinct names. */
+  subject?: string | undefined;
   name?: string | undefined;
   checked?: boolean | undefined;
   defaultChecked?: boolean | undefined;
@@ -13,7 +15,8 @@ type SwitchProps = Readonly<{
  * An on/off setting that takes effect as it is set ("Required signer"): a native checkbox with
  * the switch role, so it toggles on Space and reads as on or off, drawn as a track and knob.
  */
-export function Switch({ label, name, checked, defaultChecked, onChange, disabled }: SwitchProps) {
+export function Switch(props: SwitchProps) {
+  const { label, subject, name, checked, defaultChecked, onChange, disabled } = props;
   return (
     <label className={styles.switch}>
       <span className={styles.control}>
@@ -35,6 +38,7 @@ export function Switch({ label, name, checked, defaultChecked, onChange, disable
         <span className={styles.track} aria-hidden="true" />
       </span>
       {label}
+      {subject !== undefined && <span className="ds-visually-hidden">{`: ${subject}`}</span>}
     </label>
   );
 }

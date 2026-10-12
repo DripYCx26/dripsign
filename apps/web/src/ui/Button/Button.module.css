@@ -93,12 +93,11 @@
   border-color: var(--tone-fg);
 }
 
-/* A toggle that is on: selected on accent soft with the accent edge, kept under the pointer. */
+/* A toggle that is on: the ink fill of the Segmented's active face, kept under the pointer. */
 .button[aria-pressed="true"],
 .button[aria-pressed="true"]:enabled:hover {
-  border-color: var(--ds-accent);
-  background: var(--ds-accent-soft);
-  color: var(--ds-text);
+  background: var(--ds-ink);
+  color: var(--ds-on-ink);
 }
 
 /* Disabled, whatever the variant: a raised face with a hairline and tertiary ink, never a dark or

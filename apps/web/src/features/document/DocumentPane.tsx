@@ -2,62 +2,31 @@
 
 import type { AgreementView, Capacity } from "@dripsign/core/types";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
 import { fileUrl } from "@/features/files";
 import type { RunCommand } from "@/features/workspace/commands.ts";
 import { Banner, Button, EmptyState } from "@/ui";
-import { DocumentHeader, type DocumentMode, type RevisionOption } from "./DocumentHeader.tsx";
 import styles from "./DocumentPane.module.css";
 import { DraftForm } from "./DraftForm.tsx";
 import { PdfReplacer } from "./PdfReplacer.tsx";
 import { PdfView } from "./PdfView.tsx";
 import { ReadingView } from "./ReadingView.tsx";
 import {
-  draftIsAhead,
   peopleFor,
-  resolveTarget,
   targetFields,
   targetSha,
   targetSignerIds,
   targetSource,
   type DocumentTarget,
 } from "./target.ts";
-import { useDraftEdit, type DraftEdit } from "./useDraftEdit.ts";
+import type { DocumentMode, DocumentState } from "./useDocumentState.ts";
 import { useRevisionParam } from "./useRevisionParam.ts";
 
-const DRAFT_VALUE = "draft";
-
-type PaneProps = Readonly<{
+type TargetProps = Readonly<{
   view: AgreementView;
-  capacity: Capacity;
-  /** The workspace's one command channel: a command in flight at a time. */
+  target: DocumentTarget;
   run: RunCommand;
   busy: boolean;
 }>;
-
-type TargetProps = PaneProps & Readonly<{ target: DocumentTarget }>;
-
-function revisionOptions(view: AgreementView, capacity: Capacity): RevisionOption[] {
-  const current = view.agreement.currentRevisionNumber;
-  const published = [...view.revisions]
-    .sort((a, b) => b.number - a.number)
-    .map((revision) => ({
-      value: String(revision.number),
-      label: `Revision ${String(revision.number)}${revision.number === current ? " · current" : ""}`,
-    }));
-  const options = draftIsAhead(view, capacity)
-    ? [{ value: DRAFT_VALUE, label: "Draft (private)" }, ...published]
-    : published;
-  // One revision alone is not "current" of anything.
-  const only = options.length === 1 ? options[0] : undefined;
-  return only === undefined || only.value === DRAFT_VALUE
-    ? options
-    : [{ ...only, label: `Revision ${only.value}` }];
-}
-
-function selectedValue(target: DocumentTarget): string {
-  return target.kind === "draft" ? DRAFT_VALUE : String(target.revision.number);
-}
 
 function pdfSrc(view: AgreementView, capacity: Capacity, target: DocumentTarget): string {
   const id = view.agreement.id;
@@ -116,7 +85,7 @@ function Strip({ view, target, run, busy }: TargetProps) {
         )
       }
     >
-      {`The PDF couldn’t be prepared.${error === null ? "" : ` ${error}`}`}
+      {error ?? "The PDF couldn’t be prepared."}
     </Banner>
   );
 }
@@ -163,128 +132,48 @@ function Body({ view, capacity, target, mode, pdfOpened, suggestable }: BodyProp
   );
 }
 
-type DraftActionsProps = Readonly<{
-  draft: DraftEdit;
+type PaneProps = Readonly<{
+  view: AgreementView;
+  capacity: Capacity;
+  /** The workspace's one command channel: a command in flight at a time. */
+  run: RunCommand;
   busy: boolean;
-  /** The draft is an uploaded file: it is replaced, not edited. */
-  uploaded: boolean;
-  replacing: boolean;
-  onReplacing: (open: boolean) => void;
+  /** The document's state, held by the workspace so the header's controls share it. */
+  doc: DocumentState;
 }>;
 
-/** Edit draft, or Save and Discard while the form is open; for an uploaded PDF, Replace PDF. */
-function DraftActions({ draft, busy, uploaded, replacing, onReplacing }: DraftActionsProps) {
-  if (uploaded) {
-    return (
-      <Button
-        variant="secondary"
-        size="sm"
-        pressed={replacing}
-        onClick={() => {
-          onReplacing(!replacing);
-        }}
-      >
-        Replace PDF
-      </Button>
-    );
-  }
-  if (draft.edit === null) {
-    return (
-      <Button variant="secondary" size="sm" onClick={draft.begin}>
-        Edit draft
-      </Button>
-    );
-  }
-  return (
-    <>
-      <Button variant="quiet" size="sm" disabled={busy} onClick={draft.discard}>
-        Discard
-      </Button>
-      <Button
-        variant="ink"
-        size="sm"
-        loading={busy}
-        disabled={!draft.dirty}
-        onClick={() => void draft.save()}
-      >
-        Save
-      </Button>
-    </>
-  );
-}
-
-/** The viewer may save the draft, and is looking at it (or at the revision it would replace). */
-function canEditDocument(view: AgreementView, capacity: Capacity, target: DocumentTarget) {
-  return (
-    view.allowedActions.includes("save_draft") &&
-    (target.kind === "draft" || (target.isCurrent && !draftIsAhead(view, capacity)))
-  );
-}
-
-function LoadedPane(props: TargetProps) {
-  const { view, capacity, target, run, busy } = props;
+function LoadedPane({ doc, target, ...pane }: PaneProps & Readonly<{ target: DocumentTarget }>) {
+  const { view, capacity, run, busy } = pane;
   const router = useRouter();
-  const draft = useDraftEdit(view, run);
-  const [mode, setMode] = useState<DocumentMode>("reading");
-  const [pdfOpened, setPdfOpened] = useState(false);
-  const [replacing, setReplacing] = useState(false);
-  const options = revisionOptions(view, capacity);
-  const editable = canEditDocument(view, capacity, target);
-  const uploaded = (view.draft?.upload ?? null) !== null;
-  const both = targetSource(target) !== null && targetSha(target) !== null;
-  const suggestable =
-    view.allowedActions.includes("propose") && target.kind === "revision" && target.isCurrent;
   return (
     <div className={styles.pane}>
-      <DocumentHeader
-        options={options}
-        value={selectedValue(target)}
-        defaultValue={options[0]?.value ?? ""}
-        mode={both && draft.edit === null ? mode : null}
-        onMode={(next) => {
-          setMode(next);
-          if (next === "pdf") setPdfOpened(true);
-        }}
-        locked={draft.edit !== null}
-        actions={
-          editable && (
-            <DraftActions
-              draft={draft}
-              busy={busy}
-              uploaded={uploaded}
-              replacing={replacing}
-              onReplacing={setReplacing}
-            />
-          )
-        }
-      />
-      <Strip {...props} />
+      <Strip view={view} target={target} run={run} busy={busy} />
       <div className={styles.body}>
-        {editable && uploaded && replacing && (
+        {doc.editable && doc.uploaded && doc.replacing && (
           <PdfReplacer
             agreementId={view.agreement.id}
             version={view.agreement.version}
             onUploaded={() => {
-              setReplacing(false);
+              doc.setReplacing(false);
               router.refresh();
             }}
           />
         )}
-        {draft.edit === null ? (
+        {doc.draft.edit === null ? (
           <Body
             view={view}
             capacity={capacity}
             target={target}
-            mode={mode}
-            pdfOpened={pdfOpened}
-            suggestable={suggestable}
+            mode={doc.mode}
+            pdfOpened={doc.pdfOpened}
+            suggestable={doc.suggestable}
           />
         ) : (
           <DraftForm
-            edit={draft.edit}
-            onEdit={draft.change}
+            edit={doc.draft.edit}
+            onEdit={doc.draft.change}
             pending={busy}
-            message={draft.problem}
+            message={doc.draft.problem}
           />
         )}
       </div>
@@ -293,14 +182,13 @@ function LoadedPane(props: TargetProps) {
 }
 
 /**
- * The document beside the thread: which revision (or the private draft, for staff), the reading
- * view and the exact PDF, and the draft's editing. `rev` comes from the `?rev=` parameter; one
- * that names no revision falls back to the default.
+ * The document beside the thread: the reading view and the exact PDF, and the draft's editing
+ * form. Which revision, Reading or PDF, and the draft's actions are `DocumentControls`, in the
+ * workspace header.
  */
-export function DocumentPane({ rev, ...pane }: PaneProps & Readonly<{ rev?: number | undefined }>) {
-  const target = resolveTarget(pane.view, pane.capacity, rev);
-  if (target === null) return <EmptyState message="This agreement has no document yet." />;
-  return <LoadedPane {...pane} target={target} />;
+export function DocumentPane({ doc, ...pane }: PaneProps) {
+  if (doc.target === null) return <EmptyState message="This agreement has no document yet." />;
+  return <LoadedPane {...pane} doc={doc} target={doc.target} />;
 }
 
 /** Signers of the target, each with their signature when the live or completed round on this revision holds one. */

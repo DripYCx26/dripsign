@@ -22,6 +22,8 @@ type PdfViewProps = Readonly<{
   lead?: ReactNode;
   /** A control at the end of the toolbar row. */
   actions?: ReactNode;
+  /** A quiet line under the toolbar row. */
+  note?: ReactNode;
 }>;
 
 type Loaded =
@@ -55,7 +57,7 @@ function Toolbar({ src, pages, lead, actions }: ToolbarProps) {
   );
 }
 
-function PdfDocument({ src, fields, viewerRecipientId, people = [], lead, actions }: PdfViewProps) {
+function useLoadedPdf(src: string): Loaded {
   const [loaded, setLoaded] = useState<Loaded>({ status: "loading" });
 
   useEffect(() => {
@@ -88,11 +90,24 @@ function PdfDocument({ src, fields, viewerRecipientId, people = [], lead, action
       void handle.destroy?.();
     };
   }, [src]);
+  return loaded;
+}
 
+function PdfDocument({
+  src,
+  fields,
+  viewerRecipientId,
+  people = [],
+  lead,
+  actions,
+  note,
+}: PdfViewProps) {
+  const loaded = useLoadedPdf(src);
   const pages = loaded.status === "ready" ? loaded.doc.numPages : null;
   return (
     <div className={styles.view}>
       <Toolbar src={src} pages={pages} lead={lead} actions={actions} />
+      {note}
       {loaded.status === "error" && (
         <Notice tone="stop" live="alert">
           This PDF couldn’t be shown here.

@@ -2,6 +2,7 @@
 
 import type { AgreementView, Capacity } from "@dripsign/core/types";
 import { DocumentPane } from "@/features/document/DocumentPane.tsx";
+import type { DocumentState } from "@/features/document/useDocumentState.ts";
 import { CompletionPanel } from "@/features/signing/CompletionPanel.tsx";
 import { ThreadPane } from "@/features/thread/ThreadPane.tsx";
 import type { RunCommand } from "./commands.ts";
@@ -16,7 +17,7 @@ type WorkspacePanesProps = Readonly<{
   busy: boolean;
   rail: RailMode;
   tab: WorkspaceTab;
-  rev: number | undefined;
+  doc: DocumentState;
 }>;
 
 /**
@@ -25,7 +26,7 @@ type WorkspacePanesProps = Readonly<{
  * (`railMode`). Under 1024 px `tab` (the header's Chat | Document switch) chooses the one that
  * shows; both stay mounted so a half-edited draft survives a switch.
  */
-export function WorkspacePanes({ view, capacity, run, busy, rail, tab, rev }: WorkspacePanesProps) {
+export function WorkspacePanes({ view, capacity, run, busy, rail, tab, doc }: WorkspacePanesProps) {
   return (
     <div className={styles.panes} data-tab={tab} data-rail={rail}>
       {rail !== "none" && (
@@ -40,7 +41,7 @@ export function WorkspacePanes({ view, capacity, run, busy, rail, tab, rev }: Wo
         tabIndex={-1}
       >
         <CompletionPanel view={view} />
-        <DocumentPane view={view} capacity={capacity} rev={rev} run={run} busy={busy} />
+        <DocumentPane view={view} capacity={capacity} run={run} busy={busy} doc={doc} />
       </section>
     </div>
   );

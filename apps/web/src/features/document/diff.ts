@@ -222,3 +222,17 @@ export function diffSources(before: DocumentSource | null, after: DocumentSource
     ),
   };
 }
+
+/**
+ * A changed section names itself with its heading, unless the caller already names that section
+ * and the heading is not itself the change (added, removed, renamed or moved).
+ */
+export function showsHeading(item: SectionDiffItem, namedSectionId: string | undefined): boolean {
+  return (
+    item.id !== namedSectionId ||
+    item.moved ||
+    item.change === "added" ||
+    item.change === "removed" ||
+    item.heading.some((op) => op.kind !== "same")
+  );
+}

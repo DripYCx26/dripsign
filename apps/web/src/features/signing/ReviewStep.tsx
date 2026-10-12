@@ -45,7 +45,7 @@ export function ReviewStep({
   }
 
   return (
-    <StepFrame title="Review the document" autoFocus={autoFocus} wide>
+    <StepFrame title="Review the document" hideTitle autoFocus={autoFocus} wide>
       <div ref={frame} className={styles.document}>
         {own !== undefined && (
           // Pages share a size, so a page fraction of the frame lands near the field.

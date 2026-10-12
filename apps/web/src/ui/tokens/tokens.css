@@ -76,6 +76,17 @@
   --ds-size-icon-tile: 20px;
   --ds-icon-stroke: 1.75;
 
+  /* Fixed table columns (a short tag such as a role or an action, a timestamp, a select), the
+     least a wrapping title keeps on its line, the ceilings of growing text fields, and the rule
+     beside quoted text. */
+  --ds-column-tag: 5rem;
+  --ds-column-time: 8rem;
+  --ds-column-select: 9rem;
+  --ds-measure-title-min: 12ch;
+  --ds-field-max-message: 200px;
+  --ds-field-max-preview: 160px;
+  --ds-rule-quote: 2px;
+
   /* The sheet of paper an agreement is read on: white, and off-white on a dark device with no
      shadow, so a page of text does not glare against the dark canvas. */
   --ds-paper: #ffffff;
@@ -86,12 +97,12 @@
   --ds-row-pad: var(--ds-space-3);
 
   /* Layout: the rail, the list pane, the reading width, the header and the narrow-screen drawer;
-     the document column, the focused signing flow, and the development banner. */
+     the document column, the focused signing flow, the development banner, and the side column
+     of the new-agreement form. */
   /* The workspace thread rail: wide enough for a real chat; the narrow one holds history only. */
   --ds-layout-rail: clamp(440px, 36vw, 640px);
   --ds-layout-rail-narrow: 320px;
   --ds-layout-page: 1280px;
-  --ds-layout-doc-header: 44px;
   --ds-layout-sign: 960px;
   --ds-layout-sheet-read: 1200px;
   --ds-layout-sheet-max: 760px;
@@ -101,6 +112,7 @@
   --ds-layout-header: 56px;
   --ds-layout-drawer: 640px;
   --ds-layout-dev-bar: 32px;
+  --ds-layout-form-side: 360px;
 
   /* Motion that explains: a press, a control changing, a panel arriving, work in progress. */
   --ds-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);

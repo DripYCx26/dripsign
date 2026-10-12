@@ -1,4 +1,5 @@
 import type { AgreementStatus, InboxItem, StaffListItem } from "@dripsign/core/types";
+import { staffMove, staffMoveLabel, type StaffMove } from "@/features/workspace/nextStep.ts";
 import type { SignerProgressModel } from "./SignerProgress.tsx";
 
 /** One line of a list, whoever it is for: everything the row draws, already worded. */
@@ -57,49 +58,32 @@ function progressOf(item: {
   };
 }
 
-// Mirrors the staff side of the core's `allowedActions`, so a row's phrase names the action the
-// workspace will offer first. The list read does not carry the allowed actions themselves.
-function draftStanding(item: StaffListItem): Standing<StaffGroup> {
-  if (item.preparation === "failed") return { group: "needs", phrase: "Retry preparation" };
-  if (item.preparation === "preparing") return { group: "drafts", phrase: "Preparing PDF…" };
-  if (item.publicationNeeded && item.preparation === "ready") {
-    const phrase = item.hasRevision ? "Review and publish changes" : "Review and publish";
-    return { group: "needs", phrase };
-  }
-  return { group: "drafts", phrase: "Add terms" };
-}
+const STAFF_MOVE_GROUP: Readonly<Record<StaffMove, StaffGroup>> = {
+  answer: "needs",
+  retry: "needs",
+  publish: "needs",
+  request_signatures: "needs",
+  needs_signer: "needs",
+  preparing: "drafts",
+  add_terms: "drafts",
+  awaiting_answer: "waiting",
+  none: "waiting",
+};
 
-function negotiatingStanding(item: StaffListItem): Standing<StaffGroup> {
-  if (item.pendingProposalBy === "recipient") {
-    const who = item.pendingProposalAuthor;
-    return {
-      group: "needs",
-      phrase: who === null ? "Review the proposal" : `Review ${who}’s proposal`,
-    };
-  }
-  if (item.preparation === "failed" || item.preparation === "preparing" || item.publicationNeeded) {
-    return draftStanding(item);
-  }
-  if (item.pendingProposalBy === "staff") {
-    return { group: "waiting", phrase: "Waiting for recipients to respond" };
-  }
-  return { group: "needs", phrase: "Request signatures" };
-}
-
-/** The group and next-step phrase of one staff list item. */
-export function staffStanding(item: StaffListItem): Standing<StaffGroup> {
-  switch (item.status) {
-    case "void":
-      return { group: "done", phrase: "" };
-    case "signed":
-      return { group: "done", phrase: "" };
-    case "signing":
-      return { group: "waiting", phrase: "" };
-    case "negotiating":
-      return negotiatingStanding(item);
-    case "draft":
-      return draftStanding(item);
-  }
+/** The group and next-step phrase of one staff list item: the workspace's own staff move. */
+function staffStanding(item: StaffListItem): Standing<StaffGroup> {
+  if (item.status === "void" || item.status === "signed") return { group: "done", phrase: "" };
+  const move = staffMove({
+    ...item,
+    requiredSigners: item.recipients.filter((recipient) => recipient.isSigner).length,
+  });
+  const group = move === "none" && item.status === "draft" ? "drafts" : STAFF_MOVE_GROUP[move];
+  const who = item.pendingProposalAuthor;
+  const phrase =
+    move === "answer" && who !== null
+      ? `Review ${who}’s proposal`
+      : staffMoveLabel(move, item.status);
+  return { group, phrase };
 }
 
 function recipientNames(item: StaffListItem): string {
@@ -122,29 +106,20 @@ function staffRow(item: StaffListItem): RowModel {
   };
 }
 
-function signingStanding(item: InboxItem): Standing<InboxGroup> {
-  if (item.finalizing) return { group: "waiting", phrase: "" };
-  if (item.viewerIsRequiredSigner && !item.viewerHasSigned) {
-    return { group: "sign", phrase: "Review and sign" };
+/** The group and next-step phrase of one inbox item, from the policy's answer for the recipient. */
+function inboxStanding(item: InboxItem): Standing<InboxGroup> {
+  if (item.status === "void" || item.status === "signed") return { group: "done", phrase: "" };
+  if (item.allowedActions.includes("sign")) return { group: "sign", phrase: "Review and sign" };
+  if (item.allowedActions.includes("accept")) {
+    return { group: "respond", phrase: "Respond to proposal" };
   }
-  return { group: "waiting", phrase: item.viewerHasSigned ? "You signed" : "" };
-}
-
-/** The group and next-step phrase of one inbox item, from the recipient's side. */
-export function inboxStanding(item: InboxItem): Standing<InboxGroup> {
-  switch (item.status) {
-    case "void":
-    case "signed":
-      return { group: "done", phrase: "" };
-    case "signing":
-      return signingStanding(item);
-    case "negotiating":
-    case "draft":
-      if (item.pendingProposalBy === "staff") {
-        return { group: "respond", phrase: "Respond to proposal" };
-      }
-      return { group: "waiting", phrase: `Waiting on ${item.orgName}` };
+  if (item.status === "signing") {
+    return {
+      group: "waiting",
+      phrase: item.viewerHasSigned && !item.finalizing ? "You signed" : "",
+    };
   }
+  return { group: "waiting", phrase: `Waiting on ${item.orgName}` };
 }
 
 function inboxRow(item: InboxItem): RowModel {

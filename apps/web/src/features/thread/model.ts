@@ -25,20 +25,24 @@ function pendingProposal(view: AgreementView): ProposalView | null {
   return view.proposals.find((proposal) => proposal.status === "pending") ?? null;
 }
 
-export type ThreadItem =
+type ThreadEntry =
   | Readonly<{ kind: "message"; key: string; at: string; message: MessageView }>
   | Readonly<{ kind: "proposal"; key: string; at: string; proposal: ProposalView }>
   /** Milestones that happened in the same minute, one line each. */
   | Readonly<{ kind: "activity"; key: string; at: string; lines: readonly string[] }>;
 
-type ThreadSource = Pick<AgreementView, "messages" | "proposals" | "timeline" | "viewer"> &
-  Readonly<{ agreement: Pick<AgreementView["agreement"], "voidReason"> }>;
+/** `timed`: a message or card shows its time (see `TIME_GAP_MS`); milestones always do. */
+export type ThreadItem = ThreadEntry & Readonly<{ timed: boolean }>;
+
+type ThreadSource = Pick<AgreementView, "messages" | "proposals" | "timeline" | "viewer">;
 
 const MINUTE_MS = 60_000;
+/** A time is shown on the first item, the last, and after a pause longer than this. */
+const TIME_GAP_MS = 5 * MINUTE_MS;
 
 /** Folds neighbouring milestones of the same minute into one row; order is never changed. */
-function groupMilestones(items: readonly ThreadItem[]): ThreadItem[] {
-  const grouped: ThreadItem[] = [];
+function groupMilestones(items: readonly ThreadEntry[]): ThreadEntry[] {
+  const grouped: ThreadEntry[] = [];
   for (const item of items) {
     const last = grouped.at(-1);
     if (
@@ -54,26 +58,41 @@ function groupMilestones(items: readonly ThreadItem[]): ThreadItem[] {
   return grouped;
 }
 
-/** Messages, proposals and the agreement's milestones as one conversation, oldest first. */
+function markTimes(items: readonly ThreadEntry[]): ThreadItem[] {
+  return items.map((item, index) => {
+    const previous = items[index - 1];
+    const timed =
+      previous === undefined ||
+      index === items.length - 1 ||
+      Date.parse(item.at) - Date.parse(previous.at) > TIME_GAP_MS;
+    return { ...item, timed };
+  });
+}
+
+/**
+ * Messages, proposals and the agreement's milestones as one conversation, oldest first. A
+ * countered proposal is not an item: it folds into the card that replaced it (`earlierVersions`).
+ * A withdrawn one (superseded with nothing replacing it) keeps its card.
+ */
 export function threadItems(view: ThreadSource): readonly ThreadItem[] {
-  const items: ThreadItem[] = [
-    ...view.messages.map((message): ThreadItem => ({
+  const countered = new Set(view.proposals.map((proposal) => proposal.supersedesId));
+  const items: ThreadEntry[] = [
+    ...view.messages.map((message): ThreadEntry => ({
       kind: "message",
       key: `message-${message.id}`,
       at: message.createdAt,
       message,
     })),
-    ...view.proposals.map((proposal): ThreadItem => ({
-      kind: "proposal",
-      key: `proposal-${proposal.id}`,
-      at: proposal.createdAt,
-      proposal,
-    })),
-    ...view.timeline.flatMap((item, index): ThreadItem[] => {
-      const line = describeMilestone(item, {
-        viewer: view.viewer,
-        voidReason: view.agreement.voidReason,
-      });
+    ...view.proposals
+      .filter((proposal) => !countered.has(proposal.id))
+      .map((proposal): ThreadEntry => ({
+        kind: "proposal",
+        key: `proposal-${proposal.id}`,
+        at: proposal.createdAt,
+        proposal,
+      })),
+    ...view.timeline.flatMap((item, index): ThreadEntry[] => {
+      const line = describeMilestone(item, { viewer: view.viewer });
       // The view has no row id; time, kind and position are stable for one snapshot.
       return line === null
         ? []
@@ -87,8 +106,10 @@ export function threadItems(view: ThreadSource): readonly ThreadItem[] {
           ];
     }),
   ];
-  return groupMilestones(
-    items.sort((a, b) => Date.parse(a.at) - Date.parse(b.at) || a.key.localeCompare(b.key)),
+  return markTimes(
+    groupMilestones(
+      items.sort((a, b) => Date.parse(a.at) - Date.parse(b.at) || a.key.localeCompare(b.key)),
+    ),
   );
 }
 
@@ -164,6 +185,19 @@ export function turnSentence(view: AgreementView, capacity: Capacity): string | 
 /** The proposal that replaced this one, when a counterproposal superseded it. */
 export function counteredBy(view: AgreementView, proposal: ProposalView): ParticipantRef | null {
   return view.proposals.find((other) => other.supersedesId === proposal.id)?.author ?? null;
+}
+
+/** The proposals a live one superseded, oldest first. */
+export function earlierVersions(view: AgreementView, proposal: ProposalView): ProposalView[] {
+  const earlier: ProposalView[] = [];
+  let id = proposal.supersedesId;
+  while (id !== null) {
+    const found = view.proposals.find((other) => other.id === id);
+    if (found === undefined) break;
+    earlier.unshift(found);
+    id = found.supersedesId;
+  }
+  return earlier;
 }
 
 /** The proposal a new proposal would counter: the other side's open one, when countering is allowed. */

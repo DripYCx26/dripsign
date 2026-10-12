@@ -3,27 +3,32 @@
 import type { AgreementView, Capacity, ProposalView } from "@dripsign/core/types";
 import { useState } from "react";
 import { SectionDiff } from "@/features/document/SectionDiff.tsx";
-import { Avatar, Button, ChevronRight, Pill } from "@/ui";
+import { Avatar, Button, Pill } from "@/ui";
 import { Ago } from "./Ago.tsx";
 import { startProposal } from "./intent.ts";
-import { baseSourceOf, counteredBy, describeChange, isOwn } from "./model.ts";
+import { EarlierVersions } from "./EarlierVersions.tsx";
+import { baseSourceOf, changedSection, describeChange, earlierVersions, isOwn } from "./model.ts";
 import styles from "./ProposalCard.module.css";
 
-export type Decision = "accept" | "reject";
+/** What the viewer does to the open proposal: answer the other side's, or withdraw their own. */
+export type Decision = "accept" | "reject" | "withdraw";
 
 type ProposalCardProps = Readonly<{
   view: AgreementView;
   capacity: Capacity;
   proposal: ProposalView;
+  /** Whether the time shows (`threadItems` decides); its exact value is the hover title. */
+  timed: boolean;
   /** True while any command of this workspace is in flight. */
   busy: boolean;
   onDecide: (decision: Decision, proposal: ProposalView) => Promise<void>;
 }>;
 
-type CardState = "pending" | "stale" | "accepted" | "declined" | "superseded";
+type CardState = "pending" | "stale" | "accepted" | "declined" | "withdrawn";
 
 function cardState(view: AgreementView, proposal: ProposalView): CardState {
-  if (proposal.status === "superseded") return "superseded";
+  // A countered proposal folds into its successor's card, so a superseded card was withdrawn.
+  if (proposal.status === "superseded") return "withdrawn";
   if (proposal.status === "accepted") return "accepted";
   if (proposal.status === "rejected") return "declined";
   const current = view.agreement.currentRevisionNumber ?? proposal.baseRevisionNumber;
@@ -36,12 +41,14 @@ function canAnswer(view: AgreementView): boolean {
   );
 }
 
-function OpenMark({ view, proposal }: Readonly<Omit<ProposalCardProps, "busy" | "onDecide">>) {
+type MarkProps = Readonly<Omit<ProposalCardProps, "timed" | "busy" | "onDecide">>;
+
+function OpenMark({ view, proposal }: MarkProps) {
   if (canAnswer(view)) return <Pill tone="attention">Your turn</Pill>;
   return <Pill tone="info">{isOwn(proposal.author, view) ? "Waiting" : "Open"}</Pill>;
 }
 
-function StateMark(props: Readonly<Omit<ProposalCardProps, "busy" | "onDecide">>) {
+function StateMark(props: MarkProps) {
   const { view, capacity, proposal } = props;
   switch (cardState(view, proposal)) {
     case "pending":
@@ -60,17 +67,18 @@ function StateMark(props: Readonly<Omit<ProposalCardProps, "busy" | "onDecide">>
       }
       // Recipients never learn about private drafts, so their side of "accepted" stops there.
       return <Pill tone="confirm">{capacity === "staff" ? "In draft" : "Accepted"}</Pill>;
-    case "superseded":
-      return null;
+    case "withdrawn":
+      return <Pill tone="info">Withdrawn</Pill>;
   }
 }
 
-function Decisions({ view, proposal, busy, onDecide }: ProposalCardProps) {
+function Decisions({ view, proposal, busy, onDecide }: Omit<ProposalCardProps, "timed">) {
   const [acting, setActing] = useState<Decision | null>(null);
   const canAccept = view.allowedActions.includes("accept");
   const canCounter = view.allowedActions.includes("counter");
   const canDecline = view.allowedActions.includes("reject");
-  if (!canAnswer(view)) return null;
+  const canWithdraw = view.allowedActions.includes("withdraw") && isOwn(proposal.author, view);
+  if (!canAnswer(view) && !canWithdraw) return null;
 
   async function decide(decision: Decision) {
     setActing(decision);
@@ -117,16 +125,33 @@ function Decisions({ view, proposal, busy, onDecide }: ProposalCardProps) {
           Decline
         </Button>
       )}
+      {canWithdraw && (
+        <Button
+          variant="quiet"
+          size="sm"
+          loading={acting === "withdraw"}
+          disabled={busy && acting !== "withdraw"}
+          onClick={() => void decide("withdraw")}
+        >
+          Withdraw
+        </Button>
+      )}
     </div>
   );
 }
 
 function ProposalBody(props: ProposalCardProps) {
-  const { view, proposal } = props;
+  const { view, proposal, timed } = props;
   const state = cardState(view, proposal);
   const open = state === "pending" || state === "stale";
+  const earlier = earlierVersions(view, proposal);
+  const before = baseSourceOf(view, proposal);
   const diff = (
-    <SectionDiff before={baseSourceOf(view, proposal)} after={proposal.replacementSource} />
+    <SectionDiff
+      before={before}
+      after={proposal.replacementSource}
+      namedSectionId={changedSection(before, proposal.replacementSource)?.section.id}
+    />
   );
   return (
     <>
@@ -147,42 +172,30 @@ function ProposalBody(props: ProposalCardProps) {
             <div className={styles.diff}>{diff}</div>
           </details>
         ))}
-      <footer className={styles.foot}>
-        <p className={styles.time}>
-          <Ago value={proposal.createdAt} />
-        </p>
-        {open && <Decisions {...props} />}
-      </footer>
+      {(timed || earlier.length > 0 || open) && (
+        <footer className={styles.foot}>
+          <EarlierVersions view={view} versions={earlier} />
+          {timed && (
+            <p className={styles.time}>
+              <Ago value={proposal.createdAt} />
+            </p>
+          )}
+          {open && <Decisions {...props} />}
+        </footer>
+      )}
     </>
   );
 }
 
 /**
  * A proposal in the thread: who proposed what, whose turn it is, the change itself and the
- * actions the policy allows. A decided one folds its diff away; a superseded one is one line.
+ * actions the policy allows. A decided one folds its diff away; the proposals it countered fold
+ * into its footer.
  */
 export function ProposalCard(props: ProposalCardProps) {
   const { view, proposal } = props;
   const state = cardState(view, proposal);
   const open = state === "pending" || state === "stale";
-  if (state === "superseded") {
-    const by = counteredBy(view, proposal);
-    return (
-      <details className={styles.superseded}>
-        <summary className={styles.summary}>
-          <span aria-hidden="true">↳</span>
-          <span>{by === null ? "Countered" : `Countered by ${by.label}`}</span>
-          <span className={styles.show} aria-hidden="true">
-            Show
-            <ChevronRight />
-          </span>
-        </summary>
-        <article className={styles.card} data-state="superseded">
-          <ProposalBody {...props} />
-        </article>
-      </details>
-    );
-  }
   return (
     <article
       className={styles.card}

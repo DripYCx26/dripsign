@@ -1,22 +1,21 @@
-/* Sticks to the top of the document pane while the sheet scrolls beneath it. */
-.header {
-  position: sticky;
-  top: 0;
-  z-index: 1;
+.controls {
   display: flex;
-  min-height: var(--ds-layout-doc-header);
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--ds-space-1) var(--ds-space-3);
-  background: var(--ds-canvas);
+  gap: var(--ds-space-2) var(--ds-space-3);
 }
 
 .revision {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: var(--ds-space-1);
+}
+
+/* The chevron button's own padding is pulled in so the label and glyph sit one 4 px step apart. */
+.revision > button {
+  margin-inline-start: calc(
+    var(--ds-space-1) - (var(--ds-size-control-md) - var(--ds-size-icon)) / 2
+  );
 }
 
 .label {
@@ -24,15 +23,10 @@
   font-size: var(--ds-text-md);
   font-weight: var(--ds-weight-medium);
   line-height: var(--ds-leading-md);
+  white-space: nowrap;
 }
 
 .blank {
   display: inline-block;
   width: var(--ds-size-icon);
-}
-
-.controls {
-  display: flex;
-  align-items: center;
-  gap: var(--ds-space-2);
 }

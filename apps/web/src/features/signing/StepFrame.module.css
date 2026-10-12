@@ -9,7 +9,7 @@
   width: 100%;
 }
 
-/* The h1 is a focus target, not a control: base.css draws it. */
+/* The h2 is a focus target, not a control: base.css draws it. */
 .title:focus {
   outline: none;
 }

@@ -1,0 +1,23 @@
+/* A link that looks like a quiet icon button: 32 px, 44 px on a coarse pointer. */
+
+.back {
+  display: inline-flex;
+  width: max(var(--ds-space-8), var(--ds-size-target-min));
+  height: max(var(--ds-space-8), var(--ds-size-target-min));
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--ds-radius-pill);
+  color: var(--ds-text-secondary);
+  transition: background-color var(--ds-motion-quick) var(--ds-ease-enter);
+}
+
+.back:hover {
+  background: var(--ds-surface-subtle);
+  color: var(--ds-text);
+}
+
+.back > svg {
+  width: var(--ds-size-icon-tile);
+  height: var(--ds-size-icon-tile);
+  stroke-width: var(--ds-icon-stroke);
+}

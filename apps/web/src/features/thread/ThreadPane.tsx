@@ -49,9 +49,10 @@ function useSentAnnouncement() {
 
 /**
  * Opens the thread at its newest end, where the composer is. An item taller than the list (a long
- * proposal) opens at its own top, so its title is never scrolled out of sight.
+ * proposal) opens at its own top, so its title is never scrolled out of sight. Keyed on the newest
+ * item, not the count: a counterproposal replaces the card it supersedes without adding a row.
  */
-function useOpenAtNewest(list: RefObject<HTMLOListElement | null>, itemCount: number) {
+function useOpenAtNewest(list: RefObject<HTMLOListElement | null>, newestKey: string | undefined) {
   useEffect(() => {
     const element = list.current;
     const newest = element?.lastElementChild;
@@ -59,7 +60,7 @@ function useOpenAtNewest(list: RefObject<HTMLOListElement | null>, itemCount: nu
     const newestTop = newest.getBoundingClientRect().top - element.getBoundingClientRect().top;
     const end = element.scrollHeight - element.clientHeight;
     element.scrollTo({ top: Math.min(end, element.scrollTop + newestTop) });
-  }, [itemCount, list]);
+  }, [newestKey, list]);
 }
 
 type ThreadRowProps = Readonly<{
@@ -73,7 +74,13 @@ type ThreadRowProps = Readonly<{
 function ThreadRow({ item, view, capacity, busy, onDecide }: ThreadRowProps) {
   switch (item.kind) {
     case "message":
-      return <MessageItem message={item.message} own={isOwn(item.message.author, view)} />;
+      return (
+        <MessageItem
+          message={item.message}
+          own={isOwn(item.message.author, view)}
+          timed={item.timed}
+        />
+      );
     case "activity":
       return <SystemRow at={item.at} lines={item.lines} />;
     case "proposal":
@@ -82,6 +89,7 @@ function ThreadRow({ item, view, capacity, busy, onDecide }: ThreadRowProps) {
           view={view}
           capacity={capacity}
           proposal={item.proposal}
+          timed={item.timed}
           busy={busy}
           onDecide={onDecide}
         />
@@ -101,7 +109,7 @@ export function ThreadPane({ view, capacity, run, busy }: ThreadPaneProps) {
   const list = useRef<HTMLOListElement>(null);
   const { announcement, announce } = useSentAnnouncement();
 
-  useOpenAtNewest(list, items.length);
+  useOpenAtNewest(list, items.at(-1)?.key);
   // A proposal in progress belongs to this agreement's thread; leaving it drops the intent.
   useEffect(
     () => () => {
@@ -112,9 +120,7 @@ export function ThreadPane({ view, capacity, run, busy }: ThreadPaneProps) {
 
   async function decide(decision: Decision, proposal: ProposalView) {
     await run(
-      decision === "accept"
-        ? { kind: "accept", expectedVersion: view.agreement.version, proposalId: proposal.id }
-        : { kind: "reject", expectedVersion: view.agreement.version, proposalId: proposal.id },
+      { kind: decision, expectedVersion: view.agreement.version, proposalId: proposal.id },
       `${decision}:${proposal.id}`,
     );
   }

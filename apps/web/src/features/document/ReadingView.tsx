@@ -59,9 +59,8 @@ export function ReadingView({ source, signers, suggestable }: ReadingViewProps) 
                 {signer.signature ? (
                   <>
                     <span className={styles.ink}>{signer.signature.typedName}</span>
-                    <span>
-                      {signer.name} · signed{" "}
-                      <Moment value={signer.signature.signedAt} format="absolute" />
+                    <span className={styles.signed}>
+                      Signed <Moment value={signer.signature.signedAt} format="absolute" />
                     </span>
                   </>
                 ) : (

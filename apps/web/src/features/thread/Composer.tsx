@@ -33,7 +33,7 @@ type MessageComposerProps = Readonly<{
 }>;
 
 function MessageComposer({ view, scope, run, busy, canPropose, onSent }: MessageComposerProps) {
-  const [stored, setStored] = useStoredText(scope, "message");
+  const [stored, setStored, clearSent] = useStoredText(scope, "message");
   const text = stored ?? "";
   const field = useAutosize(text);
   const ready = text.trim() !== "" && !busy;
@@ -41,7 +41,7 @@ function MessageComposer({ view, scope, run, busy, canPropose, onSent }: Message
   async function send() {
     if (!ready) return;
     if (await run({ kind: "message", body: text }, "message")) {
-      setStored(null);
+      clearSent(stored);
       onSent();
       field.current?.focus();
     }
@@ -116,7 +116,8 @@ function intentStands(
 /**
  * The composer, pinned under the thread. A message by default; proposing replaces it while an
  * intent (from "Propose a change", a document section or a Counter) stands. Text is kept in
- * session storage and cleared only once the command succeeded.
+ * session storage and cleared only once the command succeeded, and only if nothing was typed
+ * while it was in flight.
  */
 export function Composer({ view, capacity, run, busy, onSent }: ComposerProps) {
   const scope = textScope(view, capacity);

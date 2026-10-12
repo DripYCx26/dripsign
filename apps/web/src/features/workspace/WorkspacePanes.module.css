@@ -37,7 +37,7 @@
   position: relative;
   min-width: 0;
   min-height: 0;
-  padding: 0 var(--ds-space-6) var(--ds-space-10);
+  padding: var(--ds-space-6);
   overflow-y: auto;
   background: var(--ds-canvas);
 }

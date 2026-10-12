@@ -14,13 +14,10 @@
   padding: 0 var(--ds-space-4);
 }
 
+/* The face and size are the h1's own (base.css), the same as the workspace title. */
 .title {
   min-width: 0;
   overflow: hidden;
-  color: var(--ds-text);
-  font-size: var(--ds-text-md);
-  font-weight: var(--ds-weight-medium);
-  line-height: var(--ds-leading-md);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

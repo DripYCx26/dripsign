@@ -1,5 +1,11 @@
-import type { Command } from "@dripsign/core/schema";
-import type { AgreementAction, AgreementView, Capacity, RoundView } from "@dripsign/core/types";
+import type { Command, PreparationStatus } from "@dripsign/core/schema";
+import type {
+  AgreementAction,
+  AgreementStatus,
+  AgreementView,
+  Capacity,
+  RoundView,
+} from "@dripsign/core/types";
 import { fileUrl } from "../files.ts";
 
 export type NextStepKind = "command" | "navigate" | "scroll" | "none";
@@ -48,44 +54,114 @@ function download(view: AgreementView, capacity: Capacity): NextStep {
   };
 }
 
-/** Staff, while the agreement is a draft or in review and no round is live. */
+/** What a staff list row and the staff workspace both read to name the next step. */
+export type StaffFacts = Readonly<{
+  status: AgreementStatus;
+  preparation: PreparationStatus;
+  /** Live required signers in the draft. */
+  requiredSigners: number;
+  allowedActions: readonly AgreementAction[];
+}>;
+
+/**
+ * Staff's next move outside a signature request, from the policy's allowed actions: the one rule
+ * the list row and the workspace header both word. `none` is nothing to do or say.
+ */
+export type StaffMove =
+  | "answer"
+  | "preparing"
+  | "retry"
+  | "add_terms"
+  | "publish"
+  | "request_signatures"
+  | "needs_signer"
+  | "awaiting_answer"
+  | "none";
+
+export function staffMove(facts: StaffFacts): StaffMove {
+  const can = (action: AgreementAction) => facts.allowedActions.includes(action);
+  const editable = facts.status === "draft" || facts.status === "negotiating";
+  if (!editable) return "none";
+  if (can("accept")) return "answer";
+  if (facts.preparation === "preparing") return "preparing";
+  if (can("retry_preparation")) return "retry";
+  if (facts.status === "draft" && facts.preparation === "empty") return "add_terms";
+  if (can("publish")) return "publish";
+  if (can("request_signatures")) return "request_signatures";
+  if (facts.preparation === "ready" && facts.requiredSigners === 0) return "needs_signer";
+  if (can("withdraw")) return "awaiting_answer";
+  return "none";
+}
+
+/** The words of a staff move; publishing says whether recipients have seen a revision before. */
+export function staffMoveLabel(move: StaffMove, status: AgreementStatus): string {
+  switch (move) {
+    case "preparing":
+      return "Preparing PDF…";
+    case "retry":
+      return "Retry preparation";
+    case "add_terms":
+      return "Add terms";
+    case "publish":
+      return status === "draft" ? "Review and publish" : "Review and publish changes";
+    case "request_signatures":
+      return "Request signatures";
+    case "needs_signer":
+      return "Needs a required signer";
+    case "awaiting_answer":
+      return "Waiting for recipients to respond";
+    case "answer":
+      return "Review the proposal";
+    case "none":
+      return "";
+  }
+}
+
+function staffFacts(view: AgreementView): StaffFacts {
+  return {
+    status: view.agreement.status,
+    preparation: view.agreement.preparation?.status ?? "empty",
+    requiredSigners: view.recipients.filter((r) => r.isSigner && r.removedAt === null).length,
+    allowedActions: view.allowedActions,
+  };
+}
+
+/** Staff, while no round is live. A proposal's card carries its answer, and its author's wait. */
 function staffDraftStep(view: AgreementView): NextStep {
-  const { preparation, status, version } = view.agreement;
-  const state = preparation?.status ?? "empty";
-  if (state === "preparing") return { label: "Preparing PDF…", kind: "none", disabled: true };
-  if (state === "failed" && can(view, "retry_preparation")) {
-    return {
-      label: "Retry preparation",
-      kind: "command",
-      command: { kind: "retry_preparation", expectedVersion: version },
-    };
+  const { status, version } = view.agreement;
+  const move = staffMove(staffFacts(view));
+  const label = staffMoveLabel(move, status);
+  switch (move) {
+    case "preparing":
+      return { label, kind: "none", disabled: true };
+    case "retry":
+      return {
+        label,
+        kind: "command",
+        command: { kind: "retry_preparation", expectedVersion: version },
+      };
+    case "add_terms":
+      return { label, kind: "scroll", href: `#${DOCUMENT_PANE_ID}` };
+    case "publish":
+      return { label, kind: "navigate", href: `/staff/agreements/${view.agreement.id}/publish` };
+    case "request_signatures":
+      return {
+        label,
+        kind: "command",
+        command: { kind: "request_signatures", expectedVersion: version },
+      };
+    case "needs_signer":
+      return {
+        label: staffMoveLabel("publish", status),
+        kind: "none",
+        disabled: true,
+        chip: label,
+      };
+    case "answer":
+    case "awaiting_answer":
+    case "none":
+      return NOTHING;
   }
-  if (state === "empty" && view.agreement.currentRevisionNumber === null) {
-    return { label: "Add terms", kind: "scroll", href: `#${DOCUMENT_PANE_ID}` };
-  }
-  if (can(view, "publish")) {
-    return {
-      label: status === "draft" ? "Review and publish" : "Review and publish changes",
-      kind: "navigate",
-      href: `/staff/agreements/${view.agreement.id}/publish`,
-    };
-  }
-  if (can(view, "request_signatures")) {
-    return {
-      label: "Request signatures",
-      kind: "command",
-      command: { kind: "request_signatures", expectedVersion: version },
-    };
-  }
-  if (status === "draft" && state === "ready") {
-    return {
-      label: "Review and publish",
-      kind: "none",
-      disabled: true,
-      chip: "Needs a required signer",
-    };
-  }
-  return NOTHING;
 }
 
 function staffStep(view: AgreementView): NextStep {
@@ -98,9 +174,6 @@ function staffStep(view: AgreementView): NextStep {
       chip: `${String(signedCount(round))} of ${String(round.signers.length)} signed`,
     };
   }
-  // A proposal waiting on staff comes first: publishing now would leave it based on an old
-  // revision. Its card carries the answer, so the header offers nothing.
-  if (can(view, "accept")) return NOTHING;
   return staffDraftStep(view);
 }
 

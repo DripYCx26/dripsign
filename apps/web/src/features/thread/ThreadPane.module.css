@@ -10,11 +10,13 @@
   justify-content: flex-end;
 }
 
+/* A short thread sits on the composer: the first item's auto margin takes the free space, and
+   unlike align-content: end it never pushes the top of a long list out of reach. */
 .list {
-  display: grid;
+  display: flex;
   min-height: 0;
   flex: 1 1 auto;
-  align-content: start;
+  flex-direction: column;
   gap: var(--ds-space-3);
   margin: 0;
   padding: var(--ds-space-4);
@@ -25,6 +27,11 @@
 
 .item {
   min-width: 0;
+  flex: none;
+}
+
+.item:first-child {
+  margin-block-start: auto;
 }
 
 .item:focus-visible {

@@ -2,7 +2,7 @@
 
 import type { AgreementView, RecipientView } from "@dripsign/core/types";
 import { useState } from "react";
-import { Button, Dialog, Drawer, Notice, Pill } from "@/ui";
+import { Button, Dialog, Drawer, Notice, Pill, Switch } from "@/ui";
 import { AddRecipientForm } from "./AddRecipientForm.tsx";
 import type { PanelProps } from "./panel.ts";
 import styles from "./RecipientsDrawer.module.css";
@@ -41,13 +41,16 @@ type RowProps = Readonly<{
   working: boolean;
   onResend: () => void;
   onRemove: () => void;
+  onSetSigner: (isSigner: boolean) => void;
 }>;
 
-function RecipientRow({ view, recipient, readOnly, busy, working, onResend, onRemove }: RowProps) {
+function RecipientRow(props: RowProps) {
+  const { view, recipient, readOnly, busy, working, onResend, onRemove, onSetSigner } = props;
   const state = standing(view, recipient);
   const live = state !== "removed";
   const canResend = live && view.allowedActions.includes("resend_invite");
   const canRemove = live && !readOnly && view.allowedActions.includes("remove_recipient");
+  const canSetSigner = live && view.allowedActions.includes("set_signer");
   return (
     <li className={styles.row} data-removed={!live || undefined}>
       <div className={styles.who}>
@@ -55,7 +58,17 @@ function RecipientRow({ view, recipient, readOnly, busy, working, onResend, onRe
         <p className={styles.email}>{recipient.email}</p>
       </div>
       <div className={styles.marks}>
-        {recipient.isSigner && <Pill tone="info">Required</Pill>}
+        {canSetSigner ? (
+          <Switch
+            label="Required signer"
+            subject={recipient.name}
+            checked={recipient.isSigner}
+            disabled={busy}
+            onChange={onSetSigner}
+          />
+        ) : (
+          recipient.isSigner && <Pill tone="info">Required</Pill>
+        )}
         <StandingPill standing={state} />
       </div>
       {(canResend || canRemove) && (
@@ -82,6 +95,41 @@ function RecipientRow({ view, recipient, readOnly, busy, working, onResend, onRe
   );
 }
 
+type RemoveDialogProps = Readonly<
+  Pick<PanelProps, "view" | "run" | "busy" | "notice" | "onClose"> & {
+    recipient: RecipientView | null;
+  }
+>;
+
+/** Confirms removing one person; open while `recipient` is set, closed once the removal applied. */
+function RemoveDialog({ view, recipient, run, busy, notice, onClose }: RemoveDialogProps) {
+  async function remove(target: RecipientView) {
+    const command = {
+      kind: "remove_recipient",
+      expectedVersion: view.agreement.version,
+      recipientId: target.id,
+    } as const;
+    if (await run(command, `remove:${target.id}`)) onClose();
+  }
+
+  return (
+    <Dialog
+      open={recipient !== null}
+      title={`Remove ${recipient?.name ?? "this person"}?`}
+      confirmLabel="Remove"
+      tone="danger"
+      loading={busy}
+      onConfirm={() => {
+        if (recipient !== null) void remove(recipient);
+      }}
+      onClose={onClose}
+    >
+      <p>They lose access now. Their messages stay in the thread.</p>
+      {recipient !== null && notice}
+    </Dialog>
+  );
+}
+
 /**
  * The people on the agreement, staff only. Membership is read-only while a signature request is
  * live: the signers are frozen into the round. Resending an invite stays possible.
@@ -104,13 +152,14 @@ export function RecipientsDrawer({ open, view, run, busy, notice, onClose }: Pan
     if (ok) setSent(`Invite sent to ${recipient.name}.`);
   }
 
-  async function remove(recipient: RecipientView) {
+  async function setSigner(recipient: RecipientView, isSigner: boolean) {
     const command = {
-      kind: "remove_recipient",
+      kind: "set_signer",
       expectedVersion: view.agreement.version,
       recipientId: recipient.id,
+      isSigner,
     } as const;
-    if (await run(command, `remove:${recipient.id}`)) setRemoving(null);
+    await run(command, `set_signer:${recipient.id}`);
   }
 
   return (
@@ -136,6 +185,7 @@ export function RecipientsDrawer({ open, view, run, busy, notice, onClose }: Pan
                 onRemove={() => {
                   setRemoving(recipient);
                 }}
+                onSetSigner={(isSigner) => void setSigner(recipient, isSigner)}
               />
             ))}
           </ul>
@@ -147,22 +197,16 @@ export function RecipientsDrawer({ open, view, run, busy, notice, onClose }: Pan
           )}
         </div>
       </Drawer>
-      <Dialog
-        open={removing !== null}
-        title={`Remove ${removing?.name ?? "this person"}?`}
-        confirmLabel="Remove"
-        tone="danger"
-        loading={busy}
-        onConfirm={() => {
-          if (removing !== null) void remove(removing);
-        }}
+      <RemoveDialog
+        view={view}
+        recipient={removing}
+        run={run}
+        busy={busy}
+        notice={notice}
         onClose={() => {
           setRemoving(null);
         }}
-      >
-        <p>They lose access now. Their messages stay in the thread.</p>
-        {removing !== null && notice}
-      </Dialog>
+      />
     </>
   );
 }

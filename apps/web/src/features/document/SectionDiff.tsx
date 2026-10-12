@@ -1,7 +1,7 @@
 import type { DocumentSource } from "@dripsign/core/schema";
 import type { ReactNode } from "react";
 import { ArrowUpDown, Pill, Plus, Trash2 } from "@/ui";
-import { diffSources, type SectionDiffItem, type WordOp } from "./diff.ts";
+import { diffSources, showsHeading, type SectionDiffItem, type WordOp } from "./diff.ts";
 import styles from "./SectionDiff.module.css";
 
 /** Only whole sections that appear or vanish are marked; edited words mark themselves. */
@@ -34,26 +34,31 @@ function Ops({ ops }: Readonly<{ ops: readonly WordOp[] }>) {
 /** Unchanged text in its old place: nothing to show. */
 const isQuiet = (item: SectionDiffItem) => item.change === "unchanged" && !item.moved;
 
-function ChangedSection({ item }: Readonly<{ item: SectionDiffItem }>) {
+function ChangedSection({
+  item,
+  namedSectionId,
+}: Readonly<{ item: SectionDiffItem; namedSectionId: string | undefined }>) {
   if (isQuiet(item)) return null;
   const kind = item.change === "added" || item.change === "removed" ? WHOLE[item.change] : null;
   return (
     <li className={styles.section}>
-      <div className={styles.head}>
-        {kind !== null && (
-          <Pill tone={kind.tone} icon={kind.icon}>
-            {kind.word}
-          </Pill>
-        )}
-        {item.moved && (
-          <Pill tone="info" icon={<ArrowUpDown />}>
-            Moved
-          </Pill>
-        )}
-        <h3 className={styles.heading}>
-          <Ops ops={item.heading} />
-        </h3>
-      </div>
+      {showsHeading(item, namedSectionId) && (
+        <div className={styles.head}>
+          {kind !== null && (
+            <Pill tone={kind.tone} icon={kind.icon}>
+              {kind.word}
+            </Pill>
+          )}
+          {item.moved && (
+            <Pill tone="info" icon={<ArrowUpDown />}>
+              Moved
+            </Pill>
+          )}
+          <h3 className={styles.heading}>
+            <Ops ops={item.heading} />
+          </h3>
+        </div>
+      )}
       {item.paragraphs.map((ops, index) => (
         // Paragraph order within one diff is fixed.
         <p key={index} className={styles.paragraph}>
@@ -67,12 +72,18 @@ function ChangedSection({ item }: Readonly<{ item: SectionDiffItem }>) {
 /**
  * What changed between two versions of the terms: sections by id, then the words inside a changed
  * section. Sections that neither changed nor moved are left out. A null `before` is a first
- * revision.
+ * revision. `namedSectionId`: the section the caller already names, whose heading shows only when
+ * it is itself the change.
  */
 export function SectionDiff({
   before,
   after,
-}: Readonly<{ before: DocumentSource | null; after: DocumentSource | null }>) {
+  namedSectionId,
+}: Readonly<{
+  before: DocumentSource | null;
+  after: DocumentSource | null;
+  namedSectionId?: string | undefined;
+}>) {
   if (after === null) return <p className={styles.empty}>There are no written terms to compare.</p>;
   const diff = diffSources(before, after);
   if (diff.title === null && diff.sections.every(isQuiet)) {
@@ -87,7 +98,7 @@ export function SectionDiff({
       )}
       <ol className={styles.list}>
         {diff.sections.map((item) => (
-          <ChangedSection key={item.id} item={item} />
+          <ChangedSection key={item.id} item={item} namedSectionId={namedSectionId} />
         ))}
       </ol>
     </div>

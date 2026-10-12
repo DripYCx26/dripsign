@@ -3,6 +3,8 @@
 import type { AgreementView, Capacity } from "@dripsign/core/types";
 import { useState } from "react";
 import { useCommand } from "@/features/command/useCommand.ts";
+import { DocumentControls } from "@/features/document/DocumentControls.tsx";
+import { useDocumentState } from "@/features/document/useDocumentState.ts";
 import { CommandNotice } from "./CommandNotice.tsx";
 import { defaultTab, railMode, type WorkspaceTab } from "./tabs.ts";
 import { usePoll } from "./usePoll.ts";
@@ -22,6 +24,14 @@ type WorkspaceShellProps = Readonly<{
 
 const ASSISTANT_LIMIT = "Today's assistant limit is reached.";
 
+/** The completion panel polls a finalizing round itself; the worker's other two jobs are here. */
+function isWaitingOnWorker(view: AgreementView): boolean {
+  return (
+    view.agreement.preparation?.status === "preparing" ||
+    view.aiSuggestions.some((suggestion) => suggestion.status === "queued")
+  );
+}
+
 /**
  * The workspace both capacities share: the header, the thread rail beside the document, and
  * staff's drawers. It holds the one `useCommand` for the agreement, so a single command is in
@@ -40,6 +50,7 @@ export function WorkspaceShell({
     capacity,
     initialView,
   );
+  const doc = useDocumentState(view, capacity, rev, run);
   const nav = useWorkspaceNav(initialTab ?? defaultTab(initialView));
   const rail = railMode(view);
   // Without a rail there is only the document, whatever tab the address or a proposal asked for.
@@ -47,11 +58,7 @@ export function WorkspaceShell({
   const [panel, setPanel] = useState<Panel | null>(null);
   const staff = capacity === "staff";
 
-  // The completion panel polls a finalizing round itself; the worker's other two jobs are here.
-  const waitingOnWorker =
-    view.agreement.preparation?.status === "preparing" ||
-    view.aiSuggestions.some((suggestion) => suggestion.status === "queued");
-  usePoll(!pending && waitingOnWorker, refresh);
+  usePoll(!pending && isWaitingOnWorker(view), refresh);
 
   function open(next: Panel | null) {
     clearError();
@@ -79,6 +86,9 @@ export function WorkspaceShell({
         onTab={nav.selectTab}
         onPanel={open}
         onReveal={nav.reveal}
+        documentControls={
+          doc.target === null ? null : <DocumentControls doc={doc} busy={pending} />
+        }
       />
       {panel === null && notice}
       <WorkspacePanes
@@ -88,7 +98,7 @@ export function WorkspaceShell({
         busy={pending}
         rail={rail}
         tab={tab}
-        rev={rev}
+        doc={doc}
       />
       {staff && (
         <WorkspacePanels
