@@ -1,7 +1,7 @@
 // Bounded reads behind the agreement view. Each runs inside the view's one REPEATABLE READ
 // snapshot; visibility filtering happens in view.ts.
 import type { Db } from "../db.ts";
-import type { AiSuggestionResult, DocumentSource, SigningField } from "../schema.ts";
+import type { AiMode, AiSuggestionResult, DocumentSource, SigningField } from "../schema.ts";
 import type {
   AiSuggestionStatus,
   ArtifactKind,
@@ -105,6 +105,7 @@ export interface SuggestionRow {
   readonly id: string;
   readonly requestedBy: string;
   readonly instruction: string;
+  readonly mode: AiMode;
   readonly proposalId: string | null;
   readonly status: AiSuggestionStatus;
   readonly baseSourceSha256: string;
@@ -216,9 +217,9 @@ export async function loadArtifacts(db: Db, scope: Scope): Promise<ArtifactRow[]
 
 export async function loadSuggestions(db: Db, scope: Scope): Promise<SuggestionRow[]> {
   const found = await db.query<SuggestionRow>(
-    `SELECT id, requested_by AS "requestedBy", instruction, proposal_id AS "proposalId", status,
-       base_source_sha256 AS "baseSourceSha256", result, error, created_at AS "createdAt",
-       applied_at AS "appliedAt"
+    `SELECT id, requested_by AS "requestedBy", instruction, mode, proposal_id AS "proposalId",
+       status, base_source_sha256 AS "baseSourceSha256", result, error,
+       created_at AS "createdAt", applied_at AS "appliedAt"
      FROM dripsign.ai_suggestion WHERE tenant_id = $1 AND agreement_id = $2
      ORDER BY created_at DESC, id DESC LIMIT $3`,
     [...scope, VIEW_LIMITS.suggestions],

@@ -259,6 +259,7 @@ CREATE TABLE dripsign.ai_suggestion (
   id uuid NOT NULL,
   requested_by dripsign.email NOT NULL,
   instruction text NOT NULL CHECK (length(instruction) BETWEEN 1 AND 4000),
+  mode text NOT NULL CHECK (mode IN ('plan', 'draft')),
   proposal_id uuid,
   base_source jsonb NOT NULL CHECK (octet_length(base_source::text) <= 500000),
   base_source_sha256 dripsign.sha256 NOT NULL,
@@ -280,7 +281,9 @@ CREATE TABLE dripsign.ai_suggestion (
   FOREIGN KEY (tenant_id, agreement_id, proposal_id)
     REFERENCES dripsign.proposal (tenant_id, agreement_id, id),
   CHECK ((status IN ('ready', 'applied')) = (result IS NOT NULL)),
-  CHECK ((status = 'applied') = (applied_at IS NOT NULL))
+  CHECK ((status = 'applied') = (applied_at IS NOT NULL)),
+  -- Only a draft carries a source to apply.
+  CHECK (status <> 'applied' OR mode = 'draft')
 );
 
 CREATE INDEX ai_suggestion_spend ON dripsign.ai_suggestion (tenant_id, day);

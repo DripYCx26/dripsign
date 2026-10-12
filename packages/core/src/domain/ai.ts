@@ -7,21 +7,33 @@ import type { Db } from "../db.ts";
 import { DomainError, notFound } from "../errors.ts";
 import { enqueue } from "../jobs/outbox.ts";
 import { aiSuggestionResultSchema, LIMITS } from "../schema.ts";
-import type { AiSuggestionResult, CommandOf, DocumentSource } from "../schema.ts";
+import type { AiDraft, AiMode, AiSuggestionResult, CommandOf, DocumentSource } from "../schema.ts";
 import { canonicalSha256 } from "./receipts.ts";
 import { stageDraft } from "./revisions.ts";
 import { conflict } from "./state.ts";
 import type { CommandContext } from "./state.ts";
 
 /**
- * Reserved per request: an upper bound for one call (an admitted source, the instruction and a
- * proposal are under 15k input tokens, plus 8k output tokens). The actual cost replaces it.
+ * Reserved per request: an upper bound for one call (an admitted source, the instruction, a
+ * proposal and `LIMITS.aiTurns` short turns of history are under 100k input tokens, plus the
+ * mode's output tokens: 2k for a plan, 8k for a draft). The actual cost replaces it.
  */
-export const AI_RESERVATION_MICROS = 1_000_000;
+export const AI_RESERVATION_MICROS: Readonly<Record<AiMode, number>> = {
+  plan: 250_000,
+  draft: 1_000_000,
+};
+
+/** One earlier turn as the model sees it: the reply's summary and outline, never a full source. */
+export interface SuggestionTurn {
+  readonly instruction: string;
+  readonly reply: string;
+}
 
 export interface SuggestionInput {
+  readonly mode: AiMode;
   readonly source: DocumentSource;
   readonly instruction: string;
+  readonly history: readonly SuggestionTurn[];
   readonly proposalText?: string;
 }
 
@@ -46,26 +58,28 @@ export async function askAi(ctx: CommandContext, command: CommandOf<"ask_ai">): 
     [agreement.tenantId],
   );
   const limit = Math.floor(ai.dailyLimitUsd * 1_000_000);
-  if (Number(spent.rows[0]?.micros ?? 0) + AI_RESERVATION_MICROS > limit) {
+  const reserved = AI_RESERVATION_MICROS[command.mode];
+  if (Number(spent.rows[0]?.micros ?? 0) + reserved > limit) {
     throw new DomainError("rate_limited", "Today’s assistant limit is reached.");
   }
   const suggestionId = randomUUID();
   await db.query(
     `INSERT INTO dripsign.ai_suggestion (
-       tenant_id, agreement_id, id, requested_by, instruction, proposal_id, base_source,
+       tenant_id, agreement_id, id, requested_by, instruction, mode, proposal_id, base_source,
        base_source_sha256, model, reserved_micros
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
     [
       agreement.tenantId,
       agreement.id,
       suggestionId,
       actor.email,
       command.instruction,
+      command.mode,
       command.proposalId ?? null,
       JSON.stringify(source),
       canonicalSha256(source),
       AI_MODEL,
-      AI_RESERVATION_MICROS,
+      reserved,
     ],
   );
   await enqueue(db, {
@@ -86,9 +100,10 @@ async function requireProposal(ctx: CommandContext, proposalId: string): Promise
 
 export async function applyAi(ctx: CommandContext, command: CommandOf<"apply_ai">): Promise<void> {
   const { db, agreement, state } = ctx;
-  const found = await db.query<{ baseSourceSha256: string; result: AiSuggestionResult }>(
+  const found = await db.query<{ baseSourceSha256: string; result: AiDraft }>(
     `SELECT base_source_sha256 AS "baseSourceSha256", result FROM dripsign.ai_suggestion
      WHERE tenant_id = $1 AND agreement_id = $2 AND id = $3 AND status = 'ready'
+       AND mode = 'draft'
      FOR UPDATE`,
     [agreement.tenantId, agreement.id, command.suggestionId],
   );
@@ -115,21 +130,47 @@ export async function loadSuggestionInput(
   input: { readonly tenantId: string; readonly suggestionId: string },
 ): Promise<SuggestionInput | null> {
   const found = await db.query<{
+    mode: AiMode;
     source: DocumentSource;
     instruction: string;
     proposalText: string | null;
+    history: { instruction: string; result: AiSuggestionResult }[];
   }>(
-    `SELECT i.base_source AS source, i.instruction, p.text AS "proposalText"
+    `SELECT i.mode, i.base_source AS source, i.instruction, p.text AS "proposalText",
+       coalesce((
+         SELECT jsonb_agg(jsonb_build_object('instruction', t.instruction, 'result', t.result)
+           ORDER BY t.created_at, t.id)
+         FROM (
+           SELECT h.instruction, h.result, h.created_at, h.id FROM dripsign.ai_suggestion h
+           WHERE h.tenant_id = i.tenant_id AND h.agreement_id = i.agreement_id
+             AND h.status IN ('ready', 'applied') AND h.created_at < i.created_at
+           ORDER BY h.created_at DESC, h.id DESC LIMIT $3
+         ) t
+       ), '[]') AS history
      FROM dripsign.ai_suggestion i
      LEFT JOIN dripsign.proposal p
        ON p.tenant_id = i.tenant_id AND p.agreement_id = i.agreement_id AND p.id = i.proposal_id
      WHERE i.tenant_id = $1 AND i.id = $2 AND i.status = 'queued'`,
-    [input.tenantId, input.suggestionId],
+    [input.tenantId, input.suggestionId, LIMITS.aiTurns],
   );
   const row = found.rows[0];
   if (row === undefined) return null;
-  const { source, instruction, proposalText } = row;
-  return proposalText === null ? { source, instruction } : { source, instruction, proposalText };
+  const { mode, source, instruction, proposalText } = row;
+  const history = row.history.map((turn) => ({
+    instruction: turn.instruction,
+    reply: turnReply(turn.result),
+  }));
+  const base = { mode, source, instruction, history };
+  return proposalText === null ? base : { ...base, proposalText };
+}
+
+// The current base source is already the latest state, so a reply is its gist, not its terms.
+function turnReply(result: AiSuggestionResult): string {
+  const lines =
+    result.kind === "plan"
+      ? result.outline.map((item, index) => `${String(index + 1)}. ${item.heading}: ${item.intent}`)
+      : result.source.sections.map((section) => `- ${section.heading}`);
+  return [result.summary, ...lines].join("\n");
 }
 
 /** Worker seam: stores the result and the actual cost. False when the suggestion already ended. */

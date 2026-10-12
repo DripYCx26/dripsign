@@ -1,5 +1,6 @@
 // Read models the web renders. Validated inputs and stored JSON shapes live in schema.ts.
 import type {
+  AiMode,
   AiSuggestionResult,
   CommandKind,
   DocumentSource,
@@ -164,6 +165,8 @@ export interface AiSuggestionView {
   readonly id: string;
   readonly requestedBy: string;
   readonly instruction: string;
+  /** Only a ready `draft` turn can be applied; a `plan` is an outline to confirm. */
+  readonly mode: AiMode;
   readonly proposalId: string | null;
   readonly status: AiSuggestionStatus;
   readonly baseSourceSha256: string;

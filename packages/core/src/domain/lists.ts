@@ -30,7 +30,8 @@ const POLICY_COLUMNS = `a.status, a.draft_dirty AS "draftDirty",
    WHERE s.tenant_id = a.tenant_id AND s.agreement_id = a.id AND s.is_signer
      AND s.revoked_at IS NULL) AS "draftSigners",
   (SELECT count(*)::int FROM dripsign.ai_suggestion i
-   WHERE i.tenant_id = a.tenant_id AND i.agreement_id = a.id AND i.status = 'ready') AS "readyAi",
+   WHERE i.tenant_id = a.tenant_id AND i.agreement_id = a.id AND i.status = 'ready'
+     AND i.mode = 'draft') AS "readyAi",
   p.by AS "pendingBy", p.email AS "pendingEmail", g.status AS "roundStatus"`;
 
 const PENDING_PROPOSAL = `LEFT JOIN LATERAL (

@@ -534,13 +534,12 @@ it("renames from the terms, fences, replays, rechecks authority, keeps the last 
   // Revoked while a message waits on the agreement, a create replay on its receipt and a roster
   // change on the staff row: all three fail.
   const second = await colleague(staff);
-  const draft: NewAgreementInput = {
-    source: terms("Twelve months."),
-    recipients: [person("Casey Park", false)],
-  };
+  const draft: NewAgreementInput = { source: terms("Twelve months."), recipients: [] };
   const createKey = `key-${randomUUID()}`;
-  // A new draft prepares even before it has a signer.
-  expect(await jobCount(await createAgreement(staff, createKey, draft), "pdf_prepare")).toBe(1);
+  // A new draft with no recipients prepares its PDF, and publishing waits for a required signer.
+  const created = await createAgreement(staff, createKey, draft);
+  expect(await jobCount(created, "pdf_prepare")).toBe(1);
+  await expect(publish(staff, created)).rejects.toMatchObject({ code: "conflict" });
   const held = await holdLocks(
     ["SELECT 1 FROM dripsign.agreement WHERE id = $1 FOR UPDATE", [id]],
     ["SELECT 1 FROM dripsign.command_receipt WHERE key = $1 FOR UPDATE", [createKey]],

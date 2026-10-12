@@ -238,7 +238,8 @@ export async function loadState(
           'consentHash', consent_hash) FROM live_round) AS round,
        (${LIVE_SIGNERS}) AS signers,
        (SELECT count(*)::int FROM dripsign.ai_suggestion
-        WHERE tenant_id = $1 AND agreement_id = $2 AND status = 'ready') AS "readyAi",
+        WHERE tenant_id = $1 AND agreement_id = $2 AND status = 'ready' AND mode = 'draft')
+         AS "readyAi",
        (SELECT id FROM viewer) AS "viewerId",
        EXISTS (SELECT 1 FROM dripsign.round_signer rs JOIN live_round g ON g.id = rs.round_id
                WHERE rs.tenant_id = $1 AND rs.recipient_id = (SELECT id FROM viewer))

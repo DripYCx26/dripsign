@@ -17,6 +17,8 @@ export const LIMITS = {
   sourceBytes: 500_000,
   /** The assistant returns the whole source within its 8,000 output tokens and 90 s timeout. */
   aiSourceBytes: 16_000,
+  /** Finished assistant turns of the agreement sent back to the model as its conversation. */
+  aiTurns: 8,
   draftBytes: 600_000,
   /** The largest PDF the app renders or stores: a revision, a signed PDF or an audit record. */
   pdfBytes: 20 * 1024 * 1024,
@@ -180,11 +182,37 @@ export const draftSchema = z
     "The draft is too large.",
   );
 
-export const aiSuggestionResultSchema = z.strictObject({
-  summary: z.string().min(1).max(2_000),
-  source: documentSourceSchema,
-  questions: z.array(z.string().min(1).max(500)).max(20),
+export const themeSchema = z.enum(["light", "dark", "night"]);
+
+/** A plan is an outline to confirm; a draft is a complete source staff may apply. */
+export const aiModeSchema = z.enum(["plan", "draft"]);
+
+const aiQuestionsSchema = z.array(z.string().min(1).max(500)).max(20);
+const aiSummarySchema = z.string().min(1).max(2_000);
+
+export const aiPlanSchema = z.strictObject({
+  kind: z.literal("plan"),
+  summary: aiSummarySchema,
+  outline: z
+    .array(
+      z.strictObject({
+        heading: z.string().min(1).max(LIMITS.heading),
+        intent: z.string().min(1).max(300),
+      }),
+    )
+    .min(1)
+    .max(LIMITS.sections),
+  questions: aiQuestionsSchema,
 });
+
+export const aiDraftSchema = z.strictObject({
+  kind: z.literal("draft"),
+  summary: aiSummarySchema,
+  source: documentSourceSchema,
+  questions: aiQuestionsSchema,
+});
+
+export const aiSuggestionResultSchema = z.discriminatedUnion("kind", [aiPlanSchema, aiDraftSchema]);
 
 export const newRecipientSchema = z.strictObject({
   name: personNameSchema,
@@ -195,7 +223,7 @@ export const newRecipientSchema = z.strictObject({
 export const newAgreementInputSchema = z
   .strictObject({
     source: documentSourceSchema,
-    recipients: z.array(newRecipientSchema).min(1).max(LIMITS.recipients),
+    recipients: z.array(newRecipientSchema).max(LIMITS.recipients),
   })
   .refine(
     (input) =>
@@ -271,6 +299,7 @@ export const commandSchema = z.discriminatedUnion("kind", [
   z.strictObject({
     kind: z.literal("ask_ai"),
     instruction: aiInstructionSchema,
+    mode: aiModeSchema,
     proposalId: uuidSchema.optional(),
   }),
   z.strictObject({ kind: z.literal("apply_ai"), ...fenced, suggestionId: uuidSchema }),
@@ -319,6 +348,10 @@ export type DocumentAsset = z.infer<typeof documentAssetSchema>;
 export type SigningField = z.infer<typeof signingFieldSchema>;
 export type PreparationStatus = (typeof PREPARATION_STATUSES)[number];
 export type Draft = z.infer<typeof draftSchema>;
+export type Theme = z.infer<typeof themeSchema>;
+export type AiMode = z.infer<typeof aiModeSchema>;
+export type AiPlan = z.infer<typeof aiPlanSchema>;
+export type AiDraft = z.infer<typeof aiDraftSchema>;
 export type AiSuggestionResult = z.infer<typeof aiSuggestionResultSchema>;
 export type NewRecipient = z.infer<typeof newRecipientSchema>;
 export type NewAgreementInput = z.infer<typeof newAgreementInputSchema>;

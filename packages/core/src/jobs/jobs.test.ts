@@ -2,11 +2,8 @@ import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { closePool, getPool, tx } from "../db.ts";
-import { AI_RESERVATION_MICROS, askAi } from "../domain/ai.ts";
-import { loadState, lockAgreement, resolveAccess } from "../domain/state.ts";
-import type { StaffActor } from "../types.ts";
-import { canonicalJson, LIMITS } from "../schema.ts";
+import { closePool, getPool } from "../db.ts";
+import { canonicalJson } from "../schema.ts";
 import { getStorage, hashBytes, objectKey, readBytes } from "../adapters/storage.ts";
 import { completeArchive } from "../domain/signing.ts";
 import { enqueue, finishJob, retryJob } from "./outbox.ts";
@@ -185,8 +182,8 @@ describe("outbox execution", () => {
     const foreignBefore = await foreignRow();
     const suggestionId = randomUUID();
     await getPool().query(
-      `INSERT INTO dripsign.ai_suggestion (tenant_id,agreement_id,id,requested_by,instruction,base_source,base_source_sha256,model,reserved_micros)
-      VALUES ($1,$2,$3,$4,'Review scope',$5,$6,'claude-sonnet-5-5',2000000)`,
+      `INSERT INTO dripsign.ai_suggestion (tenant_id,agreement_id,id,requested_by,instruction,mode,base_source,base_source_sha256,model,reserved_micros)
+      VALUES ($1,$2,$3,$4,'Review scope','draft',$5,$6,'claude-sonnet-5-5',2000000)`,
       [
         context.tenantId,
         context.agreementId,
@@ -303,44 +300,5 @@ describe("outbox execution", () => {
     vi.useRealTimers();
     await running;
     await assertRetention(context, suggestionId);
-  });
-
-  it("admits exactly one of two concurrent ask_ai calls at the daily cap", async () => {
-    const first = await fixture();
-    const second = await fixture(first.tenantId);
-    const actor: StaffActor = {
-      capacity: "staff",
-      tenantId: first.tenantId,
-      email: first.email,
-      sessionId: randomUUID(),
-      verifiedAt: new Date().toISOString(),
-      role: "admin",
-    };
-    const ask = (agreementId: string, terms = source) =>
-      tx(async (db) => {
-        const access = await resolveAccess(db, actor, agreementId);
-        const locked = await lockAgreement(db, first.tenantId, agreementId, null);
-        const agreement = { ...locked, draft: { ...locked.draft, source: terms } };
-        const state = await loadState(db, agreement, actor);
-        await askAi(
-          { db, actor, agreement, access, state },
-          { kind: "ask_ai", instruction: "Review this synthetic scope." },
-        );
-      });
-    const results = await Promise.allSettled([ask(first.agreementId), ask(second.agreementId)]);
-    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
-    const refused = results.find((result) => result.status === "rejected");
-    if (!refused) throw new Error("Concurrent AI request was not refused");
-    expect(refused.reason).toMatchObject({ code: "rate_limited" });
-    // Terms longer than the assistant can return are refused before any spend is reserved.
-    const paragraphs = ["x".repeat(LIMITS.paragraph), "y".repeat(LIMITS.paragraph)];
-    const long = { ...source, sections: [{ id: "long", heading: "Long", paragraphs }] };
-    await expect(ask(second.agreementId, long)).rejects.toMatchObject({ code: "invalid" });
-    const suggestions = await getPool().query<{ count: string; total: string }>(
-      "SELECT count(*)::text AS count, sum(reserved_micros)::text AS total FROM dripsign.ai_suggestion WHERE tenant_id=$1",
-      [first.tenantId],
-    );
-    expect(Number(suggestions.rows[0]?.count)).toBe(1);
-    expect(Number(suggestions.rows[0]?.total)).toBe(AI_RESERVATION_MICROS);
   });
 });

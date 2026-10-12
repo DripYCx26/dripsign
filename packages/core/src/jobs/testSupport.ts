@@ -182,8 +182,8 @@ async function seedRetention(context: Context, suggestionId: string): Promise<vo
     sections: [{ id: "scope", heading: "Scope", paragraphs: ["Synthetic."] }],
   };
   await db.query(
-    `INSERT INTO dripsign.ai_suggestion (tenant_id,agreement_id,id,requested_by,instruction,base_source,base_source_sha256,model,reserved_micros,status,result,finished_at,applied_at,created_at)
-     SELECT $1,$2,gen_random_uuid(),$3,'Synthetic',$4,$5,'claude-sonnet-5-5',1000,status,
+    `INSERT INTO dripsign.ai_suggestion (tenant_id,agreement_id,id,requested_by,instruction,mode,base_source,base_source_sha256,model,reserved_micros,status,result,finished_at,applied_at,created_at)
+     SELECT $1,$2,gen_random_uuid(),$3,'Synthetic','draft',$4,$5,'claude-sonnet-5-5',1000,status,
        CASE WHEN status IN ('ready','applied') THEN '{}'::jsonb END,
        CASE WHEN status <> 'queued' THEN now()-interval '91 days' END,
        CASE WHEN status='applied' THEN now()-interval '91 days' END,now()-interval '91 days'
@@ -197,8 +197,8 @@ async function seedRetention(context: Context, suggestionId: string): Promise<vo
     ],
   );
   await db.query(
-    `INSERT INTO dripsign.ai_suggestion (tenant_id,agreement_id,id,requested_by,instruction,base_source,base_source_sha256,model,reserved_micros,status,result,finished_at)
-     VALUES ($1,$2,gen_random_uuid(),$3,'Synthetic',$4,$5,'claude-sonnet-5-5',1000,'ready','{}',now()-interval '89 days')`,
+    `INSERT INTO dripsign.ai_suggestion (tenant_id,agreement_id,id,requested_by,instruction,mode,base_source,base_source_sha256,model,reserved_micros,status,result,finished_at)
+     VALUES ($1,$2,gen_random_uuid(),$3,'Synthetic','draft',$4,$5,'claude-sonnet-5-5',1000,'ready','{}',now()-interval '89 days')`,
     [
       context.tenantId,
       context.agreementId,
@@ -239,14 +239,18 @@ export async function assertModelPrice(): Promise<void> {
           content: [
             {
               type: "tool_use",
-              name: "suggest_edits",
+              name: "write_draft",
               input: { source, summary: "Synthetic", questions: [] },
             },
           ],
         }),
       ),
     );
-    const result = await suggestEdits({ source, instruction: "Synthetic" }, undefined, called);
+    const result = await suggestEdits(
+      { mode: "draft", source, instruction: "Synthetic", history: [] },
+      undefined,
+      called,
+    );
     expect(result.costMicros).toBe(34);
     expect(called).toHaveBeenCalledOnce();
   } finally {
