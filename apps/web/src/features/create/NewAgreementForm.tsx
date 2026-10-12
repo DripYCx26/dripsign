@@ -11,7 +11,7 @@ import { emptyRow, type RecipientRow, type RowErrors } from "./recipients.ts";
 import { RecipientRows } from "./RecipientRows.tsx";
 import { SubmitBar } from "./SubmitBar.tsx";
 import { TemplatePicker } from "./TemplatePicker.tsx";
-import { templateSections, templateTitle, type TemplateId } from "./templates.ts";
+import { templateSections, templateTitle, type TemplateId } from "@/features/draft/templates.ts";
 import { useCreateAgreement } from "./useCreateAgreement.ts";
 import { hasContent, type FormValues } from "./validate.ts";
 

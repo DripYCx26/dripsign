@@ -1,11 +1,13 @@
 "use client";
 
+import type { Command } from "@dripsign/core/schema";
 import type { AgreementView, Capacity } from "@dripsign/core/types";
-import { useState, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { useCommand } from "@/features/command/useCommand.ts";
 import { DocumentControls } from "@/features/document/DocumentControls.tsx";
 import { useDocumentState } from "@/features/document/useDocumentState.ts";
 import { CommandNotice } from "./CommandNotice.tsx";
+import type { RunCommand } from "./commands.ts";
 import { defaultTab, railMode, type WorkspaceTab } from "./tabs.ts";
 import { usePoll } from "./usePoll.ts";
 import { useWorkspaceNav } from "./useWorkspaceNav.ts";
@@ -34,6 +36,19 @@ function isWaitingOnWorker(view: AgreementView): boolean {
   );
 }
 
+/** The kind of command last sent, so a refusal is worded by the command that met it. */
+function useKindOfLastRun(send: RunCommand) {
+  const [lastKind, setLastKind] = useState<Command["kind"] | null>(null);
+  const run = useCallback<RunCommand>(
+    (command, intentId) => {
+      setLastKind(command.kind);
+      return send(command, intentId);
+    },
+    [send],
+  );
+  return { run, lastKind };
+}
+
 /**
  * The workspace both capacities share: the bar, the thread rail beside the document, and
  * staff's drawers. It holds the one `useCommand` for the agreement, so a single command is in
@@ -48,11 +63,9 @@ export function WorkspaceShell({
   initialTab,
   rev,
 }: WorkspaceShellProps) {
-  const { view, run, pending, error, clearError, refresh } = useCommand(
-    agreementId,
-    capacity,
-    initialView,
-  );
+  const command = useCommand(agreementId, capacity, initialView);
+  const { view, pending, error, clearError, refresh } = command;
+  const { run, lastKind } = useKindOfLastRun(command.run);
   const doc = useDocumentState(view, capacity, rev, run);
   const nav = useWorkspaceNav(initialTab ?? defaultTab(initialView));
   const rail = railMode(view);
@@ -73,7 +86,7 @@ export function WorkspaceShell({
       error={error}
       placement={panel === null ? "page" : "panel"}
       onReload={() => void refresh()}
-      rateLimited={panel === "assistant" ? ASSISTANT_LIMIT : undefined}
+      rateLimited={lastKind === "ask_ai" ? ASSISTANT_LIMIT : undefined}
     />
   );
 

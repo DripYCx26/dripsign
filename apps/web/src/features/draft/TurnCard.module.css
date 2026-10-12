@@ -1,0 +1,98 @@
+/* One exchange of the assistant thread: staff's own bubble (as in the message thread), then the
+   assistant's reply as a raised card. */
+
+.turn {
+  display: grid;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+
+.ask {
+  justify-self: end;
+  max-width: 88%;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border-radius: var(--ds-radius-panel);
+  border-end-end-radius: var(--ds-radius-tag);
+  background: var(--ds-accent-soft);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.card {
+  display: grid;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-4);
+  border-radius: var(--ds-radius-panel);
+  border-start-start-radius: var(--ds-radius-tag);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-card);
+}
+
+.summary {
+  overflow-wrap: anywhere;
+}
+
+.outline {
+  display: grid;
+  gap: var(--ds-space-2);
+  margin: 0;
+  padding-inline-start: var(--ds-space-5);
+}
+
+.outline > li {
+  padding-inline-start: var(--ds-space-1);
+}
+
+.heading {
+  display: block;
+  font-weight: var(--ds-weight-medium);
+}
+
+.intent {
+  display: block;
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
+}
+
+.questions {
+  display: grid;
+  gap: var(--ds-space-1);
+}
+
+.questions ul {
+  display: grid;
+  gap: var(--ds-space-1);
+  margin: 0;
+  padding-inline-start: var(--ds-space-5);
+}
+
+.label {
+  color: var(--ds-text-tertiary);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-semibold);
+  letter-spacing: var(--ds-tracking-caps);
+  line-height: var(--ds-leading-xs);
+  text-transform: uppercase;
+}
+
+/* The same disclosure as a proposal's earlier versions. */
+.toggle {
+  composes: summary from "../thread/EarlierVersions.module.css";
+}
+
+details[open] > .toggle {
+  margin-block-end: var(--ds-space-3);
+}
+
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+
+.quiet {
+  color: var(--ds-text-tertiary);
+  font-size: var(--ds-text-sm);
+}

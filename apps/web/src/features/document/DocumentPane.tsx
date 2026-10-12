@@ -33,7 +33,7 @@ function pdfSrc(view: AgreementView, capacity: Capacity, target: DocumentTarget)
   return fileUrl(id, "revision", { rev: target.revision.number, as: capacity });
 }
 
-function readingMeta(view: AgreementView, target: DocumentTarget): ReadingMeta {
+function readingMeta(view: AgreementView, target: DocumentTarget, candidate = false): ReadingMeta {
   const revision = target.kind === "revision" ? target.revision : null;
   const completed = view.completedRound;
   return {
@@ -42,7 +42,56 @@ function readingMeta(view: AgreementView, target: DocumentTarget): ReadingMeta {
     publishedAt: revision?.publishedAt ?? null,
     signedAt: revision !== null && completed?.revisionId === revision.id ? completed.endedAt : null,
     voided: view.agreement.status === "void",
+    candidate,
   };
+}
+
+/** The assistant's draft on the sheet: apply it, or go back to the draft it would replace. */
+function CandidateStrip({
+  view,
+  doc,
+  run,
+  busy,
+}: Readonly<{ view: AgreementView; doc: DocumentState; run: RunCommand; busy: boolean }>) {
+  const { candidate } = doc;
+  if (candidate === null) return null;
+  const canApply = !candidate.stale && view.allowedActions.includes("apply_ai");
+  return (
+    <Banner
+      tone={candidate.stale ? "attention" : "info"}
+      live={candidate.stale ? "polite" : undefined}
+      action={
+        <>
+          {canApply && (
+            <Button
+              variant="ink"
+              size="sm"
+              loading={busy}
+              onClick={() => {
+                void run(
+                  {
+                    kind: "apply_ai",
+                    expectedVersion: view.agreement.version,
+                    suggestionId: candidate.id,
+                  },
+                  `apply_ai:${candidate.id}`,
+                );
+              }}
+            >
+              Apply draft
+            </Button>
+          )}
+          <Button variant="quiet" size="sm" onClick={doc.hideCandidate}>
+            Show current
+          </Button>
+        </>
+      }
+    >
+      {candidate.stale
+        ? "This candidate no longer matches the draft"
+        : "Candidate draft from the assistant · not applied"}
+    </Banner>
+  );
 }
 
 /** The one line above the document when it is an older revision or the draft's PDF is not ready. */
@@ -152,29 +201,52 @@ type PaneProps = Readonly<{
   doc: DocumentState;
 }>;
 
+/** What fills the sheet: the assistant's candidate, the draft's form, or the document itself. */
+function Surface({ doc, target, ...pane }: PaneProps & Readonly<{ target: DocumentTarget }>) {
+  const { view, capacity, busy } = pane;
+  if (doc.candidateShown && doc.candidate !== null) {
+    return (
+      <ReadingView
+        source={doc.candidate.source}
+        meta={readingMeta(view, target, true)}
+        signers={signersWithSignatures(view, target)}
+        suggestable={false}
+      />
+    );
+  }
+  if (doc.draft.edit !== null) {
+    return (
+      <DraftForm
+        edit={doc.draft.edit}
+        onEdit={doc.draft.change}
+        pending={busy}
+        message={doc.draft.problem}
+      />
+    );
+  }
+  return (
+    <Body
+      view={view}
+      capacity={capacity}
+      target={target}
+      mode={doc.mode}
+      pdfOpened={doc.pdfOpened}
+      suggestable={doc.suggestable}
+    />
+  );
+}
+
 function LoadedPane({ doc, target, ...pane }: PaneProps & Readonly<{ target: DocumentTarget }>) {
-  const { view, capacity, run, busy } = pane;
+  const { view, run, busy } = pane;
   return (
     <div className={styles.pane}>
-      <Strip view={view} target={target} run={run} busy={busy} />
+      {doc.candidateShown ? (
+        <CandidateStrip view={view} doc={doc} run={run} busy={busy} />
+      ) : (
+        <Strip view={view} target={target} run={run} busy={busy} />
+      )}
       <div className={styles.body}>
-        {doc.draft.edit === null ? (
-          <Body
-            view={view}
-            capacity={capacity}
-            target={target}
-            mode={doc.mode}
-            pdfOpened={doc.pdfOpened}
-            suggestable={doc.suggestable}
-          />
-        ) : (
-          <DraftForm
-            edit={doc.draft.edit}
-            onEdit={doc.draft.change}
-            pending={busy}
-            message={doc.draft.problem}
-          />
-        )}
+        <Surface doc={doc} target={target} {...pane} />
       </div>
     </div>
   );

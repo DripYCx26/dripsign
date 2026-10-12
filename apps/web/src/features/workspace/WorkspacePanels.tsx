@@ -8,6 +8,7 @@ import { RecipientsDrawer } from "@/features/manage/RecipientsDrawer.tsx";
 import { RequestSignaturesDialog } from "@/features/manage/RequestSignaturesDialog.tsx";
 import { VoidDialog } from "@/features/manage/VoidDialog.tsx";
 import type { RunCommand } from "./commands.ts";
+import { railMode } from "./tabs.ts";
 
 export type Panel = "recipients" | "assistant" | "void" | "cancel" | "request";
 
@@ -34,7 +35,10 @@ export function WorkspacePanels({ view, run, busy, open, notice, onClose }: Work
     notice: open === name ? notice : null,
     onClose,
   });
-  const showAssistant = view.allowedActions.includes("ask_ai") || view.aiSuggestions.length > 0;
+  // The drafting rail is the assistant; mounting its drawer too would show it twice.
+  const showAssistant =
+    railMode(view) !== "draft" &&
+    (view.allowedActions.includes("ask_ai") || view.aiSuggestions.length > 0);
   return (
     <>
       <RecipientsDrawer {...panel("recipients")} />

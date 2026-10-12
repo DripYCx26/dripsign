@@ -2,7 +2,7 @@
 
 import { LIMITS } from "@dripsign/core/schema";
 import type { AgreementView, Capacity } from "@dripsign/core/types";
-import { useEffect } from "react";
+import { useEffect, type ReactNode, type RefObject } from "react";
 import type { RunCommand } from "@/features/workspace/commands.ts";
 import { ArrowUp, Button, IconButton, Pencil } from "@/ui";
 import styles from "./Composer.module.css";
@@ -22,6 +22,81 @@ type ComposerProps = Readonly<{
   busy: boolean;
   onSent: (sent: Sent) => void;
 }>;
+
+type ComposerBoxProps = Readonly<{
+  /** The dock's id, for the jump to the composer. */
+  id?: string | undefined;
+  fieldId: string;
+  fieldRef: RefObject<HTMLTextAreaElement | null>;
+  label: string;
+  placeholder: string;
+  maxLength: number;
+  value: string;
+  /** There is text and nothing is in flight. */
+  ready: boolean;
+  onChange: (value: string) => void;
+  onSend: () => void;
+  /** The quiet row under the field: buttons, if any. */
+  foot?: ReactNode;
+}>;
+
+/**
+ * The house chat box, docked under a list: one growing field, Enter to send, a round Send. The
+ * message composer and the assistant's share it; what sending means is the caller's.
+ */
+export function ComposerBox({
+  id,
+  fieldId,
+  fieldRef,
+  label,
+  placeholder,
+  maxLength,
+  value,
+  ready,
+  onChange,
+  onSend,
+  foot,
+}: ComposerBoxProps) {
+  return (
+    <div className={styles.composer} id={id}>
+      <form
+        className={styles.box}
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSend();
+        }}
+      >
+        <div className={styles.row}>
+          <textarea
+            id={fieldId}
+            ref={fieldRef}
+            className={styles.field}
+            rows={1}
+            aria-label={label}
+            placeholder={placeholder}
+            maxLength={maxLength}
+            value={value}
+            onChange={(event) => {
+              onChange(event.target.value);
+            }}
+            onKeyDown={(event) => {
+              sendOnEnter(event, onSend);
+            }}
+          />
+          <IconButton
+            variant="ink"
+            shape="round"
+            type="submit"
+            label="Send"
+            icon={<ArrowUp />}
+            disabled={!ready}
+          />
+        </div>
+        {foot ? <div className={styles.foot}>{foot}</div> : null}
+      </form>
+    </div>
+  );
+}
 
 type MessageComposerProps = Readonly<{
   view: AgreementView;
@@ -48,41 +123,19 @@ function MessageComposer({ view, scope, run, busy, canPropose, onSent }: Message
   }
 
   return (
-    <form
-      className={styles.box}
-      onSubmit={(event) => {
-        event.preventDefault();
-        void send();
-      }}
-    >
-      <div className={styles.row}>
-        <textarea
-          id={MESSAGE_FIELD_ID}
-          ref={field}
-          className={styles.field}
-          rows={1}
-          aria-label="Message"
-          placeholder={`Message ${otherSideLabel(view, scope.capacity)}`}
-          maxLength={LIMITS.messageText}
-          value={text}
-          onChange={(event) => {
-            setStored(event.target.value);
-          }}
-          onKeyDown={(event) => {
-            sendOnEnter(event, () => void send());
-          }}
-        />
-        <IconButton
-          variant="ink"
-          shape="round"
-          type="submit"
-          label="Send"
-          icon={<ArrowUp />}
-          disabled={!ready}
-        />
-      </div>
-      {canPropose && (
-        <div className={styles.foot}>
+    <ComposerBox
+      id="composer"
+      fieldId={MESSAGE_FIELD_ID}
+      fieldRef={field}
+      label="Message"
+      placeholder={`Message ${otherSideLabel(view, scope.capacity)}`}
+      maxLength={LIMITS.messageText}
+      value={text}
+      ready={ready}
+      onChange={setStored}
+      onSend={() => void send()}
+      foot={
+        canPropose && (
           <Button
             variant="quiet"
             size="sm"
@@ -93,9 +146,9 @@ function MessageComposer({ view, scope, run, busy, canPropose, onSent }: Message
             <Pencil />
             Propose a change
           </Button>
-        </div>
-      )}
-    </form>
+        )
+      }
+    />
   );
 }
 
@@ -151,17 +204,15 @@ export function Composer({ view, capacity, run, busy, onSent }: ComposerProps) {
   }
   if (!canMessage && !canPropose) return null;
   return (
-    <div className={styles.composer} id="composer">
-      <MessageComposer
-        view={view}
-        scope={scope}
-        run={run}
-        busy={busy}
-        canPropose={canPropose}
-        onSent={() => {
-          onSent("message");
-        }}
-      />
-    </div>
+    <MessageComposer
+      view={view}
+      scope={scope}
+      run={run}
+      busy={busy}
+      canPropose={canPropose}
+      onSent={() => {
+        onSent("message");
+      }}
+    />
   );
 }

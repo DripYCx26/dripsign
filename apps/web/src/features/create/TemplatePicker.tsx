@@ -2,7 +2,7 @@
 
 import { Button } from "@/ui";
 import styles from "./TemplatePicker.module.css";
-import { TEMPLATE_NOTE, TEMPLATE_OPTIONS, type TemplateId } from "./templates.ts";
+import { TEMPLATE_NOTE, TEMPLATE_OPTIONS, type TemplateId } from "@/features/draft/templates.ts";
 
 type TemplatePickerProps = Readonly<{
   value: TemplateId;

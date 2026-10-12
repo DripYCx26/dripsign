@@ -1,6 +1,7 @@
 import type { AgreementView, Capacity } from "@dripsign/core/types";
 import type { ReactNode } from "react";
 import { formatBytes } from "@/features/signing/format.ts";
+import { railMode } from "./tabs.ts";
 import { Ban, Download, FileText, Sparkles, Undo2, Users } from "@/ui";
 
 export type MenuId = "audit" | "recipients" | "assistant" | "download" | "cancel" | "void";
@@ -31,7 +32,14 @@ export function menuItems(view: AgreementView, capacity: Capacity): readonly Men
       icon: <FileText />,
     },
     staff && { id: "recipients", label: "Recipients", icon: <Users /> },
-    staff && can("ask_ai") && { id: "assistant", label: "Private assistant", icon: <Sparkles /> },
+    // While drafting the assistant is the rail, so the drawer is only for a negotiation.
+    staff &&
+      can("ask_ai") &&
+      railMode(view) !== "draft" && {
+        id: "assistant",
+        label: "Private assistant",
+        icon: <Sparkles />,
+      },
     can("download") && { id: "download", label: "Download current PDF", icon: <Download /> },
     staff &&
       can("cancel_signatures") &&

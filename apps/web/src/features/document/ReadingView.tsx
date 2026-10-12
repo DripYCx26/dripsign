@@ -19,6 +19,8 @@ export interface ReadingMeta {
   readonly publishedAt: string | null;
   readonly signedAt: string | null;
   readonly voided: boolean;
+  /** The sheet shows the assistant's unapplied draft, not the saved one. */
+  readonly candidate: boolean;
 }
 
 type ReadingViewProps = Readonly<{
@@ -37,7 +39,9 @@ function MetaLine({
   const names = signers.map((signer) => signer.name).join(", ");
   return (
     <p className={styles.meta}>
-      {meta.revision === null && <span className={styles.tag}>Draft</span>}
+      {meta.revision === null && (
+        <span className={styles.tag}>{meta.candidate ? "Candidate" : "Draft"}</span>
+      )}
       {meta.voided && <span className={styles.tag}>Void</span>}
       {meta.revision !== null && <span>{`Revision ${String(meta.revision)}`}</span>}
       {meta.publishedAt !== null && (

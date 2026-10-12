@@ -2,6 +2,7 @@
 
 import type { AgreementView, Capacity } from "@dripsign/core/types";
 import { useState } from "react";
+import { useCandidate } from "@/features/draft/useCandidate.ts";
 import type { RunCommand } from "@/features/workspace/commands.ts";
 import { draftIsAhead, resolveTarget, targetSha, type DocumentTarget } from "./target.ts";
 import { useDraftEdit } from "./useDraftEdit.ts";
@@ -47,9 +48,10 @@ function canEditDocument(view: AgreementView, capacity: Capacity, target: Docume
 
 /**
  * Everything the document's controls (in the workspace header) and its pane (beside the thread)
- * share, held once by the workspace: which revision, Reading or PDF, and the draft's edit
- * session. `rev` comes from the `?rev=` parameter; one that names no revision falls
- * back to the default, and a view with nothing to show has a null `target`.
+ * share, held once by the workspace: which revision, Reading or PDF, the draft's edit session and
+ * the assistant's candidate draft (only while the rail is the assistant). `rev` comes from the
+ * `?rev=` parameter; one that names no revision falls back to the default, and a view with
+ * nothing to show has a null `target`.
  */
 export function useDocumentState(
   view: AgreementView,
@@ -59,6 +61,7 @@ export function useDocumentState(
 ) {
   const target = resolveTarget(view, capacity, rev);
   const draft = useDraftEdit(view, run);
+  const candidate = useCandidate(view, draft.edit !== null);
   const [mode, setModeState] = useState<DocumentMode>("reading");
   // The PDF is built only once it is first chosen, then kept so switching back does not reload it.
   const [pdfOpened, setPdfOpened] = useState(false);
@@ -66,7 +69,18 @@ export function useDocumentState(
   const hasBothForms = target !== null && targetSha(target) !== null;
   return {
     target,
-    draft,
+    draft: {
+      ...draft,
+      begin: () => {
+        candidate.close();
+        draft.begin();
+      },
+    },
+    /** The assistant's newest unapplied draft; the sheet previews it while `candidateShown`. */
+    candidate: candidate.candidate,
+    candidateShown: candidate.shown,
+    preview: candidate.preview,
+    hideCandidate: candidate.close,
     options,
     /** The option shown when the address has no `rev`; choosing it clears the parameter. */
     defaultValue: options[0]?.value ?? "",
@@ -74,7 +88,7 @@ export function useDocumentState(
     mode,
     pdfOpened,
     /** The form on show; null when the document has one form, or while it is being edited. */
-    switchableMode: hasBothForms && draft.edit === null ? mode : null,
+    switchableMode: hasBothForms && draft.edit === null && !candidate.shown ? mode : null,
     setMode: (next: DocumentMode) => {
       setModeState(next);
       if (next === "pdf") setPdfOpened(true);

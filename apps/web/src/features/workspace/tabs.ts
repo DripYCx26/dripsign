@@ -2,14 +2,15 @@ import type { AgreementView } from "@dripsign/core/types";
 
 type TabSource = Pick<AgreementView, "allowedActions" | "messages" | "proposals">;
 
-/** `chat` is the thread rail and `document` the pane beside it; on a phone it is the one shown. */
+/** `chat` is the rail and `document` the pane beside it; on a phone it is the one shown. */
 export type WorkspaceTab = "chat" | "document";
 
 /**
- * How much of the workspace the conversation gets: `none` when there is nothing to say and no way
- * to say it (a draft), `narrow` when it is history only (signed, voided), else `full`.
+ * What the rail is: `none` when there is nothing to say and no way to say it, `narrow` when it is
+ * history only (signed, voided), `full` for the thread, and `draft` for staff's assistant while
+ * the agreement is a draft that no revision has been published from.
  */
-export type RailMode = "none" | "narrow" | "full";
+export type RailMode = "none" | "narrow" | "full" | "draft";
 
 /** Milestones alone are not a conversation: only what people wrote or proposed counts. */
 function hasConversation(view: TabSource): boolean {
@@ -20,6 +21,7 @@ export function railMode(view: TabSource): RailMode {
   if (view.allowedActions.includes("message") || view.allowedActions.includes("propose")) {
     return "full";
   }
+  if (view.allowedActions.includes("save_draft")) return "draft";
   return hasConversation(view) ? "narrow" : "none";
 }
 

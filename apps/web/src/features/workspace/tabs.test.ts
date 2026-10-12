@@ -19,3 +19,12 @@ it("counts only messages and proposals as a conversation, never milestones", () 
   expect(defaultTab(source(["message"], [message]))).toBe("chat");
   expect(defaultTab(source([], [message]))).toBe("document");
 });
+
+it("gives a draft's staff the assistant rail with or without the assistant, never a recipient", () => {
+  expect(railMode(source(["save_draft", "ask_ai"], []))).toBe("draft");
+  expect(railMode(source(["save_draft"], []))).toBe("draft");
+  expect(defaultTab(source(["save_draft", "ask_ai"], []))).toBe("document");
+  // Once a revision is out the thread takes the rail back, and a recipient never has `save_draft`.
+  expect(railMode(source(["save_draft", "message"], [message]))).toBe("full");
+  expect(railMode(source([], []))).toBe("none");
+});

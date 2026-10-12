@@ -30,15 +30,21 @@ type WorkspaceHeaderProps = Readonly<{
 
 const HOME = { staff: "/staff", recipient: "/" } as const;
 
-const TABS = [
-  { value: "chat", label: "Chat" },
-  { value: "document", label: "Document" },
-] as const;
+const TABS = {
+  chat: [
+    { value: "chat", label: "Chat" },
+    { value: "document", label: "Document" },
+  ],
+  assistant: [
+    { value: "chat", label: "Assistant" },
+    { value: "document", label: "Document" },
+  ],
+} as const;
 
 /**
  * The workspace's only bar, one 56 px row: the mark (home), back, the title in the display face
  * with its status, the step's chip and, on a void agreement, why; then the document's controls,
- * the primary action, the menu and the account. Under 1024 px the Chat | Document switch (only
+ * the primary action, the menu and the account. Under 1024 px the Chat (or Assistant) | Document switch (only
  * when there is a rail to switch to), the document controls and the primary action share a second
  * row, and there is none when they are all absent. Each control is rendered once and placed by CSS.
  */
@@ -81,7 +87,7 @@ export function WorkspaceHeader({
             hideLabel
             size="sm"
             name="workspace-pane"
-            options={TABS}
+            options={rail === "draft" ? TABS.assistant : TABS.chat}
             value={tab}
             onChange={onTab}
           />
