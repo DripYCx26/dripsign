@@ -108,7 +108,7 @@ export interface ProposalView {
   readonly baseRevisionNumber: number;
   readonly author: ParticipantRef;
   readonly text: string;
-  readonly replacementSource: DocumentSource | null;
+  readonly replacementSource: DocumentSource;
   readonly status: ProposalStatus;
   readonly supersedesId: string | null;
   readonly createdAt: string;
@@ -167,7 +167,6 @@ export interface AiSuggestionView {
   readonly instruction: string;
   /** Only a ready `draft` turn can be applied; a `plan` is an outline to confirm. */
   readonly mode: AiMode;
-  readonly proposalId: string | null;
   readonly status: AiSuggestionStatus;
   readonly baseSourceSha256: string;
   readonly result: AiSuggestionResult | null;

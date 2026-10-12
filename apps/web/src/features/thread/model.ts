@@ -142,9 +142,9 @@ type Section = DocumentSource["sections"][number];
 /** The first section a proposal adds, removes or rewrites, with its position in the source it is in. */
 export function changedSection(
   before: DocumentSource | null,
-  after: DocumentSource | null,
+  after: DocumentSource,
 ): Readonly<{ section: Section; index: number }> | null {
-  if (before === null || after === null) return null;
+  if (before === null) return null;
   const sameWords = (a: Section, b: Section) =>
     a.heading === b.heading && a.paragraphs.join("\n") === b.paragraphs.join("\n");
   const rewritten = after.sections.findIndex((section) => {
@@ -165,7 +165,7 @@ export function baseSourceOf(view: AgreementView, proposal: ProposalView): Docum
   return view.revisions.find((revision) => revision.id === proposal.baseRevisionId)?.source ?? null;
 }
 
-/** "a change to Term" or, for a proposal without changed terms, "a change". */
+/** "a change to Term", or "a change" when its base revision is not in the view. */
 export function describeChange(view: AgreementView, proposal: ProposalView): string {
   const changed = changedSection(baseSourceOf(view, proposal), proposal.replacementSource);
   if (changed === null) return "a change";

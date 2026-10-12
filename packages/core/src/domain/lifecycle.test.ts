@@ -16,7 +16,7 @@ import { sha256Hex } from "./receipts.ts";
 import { addStaff, revokeStaff, upsertStaff } from "./staff.ts";
 import { loadArchiveEvidence } from "./archive.ts";
 import { renderAuditRecord } from "../pdf/archive.ts";
-import { loadAgreementView } from "./view.ts";
+import { listInbox, loadAgreementView, readAgreementFile } from "./view.ts";
 
 function must<T>(value: T | null | undefined): T {
   if (value === null || value === undefined) throw new Error("Expected a value");
@@ -314,7 +314,7 @@ it("negotiates, publishes, collects every signature and archives the signed agre
     kind: "request_signatures",
     expectedVersion: view.agreement.version,
   });
-  // A verification older than the signing window is refused and records nothing.
+  // A verification older than the signing window, or a stale document fence, records nothing.
   await verifiedAgo(jordanActor, SIGNING_VERIFICATION_MAX_AGE_MS + 60_000);
   await expect(run(jordanActor, id, signCommand(signing, "Jordan Lee"))).rejects.toMatchObject({
     code: "verification_required",
@@ -323,6 +323,8 @@ it("negotiates, publishes, collects every signature and archives the signed agre
     getPool().query("SELECT 1 FROM dripsign.signature WHERE agreement_id = $1", [id]);
   expect((await signatures()).rowCount).toBe(0);
   await verifiedAgo(jordanActor, 0);
+  const unfenced = { ...signCommand(signing, "Jordan Lee"), documentSha256: "0".repeat(64) };
+  await expect(run(jordanActor, id, unfenced)).rejects.toMatchObject({ code: "conflict" });
   await run(jordanActor, id, signCommand(signing, "Jordan Lee"));
   expect((await signatures()).rowCount).toBe(1);
 
@@ -395,6 +397,7 @@ it("cancels signing only by a signer's proposal, voids on removal, keeps one sig
     kind: "propose",
     expectedVersion: (await loadAgreementView(morganActor, id)).agreement.version,
     text: "One more change before I sign.",
+    replacementSource: terms("Eleven months."),
   });
   expect(view.agreement.status).toBe("negotiating");
   const ended = await getPool().query<{ endReason: string; signatures: number }>(
@@ -420,6 +423,7 @@ it("cancels signing only by a signer's proposal, voids on removal, keeps one sig
       kind: "propose",
       expectedVersion: view.agreement.version,
       text: "An observer cannot stop signing.",
+      replacementSource: terms("Ten months."),
     }),
   ).rejects.toMatchObject({ code: "conflict" });
 
@@ -485,6 +489,20 @@ it("renames from the terms, fences, replays, rechecks authority, keeps the last 
   const renamed = await run(staff, id, rename);
   expect(renamed.agreement.title).toBe("Renamed agreement");
   await expect(run(staff, id, rename)).rejects.toMatchObject({ code: "conflict" });
+  // The draft's title stays private: recipients, their inbox, mail and files keep the published one.
+  const taylor = person("Taylor Kim", false);
+  const expectedVersion = renamed.agreement.version;
+  await run(staff, id, { kind: "add_recipient", expectedVersion, ...taylor });
+  expect((await loadAgreementView(jordanActor, id)).agreement.title).toBe("Services agreement");
+  const inbox = await listInbox(jordanActor);
+  expect(inbox.find((item) => item.id === id)?.title).toBe("Services agreement");
+  const mail = await getPool().query<{ title: string }>(
+    "SELECT payload->'params'->>'title' AS title FROM dripsign.outbox WHERE payload->>'to' = $1",
+    [taylor.email],
+  );
+  expect(mail.rows).toEqual([{ title: "Services agreement" }]);
+  const file = await readAgreementFile(jordanActor, id, { kind: "current" });
+  expect(file.filename).toBe("services-agreement-revision-1.pdf");
   // Terms the renderer refuses reach staff as its sentence, not its code; a retry prepares again.
   const { inputSha256, signerSetHash } = must(renamed.draft).preparation;
   const fence = { inputSha256: must(inputSha256), signerSetHash: must(signerSetHash) };
@@ -505,6 +523,7 @@ it("renames from the terms, fences, replays, rechecks authority, keeps the last 
     kind: "propose",
     expectedVersion: view.agreement.version,
     text: "Shorter term.",
+    replacementSource: { ...terms("Six months."), title: "Renamed agreement" },
   };
   const key = `key-${randomUUID()}`;
   await executeCommand(jordanActor, id, key, proposal);

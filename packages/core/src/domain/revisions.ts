@@ -122,7 +122,7 @@ async function enqueuePreparation(
   });
 }
 
-/** The agreement title is the draft's: lists and mail read the column, the renderer the source. */
+/** The agreement title is the draft's, for staff; recipients and mail read the published one. */
 async function writeDraft(
   db: Db,
   agreement: AgreementRow,

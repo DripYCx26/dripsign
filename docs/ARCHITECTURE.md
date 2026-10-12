@@ -32,10 +32,10 @@ migrations. Every tenant table carries `tenant_id` with composite `(tenant_id, .
 | `signed` | the completion gate (artifacts committed) | none |
 | `void` | staff void, any status except `signed` | none |
 
-- **Revisions** are immutable and numbered. A proposal rewrites exactly one section of its base
-  revision (same title, same section ids in order). Accepting it replaces that section in the
-  private draft by id, keeping other staff edits and the draft title, and is refused while staff
-  have removed that section; only a reviewed publish (the client sends the draft PDF sha it
+- **Revisions** are immutable and numbered. A proposal carries replacement terms that rewrite
+  exactly one section of its base revision (same title, same section ids in order). Accepting it
+  replaces that section in the private draft by id, keeping other staff edits and the draft
+  title, and is refused while staff have removed that section; only a reviewed publish (the client sends the draft PDF sha it
   reviewed) creates a revision. The first publish moves `draft` to `negotiating` and sends invitations.
 - **Proposals** follow a turn rule: one pending proposal per agreement (`one_pending_proposal`),
   decided by the other side. A proposal is accepted, rejected or superseded (countered by the
@@ -151,12 +151,15 @@ in Noto Sans when the name has a glyph Newsreader lacks, and `Signed <UTC minute
 verified` in the date field. The prepared bytes are the reviewed and published bytes, so they
 carry no publish date, and the revision number the next publish creates is part of the input
 hash: the commit is fenced on that hash (source and revision number) and on the signer-set hash,
-and publish refuses a draft prepared for another number. The agreement title is the draft
-source's title. A rendered or stored PDF is at most 20 MB.
+and publish refuses a draft prepared for another number. A title or section with a glyph Noto
+Sans lacks fails preparation with a sentence naming it. Staff see the draft source's title;
+recipients, their inbox and mail see the current revision's, and each file is named for the title
+of the terms it holds. A rendered or stored PDF is at most 20 MB.
 
 The signed PDF is an electronic-signature rendition with a signature page, not certificate-based
 signing. The audit record is a second artifact built from the signature,
-verification, consent and request-evidence rows. PDFs shared with recipients (revisions, the
+verification, consent and request-evidence rows; it prints typed names and request evidence
+JSON-escaped, so a glyph Noto Sans lacks appears as `\u{…}`. PDFs shared with recipients (revisions, the
 signature page, the signed PDF) show signer names only; the audit record masks emails
 (`s***@example.test`). Both artifacts render deterministically from the evidence.
 

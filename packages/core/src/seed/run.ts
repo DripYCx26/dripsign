@@ -88,7 +88,7 @@ const signAs =
 const message = (body: string) => (): Command => ({ kind: "message", body });
 
 const propose =
-  (text: string, replacementSource?: DocumentSource) =>
+  (text: string, replacementSource: DocumentSource) =>
   (view: AgreementView): Command => ({
     kind: "propose",
     expectedVersion: view.agreement.version,

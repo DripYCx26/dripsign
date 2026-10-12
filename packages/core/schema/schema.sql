@@ -120,7 +120,7 @@ CREATE TABLE dripsign.proposal (
   author_capacity text NOT NULL CHECK (author_capacity IN ('staff', 'recipient')),
   author_email dripsign.email NOT NULL,
   text text NOT NULL CHECK (length(text) BETWEEN 1 AND 10000),
-  replacement_source jsonb CHECK (octet_length(replacement_source::text) <= 500000),
+  replacement_source jsonb NOT NULL CHECK (octet_length(replacement_source::text) <= 500000),
   status text NOT NULL DEFAULT 'pending'
     CHECK (status IN ('pending', 'accepted', 'rejected', 'superseded')),
   supersedes_id uuid,
@@ -260,7 +260,6 @@ CREATE TABLE dripsign.ai_suggestion (
   requested_by dripsign.email NOT NULL,
   instruction text NOT NULL CHECK (length(instruction) BETWEEN 1 AND 4000),
   mode text NOT NULL CHECK (mode IN ('plan', 'draft')),
-  proposal_id uuid,
   base_source jsonb NOT NULL CHECK (octet_length(base_source::text) <= 500000),
   base_source_sha256 dripsign.sha256 NOT NULL,
   model text NOT NULL CHECK (length(model) BETWEEN 1 AND 100),
@@ -278,8 +277,6 @@ CREATE TABLE dripsign.ai_suggestion (
   PRIMARY KEY (tenant_id, id),
   FOREIGN KEY (tenant_id, agreement_id) REFERENCES dripsign.agreement (tenant_id, id),
   FOREIGN KEY (tenant_id, requested_by) REFERENCES dripsign.staff (tenant_id, email),
-  FOREIGN KEY (tenant_id, agreement_id, proposal_id)
-    REFERENCES dripsign.proposal (tenant_id, agreement_id, id),
   CHECK ((status IN ('ready', 'applied')) = (result IS NOT NULL)),
   CHECK ((status = 'applied') = (applied_at IS NOT NULL)),
   -- Only a draft carries a source to apply.

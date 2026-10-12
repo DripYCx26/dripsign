@@ -73,7 +73,7 @@ describe("PDF evidence", () => {
       name,
       email: `signer${String(index)}@example.test`,
     }));
-    const prepared = await prepareDraftPdf({
+    const input = {
       source: {
         title: "Services agreement",
         sections: [
@@ -87,7 +87,14 @@ describe("PDF evidence", () => {
       signers,
       revision: 1,
       organisation: "Northwind Studio",
-    });
+    };
+    // Terms the font cannot print name their section, never the signature-name sentence.
+    const unprintable = { id: "ship", heading: "Delivery", paragraphs: ["By drone 🛸."] };
+    const sections = [...input.source.sections, unprintable];
+    await expect(
+      prepareDraftPdf({ ...input, source: { ...input.source, sections } }),
+    ).rejects.toThrow("Section 2 has a character the PDF can’t print.");
+    const prepared = await prepareDraftPdf(input);
     expect(prepared.fields).toHaveLength(signers.length * 2);
     const revisionRuns = await pdfRuns(prepared.bytes);
     // The title block's meta line, and the section number hanging beside its heading.
@@ -180,13 +187,16 @@ describe("PDF evidence", () => {
     expect(fontOf("Мария Иванова")).toBe(fontOf(evidenceLine));
     expect(auditText).toContain("s***@example.test");
     expect(auditText).toContain("IP address: 127.0.0.1");
+    // An accepted name with a glyph only Newsreader has: the audit escapes what Noto Sans lacks.
+    await expect(assertRenderableName("A−B")).resolves.toBe("script");
     const renamed = {
       ...evidence,
-      signatures: evidence.signatures.map((signature) => ({ ...signature, typedName: "J. Lee" })),
+      signatures: evidence.signatures.map((signature) => ({ ...signature, typedName: "A−B" })),
     };
     expect(hashBytes(await renderSignedPdf(renamed, prepared.bytes))).not.toBe(
       hashBytes(firstSigned),
     );
+    expect(await pdfText(await renderAuditRecord(renamed))).toContain("Typed name: A\\u{2212}B");
     expect(
       hashBytes(
         await renderAuditRecord({

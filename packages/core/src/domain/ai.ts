@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { AI_MODEL, AI_RESERVATION_MICROS } from "../adapters/anthropic.ts";
 import { loadConfig } from "../config.ts";
 import type { Db } from "../db.ts";
-import { DomainError, notFound } from "../errors.ts";
+import { DomainError } from "../errors.ts";
 import { enqueue } from "../jobs/outbox.ts";
 import { aiSuggestionResultSchema, LIMITS } from "../schema.ts";
 import type { AiDraft, AiMode, AiSuggestionResult, CommandOf, DocumentSource } from "../schema.ts";
@@ -24,7 +24,6 @@ export interface SuggestionInput {
   readonly source: DocumentSource;
   readonly instruction: string;
   readonly history: readonly SuggestionTurn[];
-  readonly proposalText?: string;
 }
 
 export async function askAi(ctx: CommandContext, command: CommandOf<"ask_ai">): Promise<void> {
@@ -36,7 +35,6 @@ export async function askAi(ctx: CommandContext, command: CommandOf<"ask_ai">): 
   if (new TextEncoder().encode(JSON.stringify(source)).length > LIMITS.aiSourceBytes) {
     throw new DomainError("invalid", "These terms are too long for the assistant.");
   }
-  if (command.proposalId !== undefined) await requireProposal(ctx, command.proposalId);
   // One lock per tenant serialises reservations, so concurrent requests cannot overspend.
   await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
     `dripsign.ai-spend:${agreement.tenantId}`,
@@ -55,9 +53,9 @@ export async function askAi(ctx: CommandContext, command: CommandOf<"ask_ai">): 
   const suggestionId = randomUUID();
   await db.query(
     `INSERT INTO dripsign.ai_suggestion (
-       tenant_id, agreement_id, id, requested_by, instruction, mode, proposal_id, base_source,
+       tenant_id, agreement_id, id, requested_by, instruction, mode, base_source,
        base_source_sha256, model, reserved_micros
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
     [
       agreement.tenantId,
       agreement.id,
@@ -65,7 +63,6 @@ export async function askAi(ctx: CommandContext, command: CommandOf<"ask_ai">): 
       actor.email,
       command.instruction,
       command.mode,
-      command.proposalId ?? null,
       JSON.stringify(source),
       canonicalSha256(source),
       AI_MODEL,
@@ -78,14 +75,6 @@ export async function askAi(ctx: CommandContext, command: CommandOf<"ask_ai">): 
     dedupeKey: `ai_suggest:${suggestionId}`,
     payload: { kind: "ai_suggest", suggestionId },
   });
-}
-
-async function requireProposal(ctx: CommandContext, proposalId: string): Promise<void> {
-  const found = await ctx.db.query(
-    "SELECT 1 FROM dripsign.proposal WHERE tenant_id = $1 AND agreement_id = $2 AND id = $3",
-    [ctx.agreement.tenantId, ctx.agreement.id, proposalId],
-  );
-  if (found.rowCount !== 1) throw notFound();
 }
 
 export async function applyAi(ctx: CommandContext, command: CommandOf<"apply_ai">): Promise<void> {
@@ -123,10 +112,9 @@ export async function loadSuggestionInput(
     mode: AiMode;
     source: DocumentSource;
     instruction: string;
-    proposalText: string | null;
     history: { instruction: string; result: AiSuggestionResult }[];
   }>(
-    `SELECT i.mode, i.base_source AS source, i.instruction, p.text AS "proposalText",
+    `SELECT i.mode, i.base_source AS source, i.instruction,
        coalesce((
          SELECT jsonb_agg(jsonb_build_object('instruction', t.instruction, 'result', t.result)
            ORDER BY t.created_at, t.id)
@@ -138,20 +126,17 @@ export async function loadSuggestionInput(
          ) t
        ), '[]') AS history
      FROM dripsign.ai_suggestion i
-     LEFT JOIN dripsign.proposal p
-       ON p.tenant_id = i.tenant_id AND p.agreement_id = i.agreement_id AND p.id = i.proposal_id
      WHERE i.tenant_id = $1 AND i.id = $2 AND i.status = 'queued'`,
     [input.tenantId, input.suggestionId, LIMITS.aiTurns],
   );
   const row = found.rows[0];
   if (row === undefined) return null;
-  const { mode, source, instruction, proposalText } = row;
+  const { mode, source, instruction } = row;
   const history = row.history.map((turn) => ({
     instruction: turn.instruction,
     reply: turnReply(turn.result),
   }));
-  const base = { mode, source, instruction, history };
-  return proposalText === null ? base : { ...base, proposalText };
+  return { mode, source, instruction, history };
 }
 
 // The current base source is already the latest state, so a reply is its gist, not its terms.

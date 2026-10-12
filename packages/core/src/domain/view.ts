@@ -105,7 +105,7 @@ async function buildView(actor: Actor, rows: ViewRows): Promise<AgreementView> {
   return {
     agreement: {
       id: agreement.id,
-      title: agreement.title,
+      title: visibleTitle(staff, agreement.title, current),
       status: agreement.status,
       version: agreement.version,
       createdAt: iso(agreement.createdAt),
@@ -148,6 +148,17 @@ async function buildView(actor: Actor, rows: ViewRows): Promise<AgreementView> {
     },
     orgName: access.orgName,
   };
+}
+
+/** Staff see the private draft's title; recipients only the current revision's. */
+function visibleTitle(
+  staff: boolean,
+  draftTitle: string,
+  current: RevisionRow | undefined,
+): string {
+  if (staff) return draftTitle;
+  if (current === undefined) throw notFound();
+  return current.source.title;
 }
 
 /** Recipients see the live recipients, with only their own email and invitation time. */
@@ -286,27 +297,37 @@ async function locateFile(
 ): Promise<FileTarget> {
   const { tenantId } = await resolveAccess(db, actor, agreementId);
   const agreement = await readAgreement(db, tenantId, agreementId);
-  const base = filenameBase(agreement.title);
+  // Each file is named for its own terms' title: the draft's live one, a revision's frozen one.
   if (file.kind === "draft") {
     const document = agreement.draft.document;
     if (actor.capacity !== "staff" || document === null) throw notFound();
-    return { tenantId, ...document, filename: `${base}-draft.pdf` };
+    return { tenantId, ...document, filename: `${filenameBase(agreement.title)}-draft.pdf` };
   }
   if (file.kind === "signed" || file.kind === "audit") {
-    const found = await db.query<{ sha256: string; byteLength: number }>(
-      `SELECT sha256, byte_length AS "byteLength" FROM dripsign.artifact
-       WHERE tenant_id = $1 AND agreement_id = $2 AND kind = $3`,
+    const found = await db.query<{ title: string; sha256: string; byteLength: number }>(
+      `SELECT v.source ->> 'title' AS title, f.sha256, f.byte_length AS "byteLength"
+       FROM dripsign.artifact f
+       JOIN dripsign.signing_round g ON g.tenant_id = f.tenant_id AND g.id = f.round_id
+       JOIN dripsign.revision v ON v.tenant_id = g.tenant_id AND v.id = g.revision_id
+       WHERE f.tenant_id = $1 AND f.agreement_id = $2 AND f.kind = $3`,
       [tenantId, agreementId, ARTIFACT_FILES[file.kind]],
     );
     const artifact = found.rows[0];
     if (artifact === undefined) throw notFound();
-    return { tenantId, ...artifact, filename: `${base}-${file.kind}.pdf` };
+    const { title, ...document } = artifact;
+    return { tenantId, ...document, filename: `${filenameBase(title)}-${file.kind}.pdf` };
   }
   if (file.kind === "revision" && file.revisionNumber === undefined) {
     throw new DomainError("invalid", "Choose a revision.");
   }
-  const found = await db.query<{ number: number; sha256: string; byteLength: number }>(
-    `SELECT number, document_sha256 AS sha256, document_bytes AS "byteLength"
+  const found = await db.query<{
+    title: string;
+    number: number;
+    sha256: string;
+    byteLength: number;
+  }>(
+    `SELECT source ->> 'title' AS title, number, document_sha256 AS sha256,
+       document_bytes AS "byteLength"
      FROM dripsign.revision
      WHERE tenant_id = $1 AND agreement_id = $2
        AND CASE WHEN $3::int IS NULL THEN id = $4 ELSE number = $3 END`,
@@ -319,8 +340,9 @@ async function locateFile(
   );
   const revision = found.rows[0];
   if (revision === undefined) throw notFound();
-  const { number, ...document } = revision;
-  return { tenantId, ...document, filename: `${base}-revision-${String(number)}.pdf` };
+  const { title, number, ...document } = revision;
+  const filename = `${filenameBase(title)}-revision-${String(number)}.pdf`;
+  return { tenantId, ...document, filename };
 }
 
 function filenameBase(title: string): string {

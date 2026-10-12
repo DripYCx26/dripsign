@@ -14,7 +14,6 @@ function turn(id: string, minute: number, rest: Partial<AiSuggestionView>): AiSu
     requestedBy: "avery@northwind.test",
     instruction: "Draft it",
     mode: "draft",
-    proposalId: null,
     status: "ready",
     baseSourceSha256: "x",
     result: { kind: "draft", summary: "Done", source, questions: [] },

@@ -33,12 +33,10 @@ export function EarlierVersions({ view, versions }: EarlierVersionsProps) {
                 </summary>
                 <div className={styles.body}>
                   <p className={styles.text}>{`${version.author.label}: ${version.text}`}</p>
-                  {version.replacementSource !== null && (
-                    <SectionDiff
-                      before={baseSourceOf(view, version)}
-                      after={version.replacementSource}
-                    />
-                  )}
+                  <SectionDiff
+                    before={baseSourceOf(view, version)}
+                    after={version.replacementSource}
+                  />
                 </div>
               </details>
             </li>

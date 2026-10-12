@@ -158,18 +158,17 @@ function ProposalBody(props: ProposalCardProps) {
         <StateMark {...props} />
       </header>
       <p className={styles.reason}>{proposal.text}</p>
-      {proposal.replacementSource !== null &&
-        (open ? (
+      {open ? (
+        <div className={styles.diff}>{diff}</div>
+      ) : (
+        <details className={styles.change}>
+          <summary className={styles.toggle}>
+            Show change
+            <ChevronDown aria-hidden="true" />
+          </summary>
           <div className={styles.diff}>{diff}</div>
-        ) : (
-          <details className={styles.change}>
-            <summary className={styles.toggle}>
-              Show change
-              <ChevronDown aria-hidden="true" />
-            </summary>
-            <div className={styles.diff}>{diff}</div>
-          </details>
-        ))}
+        </details>
+      )}
       {(timed || earlier.length > 0 || open) && (
         <footer className={styles.foot}>
           <EarlierVersions view={view} versions={earlier} />

@@ -57,6 +57,7 @@ export async function prepareDraftPdf(input: PreparationInput): Promise<Prepared
   }
   const document = await PDFDocument.create({ updateMetadata: false });
   const font = await embedFont(document, "plain");
+  assertTermsPrintable(source, font);
   const write = textWriter(document, font, LIMITS.pdfPages);
   write(source.title, 24, 0);
   write(metaLine(revision, input.organisation, signers, font), 9, 30, { color: MUTED, rule: 0.5 });
@@ -71,6 +72,17 @@ export async function prepareDraftPdf(input: PreparationInput): Promise<Prepared
   metadata(document, source.title, new Date(0));
   pageNumbers(document, font);
   return { bytes: await savePdf(document), fields, pageCount: document.getPageCount() };
+}
+
+/** Staff read this sentence in the draft, so it names where the glyph is, not a signer's name. */
+function assertTermsPrintable(source: DocumentSource, font: PDFFont): void {
+  const unprintable = (part: string) =>
+    new DomainError("invalid", `${part} has a character the PDF can’t print.`);
+  if (!covers(font, source.title)) throw unprintable("The title");
+  for (const [index, section] of source.sections.entries()) {
+    if (!covers(font, [section.heading, ...section.paragraphs].join("\n")))
+      throw unprintable(`Section ${String(index + 1)}`);
+  }
 }
 
 /**

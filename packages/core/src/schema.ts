@@ -238,7 +238,6 @@ export const newAgreementInputSchema = z
   );
 
 const fenced = { expectedVersion: expectedVersionSchema };
-const replacementSource = documentSourceSchema.optional();
 
 export const commandSchema = z.discriminatedUnion("kind", [
   z.strictObject({
@@ -268,14 +267,14 @@ export const commandSchema = z.discriminatedUnion("kind", [
     kind: z.literal("propose"),
     ...fenced,
     text: proposalTextSchema,
-    replacementSource,
+    replacementSource: documentSourceSchema,
   }),
   z.strictObject({
     kind: z.literal("counter"),
     ...fenced,
     proposalId: uuidSchema,
     text: proposalTextSchema,
-    replacementSource,
+    replacementSource: documentSourceSchema,
   }),
   z.strictObject({ kind: z.literal("accept"), ...fenced, proposalId: uuidSchema }),
   z.strictObject({ kind: z.literal("reject"), ...fenced, proposalId: uuidSchema }),
@@ -300,7 +299,6 @@ export const commandSchema = z.discriminatedUnion("kind", [
     kind: z.literal("ask_ai"),
     instruction: aiInstructionSchema,
     mode: aiModeSchema,
-    proposalId: uuidSchema.optional(),
   }),
   z.strictObject({ kind: z.literal("apply_ai"), ...fenced, suggestionId: uuidSchema }),
 ]);

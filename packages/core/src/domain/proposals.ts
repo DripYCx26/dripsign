@@ -39,7 +39,7 @@ export async function propose(ctx: CommandContext, command: CommandOf<"propose">
   }
   await insertProposal(ctx, {
     text: command.text,
-    replacementSource: command.replacementSource ?? null,
+    replacementSource: command.replacementSource,
     supersedesId: null,
   });
 }
@@ -48,7 +48,7 @@ export async function counter(ctx: CommandContext, command: CommandOf<"counter">
   await supersede(ctx, command.proposalId);
   await insertProposal(ctx, {
     text: command.text,
-    replacementSource: command.replacementSource ?? null,
+    replacementSource: command.replacementSource,
     supersedesId: command.proposalId,
   });
 }
@@ -72,16 +72,12 @@ async function insertProposal(
   ctx: CommandContext,
   proposal: {
     readonly text: string;
-    readonly replacementSource: DocumentSource | null;
+    readonly replacementSource: DocumentSource;
     readonly supersedesId: string | null;
   },
 ): Promise<void> {
   const { db, agreement, actor } = ctx;
-  if (proposal.replacementSource !== null) {
-    changedSection(await currentSource(ctx), proposal.replacementSource);
-  }
-  const replacement =
-    proposal.replacementSource === null ? null : JSON.stringify(proposal.replacementSource);
+  changedSection(await currentSource(ctx), proposal.replacementSource);
   await uniqueOrConflict("one_pending_proposal", PENDING_EXISTS, () =>
     db.query(
       `INSERT INTO dripsign.proposal (
@@ -96,7 +92,7 @@ async function insertProposal(
         actor.capacity,
         actor.email,
         proposal.text,
-        replacement,
+        JSON.stringify(proposal.replacementSource),
         proposal.supersedesId,
       ],
     ),
@@ -106,14 +102,6 @@ async function insertProposal(
 export async function accept(ctx: CommandContext, command: CommandOf<"accept">): Promise<void> {
   const { db, agreement, state } = ctx;
   const { replacement, base } = await decide(ctx, command.proposalId, "accepted");
-  if (replacement === null) {
-    // Wording without replacement terms still needs a staff edit and a new revision.
-    await db.query(
-      "UPDATE dripsign.agreement SET draft_dirty = true WHERE tenant_id = $1 AND id = $2",
-      [agreement.tenantId, agreement.id],
-    );
-    return;
-  }
   const changed = changedSection(base, replacement);
   const draft = agreement.draft.source;
   if (!draft.sections.some((section) => section.id === changed.id)) {
@@ -170,10 +158,10 @@ async function decide(
   ctx: CommandContext,
   proposalId: string,
   status: "accepted" | "rejected",
-): Promise<{ readonly replacement: DocumentSource | null; readonly base: DocumentSource }> {
+): Promise<{ readonly replacement: DocumentSource; readonly base: DocumentSource }> {
   const { db, agreement, actor } = ctx;
   if (ctx.state.pending?.id !== proposalId) throw conflict();
-  const decided = await db.query<{ replacement: DocumentSource | null; base: DocumentSource }>(
+  const decided = await db.query<{ replacement: DocumentSource; base: DocumentSource }>(
     `UPDATE dripsign.proposal p SET status = $3, decided_by = $4, decided_at = now()
      FROM dripsign.revision v
      WHERE p.tenant_id = $1 AND p.id = $2 AND p.status = 'pending'

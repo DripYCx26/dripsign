@@ -131,7 +131,7 @@ it("folds a countered proposal into the live card, keeps a withdrawn one, and ti
     baseRevisionNumber: 1,
     author,
     text: id,
-    replacementSource: null,
+    replacementSource: { title: "Terms", sections: [] },
     status,
     supersedesId: id === "p-2" ? "p-1" : null,
     createdAt: `2026-10-11T${at}:00.000Z`,

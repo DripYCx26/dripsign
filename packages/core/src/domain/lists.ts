@@ -222,7 +222,8 @@ export function listInbox(actor: RecipientActor): Promise<readonly InboxItem[]> 
     );
     if (session.rowCount !== 1) throw notFound();
     const found = await db.query<InboxRow>(
-      `SELECT a.id, a.title, t.name AS "orgName", a.updated_at AS "updatedAt",
+      `SELECT a.id, v.source ->> 'title' AS title, t.name AS "orgName",
+         a.updated_at AS "updatedAt",
          ${POLICY_COLUMNS}, g.signed, g.required, g.attempts,
          EXISTS (SELECT 1 FROM dripsign.round_signer rs
                  WHERE rs.tenant_id = a.tenant_id AND rs.round_id = g.id

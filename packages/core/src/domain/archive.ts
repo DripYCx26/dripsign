@@ -158,26 +158,25 @@ export async function completeArchive(db: Db, input: ArchiveCompletion): Promise
     const agreementId = round.rows[0]?.agreementId;
     if (agreementId === undefined) throw new Error(`Round ${input.roundId} does not exist`);
     // Lock order: agreement row, then the job row.
-    const locked = await tx.query<{ title: string }>(
-      "SELECT title FROM dripsign.agreement WHERE tenant_id = $1 AND id = $2 FOR UPDATE",
+    const locked = await tx.query(
+      "SELECT 1 FROM dripsign.agreement WHERE tenant_id = $1 AND id = $2 FOR UPDATE",
       [tenantId, agreementId],
     );
-    const title = locked.rows[0]?.title;
-    if (title === undefined) throw new Error(`Agreement ${agreementId} does not exist`);
+    if (locked.rowCount !== 1) throw new Error(`Agreement ${agreementId} does not exist`);
     if (!(await lockLease(tx, input.leaseFence))) return "lease_lost";
     const status = await tx.query<{ status: string }>(
       "SELECT status FROM dripsign.signing_round WHERE tenant_id = $1 AND id = $2",
       [tenantId, input.roundId],
     );
     if (status.rows[0]?.status === "completed") return "already_completed";
-    await commitArchive(tx, { ...input, agreementId, title });
+    await commitArchive(tx, { ...input, agreementId });
     return "completed";
   });
 }
 
 async function commitArchive(
   db: Db,
-  input: ArchiveCompletion & { readonly agreementId: string; readonly title: string },
+  input: ArchiveCompletion & { readonly agreementId: string },
 ): Promise<void> {
   const { tenantId, agreementId, roundId } = input;
   // The artifact trigger requires a finalizing round; the round and agreement triggers then
@@ -205,7 +204,11 @@ async function commitArchive(
      WHERE tenant_id = $1 AND id = $2`,
     [tenantId, agreementId],
   );
-  const agreement = { tenantId, id: agreementId, title: input.title };
   const recipients = await liveRecipients(db, tenantId, agreementId);
-  await notify(db, { agreement, template: "completed", to: recipients, resourceId: roundId });
+  await notify(db, {
+    agreement: { tenantId, id: agreementId },
+    template: "completed",
+    to: recipients,
+    resourceId: roundId,
+  });
 }

@@ -233,7 +233,8 @@ export async function renderSignedPdf(
   return savePdf(document);
 }
 
-// Request evidence is literal audit data. JSON escaping preserves controls without rendering them.
+// Typed names and request evidence are literal audit data: JSON escaping keeps controls and any
+// glyph Noto Sans lacks (a signature may need only Newsreader's) without rendering them.
 function auditText(value: string | null, font: PDFFont): string {
   if (value === null) return "Not recorded";
   const supported = new Set(font.getCharacterSet());
@@ -269,7 +270,7 @@ export async function renderAuditRecord(evidence: ArchiveEvidence): Promise<Uint
     const domain = signer.email.slice(signer.email.lastIndexOf("@") + 1);
     write(`${signer.name} <${signer.email[0] ?? ""}***@${domain}>`, 12);
     write(
-      `Typed name: ${signature.typedName}\nEmail verified: ${new Date(signature.verifiedAt).toISOString()}\nSigned: ${new Date(signature.signedAt).toISOString()}\nSession: ${signature.sessionId}\nIP address: ${auditText(signature.ipAddress, font)}\nUser agent: ${auditText(signature.userAgent, font)}`,
+      `Typed name: ${auditText(signature.typedName, font)}\nEmail verified: ${new Date(signature.verifiedAt).toISOString()}\nSigned: ${new Date(signature.signedAt).toISOString()}\nSession: ${signature.sessionId}\nIP address: ${auditText(signature.ipAddress, font)}\nUser agent: ${auditText(signature.userAgent, font)}`,
       9,
     );
   }
