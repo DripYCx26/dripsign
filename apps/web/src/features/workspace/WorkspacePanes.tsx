@@ -6,6 +6,7 @@ import { DocumentPane } from "@/features/document/DocumentPane.tsx";
 import type { DocumentState } from "@/features/document/useDocumentState.ts";
 import { CompletionPanel } from "@/features/signing/CompletionPanel.tsx";
 import { ThreadPane } from "@/features/thread/ThreadPane.tsx";
+import { Notice } from "@/ui";
 import type { RunCommand } from "./commands.ts";
 import type { RailMode, WorkspaceTab } from "./tabs.ts";
 import styles from "./WorkspacePanes.module.css";
@@ -37,6 +38,11 @@ export function WorkspacePanes({ view, capacity, run, busy, rail, tab, doc }: Wo
             run={run}
             busy={busy || doc.draft.edit !== null}
             preview={doc.preview}
+            notice={
+              doc.draft.edit !== null && (
+                <Notice>Save or discard your edits to the terms before using the assistant.</Notice>
+              )
+            }
           />
         </section>
       )}
