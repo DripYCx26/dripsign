@@ -94,6 +94,32 @@ h3 {
   outline-offset: var(--ds-space-half);
 }
 
+/* Every enabled interactive surface presses in. A component that sets its own `transition` lists
+   `scale var(--ds-motion-press) var(--ds-ease-enter)`; a big surface sets `--ds-press: 0.99`. */
+:where(
+  a[href],
+  button,
+  summary,
+  [role="menuitem"],
+  [role="tab"],
+  label:has(> input[type="radio"])
+) {
+  transition: scale var(--ds-motion-press) var(--ds-ease-enter);
+}
+
+:where(
+  :is(
+      a[href],
+      button,
+      summary,
+      [role="menuitem"],
+      [role="tab"],
+      label:has(> input[type="radio"]:not(:disabled))
+    ):not(:disabled, [aria-disabled="true"]):active
+) {
+  scale: var(--ds-press);
+}
+
 .ds-visually-hidden {
   position: absolute;
   width: 1px;

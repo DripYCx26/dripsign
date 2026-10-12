@@ -8,6 +8,7 @@
 }
 
 .row {
+  --ds-press: 0.99;
   display: grid;
   min-height: var(--ds-row-height);
   grid-template-columns: minmax(0, 1fr) minmax(0, 36%) calc(var(--ds-space-10) * 3);
@@ -17,7 +18,9 @@
   border-bottom: var(--ds-hairline);
   color: var(--ds-text);
   text-decoration: none;
-  transition: background-color var(--ds-motion-press) var(--ds-ease-enter);
+  transition:
+    background-color var(--ds-motion-press) var(--ds-ease-enter),
+    scale var(--ds-motion-press) var(--ds-ease-enter);
 }
 
 .row:hover {

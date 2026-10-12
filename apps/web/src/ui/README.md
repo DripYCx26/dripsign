@@ -29,7 +29,7 @@ each a component and its CSS module, drawn only from `tokens/`. No feature logic
 - Motion is a token (`--ds-motion-*`, `--ds-anim-*`) and every duration drops to zero under
   `prefers-reduced-motion`; controls stay at or under 200 ms. A list row rises on first paint with
   `animation: var(--ds-anim-rise)` and `animation-delay` of `--ds-motion-stagger` times its
-  `--rise-index`. A card that is a link or button lifts with `translate: 0 var(--ds-lift)`.
+  `--rise-index`. A card that is a link or button lifts with `translate: 0 var(--ds-lift)`. Every enabled link, button, summary, menu item, tab and radio label presses in by `scale: var(--ds-press)` (`tokens/base.css`, zero specificity); a big surface sets `--ds-press: 0.99`, and a `transition` of its own must list `scale`.
 - Variants, sizes and states are data attributes (`data-variant`, `data-tone`, `data-status`);
   one class per element. Shared drawing is shared with CSS `composes`.
 - Props are exact and readonly; nothing is spread onto the DOM. `'use client'` only where state or

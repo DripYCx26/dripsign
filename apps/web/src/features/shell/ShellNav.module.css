@@ -17,7 +17,9 @@
   font-weight: var(--ds-weight-medium);
   line-height: var(--ds-leading-md);
   text-decoration: none;
-  transition: background-color var(--ds-motion-quick) var(--ds-ease-enter);
+  transition:
+    background-color var(--ds-motion-quick) var(--ds-ease-enter),
+    scale var(--ds-motion-press) var(--ds-ease-enter);
 }
 
 .link:hover {

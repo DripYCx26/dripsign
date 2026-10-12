@@ -61,7 +61,9 @@
   color: var(--ds-text);
   text-align: start;
   white-space: nowrap;
-  transition: background-color var(--ds-motion-press) var(--ds-ease-enter);
+  transition:
+    background-color var(--ds-motion-press) var(--ds-ease-enter),
+    scale var(--ds-motion-press) var(--ds-ease-enter);
 }
 
 .caption {

@@ -77,10 +77,9 @@
   translate: 0 var(--ds-lift);
 }
 
-/* After the hover lift, so a press settles back down. */
+/* After the hover lift, so a press settles back down; the scale is the global press in base.css. */
 .button[data-size]:not(:disabled):active {
   translate: 0 0;
-  scale: 0.97;
 }
 
 .button[data-variant="secondary"] {

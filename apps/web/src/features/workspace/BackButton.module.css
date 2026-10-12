@@ -8,7 +8,9 @@
   justify-content: center;
   border-radius: var(--ds-radius-pill);
   color: var(--ds-text-secondary);
-  transition: background-color var(--ds-motion-quick) var(--ds-ease-enter);
+  transition:
+    background-color var(--ds-motion-quick) var(--ds-ease-enter),
+    scale var(--ds-motion-press) var(--ds-ease-enter);
 }
 
 .back:hover {
