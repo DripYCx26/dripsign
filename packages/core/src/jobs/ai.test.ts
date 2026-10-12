@@ -65,7 +65,7 @@ async function seedPriorDrafts(context: Awaited<ReturnType<typeof fixture>>): Pr
   await getPool().query(
     `INSERT INTO dripsign.ai_suggestion (tenant_id,agreement_id,id,requested_by,instruction,mode,base_source,base_source_sha256,model,reserved_micros,status,result,cost_micros,finished_at,applied_at,created_at)
      SELECT $1,$2,gen_random_uuid(),$3,'Turn ' || n,'draft',$4,$5,'claude-sonnet-5-5',1,'applied',
-       jsonb_build_object('kind','draft','summary','Turn ' || n,'source',$6::jsonb,'questions','[]'::jsonb),
+       jsonb_build_object('kind','draft','summary','Turn ' || n,'source',$6::jsonb,'questions',jsonb_build_array('Who signs ' || n || '?')),
        0,now(),now(),now() - make_interval(mins => 10 - n)
      FROM generate_series(1, 9) n`,
     [
@@ -129,7 +129,8 @@ function assertPlanRequest(sent: string): void {
   expect(kept.length).toBeGreaterThan(0);
   expect(kept.length).toBeLessThan(LIMITS.aiTurns);
   expect(kept).toEqual(latest.slice(-kept.length));
-  expect(content.history.at(-1)?.reply).toMatch(/^Turn 9\n- Fees x/u);
+  // A reply keeps its questions, so the model reads what staff are answering.
+  expect(content.history.at(-1)?.reply).toMatch(/^Turn 9\n- Fees x.*\n\? Who signs 9\?$/su);
   expect(sent).not.toContain("Prior full terms.");
 }
 
@@ -155,10 +156,12 @@ it("plans on a forced tool with a bounded history, spends once and never applies
   );
   const [job] = await claimOwnJobs([outbox.rows[0]?.id ?? null]);
   if (!job) throw new Error("Plan job was not claimed");
+  // Still asking: no outline yet, and the legal check offered.
   const plan = {
     summary: "A fixed-fee website build.",
-    outline: [{ heading: "Scope", intent: "Twelve weeks of design and build." }],
+    outline: [],
     questions: ["Who owns the code?"],
+    offerLegalCheck: true,
   };
   const provider = vi.fn().mockResolvedValue(
     new Response(
@@ -180,8 +183,12 @@ it("plans on a forced tool with a bounded history, spends once and never applies
     cost: String(AI_RESERVATION_MICROS.plan),
     result: { kind: "plan", ...plan },
   });
-  // A ready plan neither offers nor performs apply_ai.
+  // A ready plan reads back as stored, and neither offers nor performs apply_ai.
   const view = await loadAgreementView(actor, context.agreementId);
+  expect(view.aiSuggestions.find((item) => item.id === queued.id)?.result).toEqual({
+    kind: "plan",
+    ...plan,
+  });
   expect(view.allowedActions).not.toContain("apply_ai");
   await expect(
     inCommand(actor, context.agreementId, (ctx) =>

@@ -8,14 +8,6 @@
   flex-direction: column;
 }
 
-.welcome {
-  display: grid;
-  min-height: 0;
-  flex: 1 1 auto;
-  align-content: center;
-  overflow-y: auto;
-}
-
 .list {
   display: flex;
   min-height: 0;
@@ -27,4 +19,23 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   list-style: none;
+}
+
+/* The opening line reads as the assistant's reply bubble. */
+.greeting {
+  composes: card from "./TurnCard.module.css";
+}
+
+.dock {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.off {
+  padding: 0 var(--ds-space-5) var(--ds-space-2);
+  color: var(--ds-text-tertiary);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-sm);
 }

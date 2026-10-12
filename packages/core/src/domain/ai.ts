@@ -13,7 +13,10 @@ import { stageDraft } from "./revisions.ts";
 import { conflict } from "./state.ts";
 import type { CommandContext } from "./state.ts";
 
-/** One earlier turn as the model sees it: the reply's summary and outline, never a full source. */
+/**
+ * One earlier turn as the model sees it: the reply's summary, outline or headings and questions,
+ * never a full source.
+ */
 export interface SuggestionTurn {
   readonly instruction: string;
   readonly reply: string;
@@ -140,12 +143,14 @@ export async function loadSuggestionInput(
 }
 
 // The current base source is already the latest state, so a reply is its gist, not its terms.
+// Questions stay, so the model reads what staff are answering.
 function turnReply(result: AiSuggestionResult): string {
   const lines =
     result.kind === "plan"
       ? result.outline.map((item, index) => `${String(index + 1)}. ${item.heading}: ${item.intent}`)
       : result.source.sections.map((section) => `- ${section.heading}`);
-  return [result.summary, ...lines].join("\n");
+  const questions = result.questions.map((question) => `? ${question}`);
+  return [result.summary, ...lines, ...questions].join("\n");
 }
 
 /**

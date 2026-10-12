@@ -33,6 +33,7 @@ it("previews the newest finished draft until it is applied, never a plan", () =>
       summary: "Plan",
       outline: [{ heading: "A", intent: "b" }],
       questions: [],
+      offerLegalCheck: false,
     },
   });
   const older = turn("older", 1, {});

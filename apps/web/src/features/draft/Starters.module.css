@@ -1,13 +1,11 @@
 .starters {
   display: grid;
-  justify-items: center;
   gap: var(--ds-space-2);
 }
 
 .row {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
   gap: var(--ds-space-2);
 }
 

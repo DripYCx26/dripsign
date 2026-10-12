@@ -35,21 +35,48 @@ function Questions({ questions }: Readonly<{ questions: readonly string[] }>) {
   );
 }
 
+/** Answers to the assistant's offer to check the legal side; each is the next plan turn. */
+const LEGAL_REPLIES = ["Check the legal side", "Skip, just plan"] as const;
+
+/**
+ * A plan reply: the assistant's message and questions, the outline once it knows enough, and on
+ * the newest turn the quick replies to a legal-check offer and "Write the draft" for an outline.
+ */
 function PlanCard({ plan, view, newest, run, busy }: Readonly<{ plan: AiPlan }> & TurnProps) {
-  const canAsk = view.allowedActions.includes("ask_ai");
+  const canAct = newest && view.allowedActions.includes("ask_ai");
+  const planned = plan.outline.length > 0;
   return (
     <article className={styles.card}>
       <p className={styles.summary}>{plan.summary}</p>
-      <ol className={styles.outline}>
-        {plan.outline.map((item) => (
-          <li key={item.heading}>
-            <span className={styles.heading}>{item.heading}</span>
-            <span className={styles.intent}>{item.intent}</span>
-          </li>
-        ))}
-      </ol>
       <Questions questions={plan.questions} />
-      {newest && canAsk && (
+      {planned && (
+        <ol className={styles.outline}>
+          {plan.outline.map((item) => (
+            <li key={item.heading}>
+              <span className={styles.heading}>{item.heading}</span>
+              <span className={styles.intent}>{item.intent}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+      {canAct && plan.offerLegalCheck && (
+        <div className={styles.foot} role="group" aria-label="Quick replies">
+          {LEGAL_REPLIES.map((instruction) => (
+            <Button
+              key={instruction}
+              variant="secondary"
+              size="sm"
+              disabled={busy}
+              onClick={() => {
+                void run({ kind: "ask_ai", mode: "plan", instruction }, "ask_ai");
+              }}
+            >
+              {instruction}
+            </Button>
+          ))}
+        </div>
+      )}
+      {canAct && planned && (
         <div>
           <Button
             variant="ink"

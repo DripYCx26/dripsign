@@ -44,10 +44,12 @@ Imports inside the package are relative with `.ts` extensions. Tests use a real 
 A starter agreement may have no recipients: its private draft still prepares a PDF. Publishing
 waits for a required signer; adding recipients does not require creating another agreement.
 
-The optional staff-private assistant has two explicit modes: `plan` returns a summary, an outline
-and questions; `draft` returns complete terms, a summary and questions. Only a ready draft can be
-applied, and only while its base source still matches; staff review and publish separately. Each
-request reserves the mode's spend against the tenant's daily limit before enqueuing one provider
-call. The latest bounded history contains summaries and headings, not earlier full draft terms.
+The optional staff-private assistant has two explicit modes: `plan` is the conversation before
+drafting and returns a summary, questions, whether it offers a legal check, and an outline (empty
+while it is still asking); `draft` returns complete terms, a summary and questions. Only a ready
+draft can be applied, and only while its base source still matches; staff review and publish
+separately. Each request reserves the mode's spend against the tenant's daily limit before
+enqueuing one provider call. The latest bounded history contains summaries, headings and
+questions, not earlier full draft terms.
 
 [Architecture](../../docs/ARCHITECTURE.md) · [Decisions](../../docs/DECISIONS.md)

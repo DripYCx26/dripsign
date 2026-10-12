@@ -1,5 +1,5 @@
-/* An empty state: an optional icon tile, the sentence in the display face, a quiet line and the one
-   action that fills the page; centred, no illustration. */
+/* An empty state: the sentence in the display face and the one action that fills the page;
+   centred, no illustration. */
 
 .empty {
   display: grid;
@@ -10,22 +10,6 @@
   text-align: center;
 }
 
-.tile {
-  display: grid;
-  width: var(--ds-space-10);
-  height: var(--ds-space-10);
-  place-items: center;
-  border-radius: var(--ds-radius-card);
-  background: var(--ds-surface-subtle);
-  color: var(--ds-text-tertiary);
-}
-
-.tile > svg {
-  width: var(--ds-size-icon-tile);
-  height: var(--ds-size-icon-tile);
-  stroke-width: var(--ds-icon-stroke);
-}
-
 .message {
   color: var(--ds-text);
   font-family: var(--ds-font-display);
@@ -33,9 +17,4 @@
   font-weight: var(--ds-weight-display);
   line-height: var(--ds-leading-xl);
   text-wrap: balance;
-}
-
-.detail {
-  font-size: var(--ds-text-md);
-  line-height: var(--ds-leading-md);
 }

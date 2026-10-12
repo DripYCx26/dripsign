@@ -3,6 +3,19 @@
 Dated product and architecture decisions. A newer entry supersedes an older one where they
 conflict; superseded text is deleted rather than kept as history (Git holds it).
 
+## 2026-10-11: The assistant offers a legal check and asks before planning; not legal advice
+
+The draft rail is always a chat: a static greeting (with the starter chips on a blank draft) and
+the composer, disabled with one quiet line when no assistant is configured. Plan mode is the
+conversation: its first reply offers to explore the legal side (`offerLegalCheck`); if staff
+accept, it asks pointed questions (jurisdiction, parties, consideration, regulated areas,
+signature formalities, term and disputes) with an empty outline, then proposes an outline whose
+legally required provisions start "Required:" and a summary naming the jurisdiction assumed with
+"Not legal advice — have counsel review." Only a plan with an outline offers "Write the draft".
+
+Rejected: a third `legal` mode (another reservation and tool for what is conversation); the model
+asserting what the law requires without naming the jurisdiction it assumed.
+
 ## 2026-10-11: Drip themes and an assistant-led draft
 
 **Colour.** Three themes from one hue set: Drip Light (the Dreach palette), Drip Dark (the same

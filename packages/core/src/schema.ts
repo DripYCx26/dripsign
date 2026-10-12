@@ -184,7 +184,11 @@ export const draftSchema = z
 
 export const themeSchema = z.enum(["light", "dark", "night"]);
 
-/** A plan is an outline to confirm; a draft is a complete source staff may apply. */
+/**
+ * A plan is the assistant's conversation before drafting: questions, an offer to check the legal
+ * side, and an outline to confirm once it knows enough (empty while it is still asking). A draft
+ * is a complete source staff may apply.
+ */
 export const aiModeSchema = z.enum(["plan", "draft"]);
 
 const aiQuestionsSchema = z.array(z.string().min(1).max(500)).max(20);
@@ -200,9 +204,10 @@ export const aiPlanSchema = z.strictObject({
         intent: z.string().min(1).max(300),
       }),
     )
-    .min(1)
     .max(LIMITS.sections),
   questions: aiQuestionsSchema,
+  // Plans stored before the legal check existed omit it.
+  offerLegalCheck: z.boolean().default(false),
 });
 
 export const aiDraftSchema = z.strictObject({
