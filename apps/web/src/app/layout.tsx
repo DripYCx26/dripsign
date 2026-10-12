@@ -7,7 +7,7 @@ import { DevBanner } from "@/features/shell/DevBanner.tsx";
 
 const geist = Geist({ subsets: ["latin"], display: "swap", variable: "--ds-face-geist" });
 const newsreader = Newsreader({
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
   style: ["normal", "italic"],
   display: "swap",
   variable: "--ds-face-newsreader",

@@ -73,6 +73,12 @@
   color: var(--ds-text);
 }
 
+/* A quiet action that removes something: danger ink on hover, still no box at rest. */
+.button[data-variant="quiet"][data-tone="stop"]:not(:disabled):hover {
+  background: var(--tone-bg);
+  color: var(--tone-fg);
+}
+
 /* An action that reads as a link: the accent, no box and no underline; the target keeps its
    height. */
 .button[data-variant="link"] {

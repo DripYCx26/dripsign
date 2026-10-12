@@ -14,6 +14,8 @@ export type ButtonSize = "sm" | "md" | "lg";
 type ButtonProps = Readonly<{
   variant: ButtonVariant;
   size?: ButtonSize | undefined;
+  /** A quiet action that removes something turns danger on hover; the danger variant is always so. */
+  tone?: "danger" | undefined;
   type?: "button" | "submit" | undefined;
   /** Work in flight: the button keeps focus and its words, shows a spinner, and does nothing. */
   loading?: boolean | undefined;
@@ -32,6 +34,7 @@ type ButtonProps = Readonly<{
 export function Button({
   variant,
   size = "md",
+  tone,
   type = "button",
   loading = false,
   pressed,
@@ -45,7 +48,7 @@ export function Button({
       className={styles.button}
       data-variant={variant}
       data-size={size}
-      data-tone={variant === "danger" ? "stop" : undefined}
+      data-tone={variant === "danger" || tone === "danger" ? "stop" : undefined}
       aria-pressed={pressed}
       aria-busy={loading || undefined}
       aria-disabled={loading || undefined}

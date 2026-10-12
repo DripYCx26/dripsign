@@ -304,6 +304,7 @@ it("negotiates, publishes, collects every signature and archives the signed agre
   view = await loadAgreementView(staff, id);
   const round = must(view.activeRound);
   expect(round.status).toBe("finalizing");
+  expect(round.signers.map((signer) => signer.signature?.face)).toEqual(["script", "script"]);
   expect(await jobCount(id, "archive")).toBe(1);
   expect(await jobCount(id, "email", "sign_request")).toBe(2);
 

@@ -8,7 +8,7 @@ the jobs worker and the CLI. Next-free; web imports it as `@dripsign/core/<path>
 | Path | What |
 |---|---|
 | `schema/` | `schema.sql`, the one baseline schema, edited in place |
-| `assets/` | The one font, used for PDF text and the signature preview |
+| `assets/` | Noto Sans for PDF text; Newsreader Italic for signatures, with Noto Sans as the fallback |
 | `src/` | `config.ts`, `db.ts`, `errors.ts`, `schema.ts`, `types.ts`, `cli.ts`, `seed.ts`; `seed/` holds the demo cast and script |
 | `src/domain/` | Policy, commands, views, receipts, revisions, signing, staff roster |
 | `src/auth/` | Email codes, sessions, rate limits, capacity resolution |

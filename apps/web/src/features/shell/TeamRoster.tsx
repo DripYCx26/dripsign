@@ -58,6 +58,7 @@ export function TeamRoster({ members, selfEmail }: Props) {
               {member.email !== selfEmail && (
                 <Button
                   variant="quiet"
+                  tone="danger"
                   size="sm"
                   onClick={() => {
                     setRevoking(member);

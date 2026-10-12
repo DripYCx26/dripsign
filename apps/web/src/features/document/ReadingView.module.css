@@ -186,6 +186,12 @@
   overflow-wrap: anywhere;
 }
 
+/* A name Newsreader cannot draw is in the sans, as in the signed PDF. */
+.ink[data-face="plain"] {
+  font-family: var(--ds-font);
+  font-style: normal;
+}
+
 .evidence {
   display: flex;
   flex-wrap: wrap;

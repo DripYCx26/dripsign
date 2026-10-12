@@ -144,8 +144,8 @@ sandbox`.
 
 Staff write the terms in the app; there is no PDF upload. A `pdf_prepare` job renders the title
 and sections (at most 200 pages) and one signature page per three required signers in the worker,
-with one embedded font ([`assets/`](../packages/core/assets)), the same file the signature preview
-uses. Its commit is fenced on the hash of the draft source (title and sections) and on the
+in Noto Sans ([`assets/`](../packages/core/assets)); the signed PDF draws a typed signature in
+Newsreader Italic, or in Noto Sans when the name has a glyph Newsreader lacks. Its commit is fenced on the hash of the draft source (title and sections) and on the
 signer-set hash of the current draft. The agreement title is the draft source's title. A
 rendered or stored PDF is at most 20 MB.
 

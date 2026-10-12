@@ -4,6 +4,7 @@ import { objectKey, readBytes } from "../adapters/storage.ts";
 import { readTx } from "../db.ts";
 import type { Db } from "../db.ts";
 import { DomainError, notFound } from "../errors.ts";
+import { signatureFaceOf } from "../pdf/font.ts";
 import type {
   Actor,
   AgreementFile,
@@ -62,8 +63,9 @@ interface ViewRows {
 }
 
 /** Bounded snapshot in one readTx; capacity is `actor.capacity`. Unavailable => not_found. */
-export function loadAgreementView(actor: Actor, agreementId: string): Promise<AgreementView> {
-  return readTx(async (db) => buildView(actor, await loadRows(db, actor, agreementId)));
+export async function loadAgreementView(actor: Actor, agreementId: string): Promise<AgreementView> {
+  const rows = await readTx((db) => loadRows(db, actor, agreementId));
+  return buildView(actor, rows);
 }
 
 async function loadRows(db: Db, actor: Actor, agreementId: string): Promise<ViewRows> {
@@ -86,7 +88,7 @@ async function loadRows(db: Db, actor: Actor, agreementId: string): Promise<View
   };
 }
 
-function buildView(actor: Actor, rows: ViewRows): AgreementView {
+async function buildView(actor: Actor, rows: ViewRows): Promise<AgreementView> {
   const { state, access } = rows;
   const { agreement } = state;
   const staff = actor.capacity === "staff";
@@ -126,8 +128,8 @@ function buildView(actor: Actor, rows: ViewRows): AgreementView {
       body: row.body,
       createdAt: iso(row.createdAt),
     })),
-    activeRound: live === undefined ? null : roundView(actor, live),
-    completedRound: completed === undefined ? null : roundView(actor, completed),
+    activeRound: live === undefined ? null : await roundView(actor, live),
+    completedRound: completed === undefined ? null : await roundView(actor, completed),
     artifacts: rows.artifacts.map((row) => ({ ...row, createdAt: iso(row.createdAt) })),
     aiSuggestions: rows.suggestions.map((row) => suggestionView(row, state)),
     timeline: rows.timeline.flatMap((row) => timelineItem(labeller, row) ?? []),
@@ -203,7 +205,7 @@ function proposalView(
   };
 }
 
-function roundView(actor: Actor, row: RoundRow) {
+async function roundView(actor: Actor, row: RoundRow) {
   return {
     id: row.id,
     revisionId: row.revisionId,
@@ -216,15 +218,21 @@ function roundView(actor: Actor, row: RoundRow) {
     endReason: row.endReason,
     finalizingDelayed:
       row.status === "finalizing" && row.archiveAttempts >= FINALIZING_DELAYED_ATTEMPTS,
-    signers: row.signers.map((signer) => ({
-      recipientId: signer.recipientId,
-      name: signer.name,
-      email: actor.capacity === "staff" || signer.email === actor.email ? signer.email : null,
-      signature:
-        signer.typedName === null || signer.signedAt === null
-          ? null
-          : { typedName: signer.typedName, signedAt: new Date(signer.signedAt).toISOString() },
-    })),
+    signers: await Promise.all(
+      row.signers.map(async (signer) => ({
+        recipientId: signer.recipientId,
+        name: signer.name,
+        email: actor.capacity === "staff" || signer.email === actor.email ? signer.email : null,
+        signature:
+          signer.typedName === null || signer.signedAt === null
+            ? null
+            : {
+                typedName: signer.typedName,
+                signedAt: new Date(signer.signedAt).toISOString(),
+                face: await signatureFaceOf(signer.typedName),
+              },
+      })),
+    ),
   };
 }
 

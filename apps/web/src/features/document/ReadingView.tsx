@@ -1,4 +1,5 @@
 import type { DocumentSource } from "@dripsign/core/schema";
+import type { RoundSignerView } from "@dripsign/core/types";
 import { BadgeCheck, Moment } from "@/ui";
 import styles from "./ReadingView.module.css";
 import { sectionAnchor } from "./sections.ts";
@@ -7,7 +8,7 @@ import { SuggestEdit } from "./SuggestEdit.tsx";
 export interface ReadingSigner {
   readonly id: string;
   readonly name: string;
-  readonly signature?: { readonly typedName: string; readonly signedAt: string } | null;
+  readonly signature?: RoundSignerView["signature"];
 }
 
 /** What the title block says of the document on show; null dates are not printed. */
@@ -28,18 +29,6 @@ type ReadingViewProps = Readonly<{
   suggestable: boolean;
 }>;
 
-// UTC, so the server's first paint and the browser's agree on the day.
-const DAY = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
-
-function Day({ value }: Readonly<{ value: string }>) {
-  return <time dateTime={value}>{DAY.format(new Date(value))}</time>;
-}
-
 /** The caps line under the title: state, revision, dates, and the parties by name, never address. */
 function MetaLine({
   meta,
@@ -53,12 +42,12 @@ function MetaLine({
       {meta.revision !== null && <span>{`Revision ${String(meta.revision)}`}</span>}
       {meta.publishedAt !== null && (
         <span>
-          Published <Day value={meta.publishedAt} />
+          Published <Moment value={meta.publishedAt} format="day" />
         </span>
       )}
       {meta.signedAt !== null && (
         <span>
-          Signed <Day value={meta.signedAt} />
+          Signed <Moment value={meta.signedAt} format="day" />
         </span>
       )}
       <span>{names === "" ? meta.org : `${meta.org} ↔ ${names}`}</span>
@@ -78,7 +67,9 @@ function Signer({ signer }: Readonly<{ signer: ReadingSigner }>) {
   }
   return (
     <li className={styles.signer}>
-      <span className={styles.ink}>{signature.typedName}</span>
+      <span className={styles.ink} data-face={signature.face}>
+        {signature.typedName}
+      </span>
       <span className={styles.evidence}>
         <Moment value={signature.signedAt} format="absolute" />
         <span className={styles.verified}>
@@ -93,8 +84,7 @@ function Signer({ signer }: Readonly<{ signer: ReadingSigner }>) {
 /**
  * The agreement's written terms as a typeset sheet: a title block, numbered sections and a
  * signature block naming who signs. It is a reading aid: the PDF, not this view, is the document
- * that is signed. The signature is drawn in the sheet's italic; the signature data does not yet
- * say which face the PDF used.
+ * that is signed. A signature is drawn in the face the signed PDF used.
  */
 export function ReadingView({ source, meta, signers, suggestable }: ReadingViewProps) {
   return (

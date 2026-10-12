@@ -28,7 +28,9 @@ function round(status: "active" | "finalizing", signed: number, total: number): 
       name: `Signer ${String(index)}`,
       email: null,
       signature:
-        index < signed ? { typedName: "Signer", signedAt: "2026-10-11T10:00:00.000Z" } : null,
+        index < signed
+          ? { typedName: "Signer", signedAt: "2026-10-11T10:00:00.000Z", face: "script" }
+          : null,
     })),
   };
 }

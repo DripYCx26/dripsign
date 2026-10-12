@@ -7,6 +7,7 @@ import type {
   PreparationStatus,
   SigningField,
 } from "./schema.ts";
+import type { SignatureFace } from "./pdf/font.ts";
 
 export type Capacity = "staff" | "recipient";
 export type StaffRole = "admin" | "member";
@@ -128,7 +129,12 @@ export interface RoundSignerView {
   readonly name: string;
   /** Null for recipients viewing someone else. */
   readonly email: string | null;
-  readonly signature: { readonly typedName: string; readonly signedAt: string } | null;
+  readonly signature: {
+    readonly typedName: string;
+    readonly signedAt: string;
+    /** The face the signed PDF draws the name in. */
+    readonly face: SignatureFace;
+  } | null;
 }
 
 export interface RoundView {

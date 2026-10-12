@@ -18,7 +18,7 @@ each a component and its CSS module, drawn only from `tokens/`. No feature logic
 | `Dialog` `Drawer`                     | Native `<dialog>` through `Modal/useModal`; focus returns to the opener                                                                                          |
 | `Menu`                                | Native popover with menu keys; optional `caption` above the items and `narrowOnly` items                                                                         |
 | `PageHeader` `TopBar` `Mark` `Avatar` | Page head (h1 and actions), sticky 56 px top bar with slots, product mark (`compact` is the glyph alone), initials                                                                                     |
-| `Moment`                              | `<time>`: absolute local time in mono for evidence, relative for lists                                                                                           |
+| `Moment`                              | `<time>`: absolute local time in mono for evidence, a local day, relative for lists                                                                                           |
 | `Tone`                                | Internal: the one tone and status colour map and tone icons                                                                                                      |
 | `icons.tsx`                           | The lucide icons the app uses; import icons from here                                                                                                            |
 
