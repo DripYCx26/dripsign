@@ -69,6 +69,8 @@ export interface AgreementSummary {
   readonly currentRevisionNumber: number | null;
   /** Null for recipients: draft activity is staff-private. */
   readonly preparation: PreparationState | null;
+  /** The fence of draft commands; null for recipients. */
+  readonly draftVersion: number | null;
 }
 
 /** A person in the thread. Recipients see staff as the organisation, with no email. */

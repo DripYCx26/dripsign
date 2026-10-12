@@ -120,17 +120,18 @@ function staffFacts(view: AgreementView): StaffFacts {
 
 /** Staff, while no round is live. A proposal's card carries its answer, and its author's wait. */
 function staffDraftStep(view: AgreementView): NextStep {
-  const { status, version } = view.agreement;
+  const { status, version, draftVersion } = view.agreement;
   const move = staffMove(staffFacts(view));
   const label = staffMoveLabel(move, status);
   switch (move) {
     case "preparing":
       return { label, kind: "none", disabled: true };
     case "retry":
+      if (draftVersion === null) return NOTHING;
       return {
         label,
         kind: "command",
-        command: { kind: "retry_preparation", expectedVersion: version },
+        command: { kind: "retry_preparation", expectedDraftVersion: draftVersion },
       };
     case "publish":
       return { label, kind: "navigate", href: `/staff/agreements/${view.agreement.id}/publish` };

@@ -59,6 +59,7 @@ function view(capacity: Capacity, scenario: Scenario): AgreementView {
       currentRevisionNumber: scenario.revision === undefined ? 1 : scenario.revision,
       preparation:
         capacity === "staff" ? { status: scenario.preparation ?? "ready", error: null } : null,
+      draftVersion: capacity === "staff" ? 7 : null,
     },
     draft: null,
     recipients: [],
@@ -104,7 +105,7 @@ const ROWS: readonly (readonly [string, Capacity, Scenario, NextStep])[] = [
     {
       label: "Retry preparation",
       kind: "command",
-      command: { kind: "retry_preparation", expectedVersion: 4 },
+      command: { kind: "retry_preparation", expectedDraftVersion: 7 },
     },
   ],
   [

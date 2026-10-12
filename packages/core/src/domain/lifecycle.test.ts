@@ -193,7 +193,7 @@ async function negotiating(recipients: readonly NewRecipient[], recipientIds?: r
     }
     await run(staff, id, {
       kind: "save_draft",
-      expectedVersion: (await loadAgreementView(staff, id)).agreement.version,
+      expectedDraftVersion: must((await loadAgreementView(staff, id)).agreement.draftVersion),
       source: terms("Twelve months."),
     });
   }
@@ -235,7 +235,7 @@ it("negotiates, publishes, collects every signature and archives the signed agre
   const created = await loadAgreementView(staff, id);
   await run(staff, id, {
     kind: "save_draft",
-    expectedVersion: created.agreement.version,
+    expectedDraftVersion: must(created.agreement.draftVersion),
     source: terms("Ten months."),
   });
   let view = await publish(staff, id);
@@ -272,7 +272,10 @@ it("negotiates, publishes, collects every signature and archives the signed agre
     replacementSource: terms("Nine months."),
   });
   // Staff edit the fee and drop the term while it waits: accepting is refused until the term is
-  // back, then lands on the term alone and keeps the fee.
+  // back, then lands on the term alone and keeps the fee. Drafting is private: the recipient's
+  // version and list order hold, so an answer built before the saves is not fenced out.
+  const seen = await loadAgreementView(jordanActor, id);
+  expect(seen.agreement.draftVersion).toBeNull();
   const acceptPending = (current: AgreementView) =>
     run(jordanActor, id, {
       kind: "accept",
@@ -282,16 +285,21 @@ it("negotiates, publishes, collects every signature and archives the signed agre
   const edited = terms("Ten months.", "$120 a month.");
   view = await run(staff, id, {
     kind: "save_draft",
-    expectedVersion: view.agreement.version,
+    expectedDraftVersion: must(view.agreement.draftVersion),
     source: { ...edited, sections: edited.sections.slice(1) },
   });
-  await expect(acceptPending(view)).rejects.toThrow("The draft no longer has this section.");
-  view = await run(staff, id, {
+  await expect(acceptPending(seen)).rejects.toThrow("The draft no longer has this section.");
+  await run(staff, id, {
     kind: "save_draft",
-    expectedVersion: view.agreement.version,
+    expectedDraftVersion: must(view.agreement.draftVersion),
     source: edited,
   });
-  await acceptPending(view);
+  const { version, updatedAt } = seen.agreement;
+  expect((await loadAgreementView(jordanActor, id)).agreement).toMatchObject({
+    version,
+    updatedAt,
+  });
+  await acceptPending(seen);
   expect((await loadAgreementView(staff, id)).draft?.source).toEqual(
     terms("Nine months.", "$120 a month."),
   );
@@ -299,7 +307,7 @@ it("negotiates, publishes, collects every signature and archives the signed agre
   // Identical terms saved after a publish prepare again: the PDF prints the number it publishes as.
   view = await run(staff, id, {
     kind: "save_draft",
-    expectedVersion: view.agreement.version,
+    expectedDraftVersion: must(view.agreement.draftVersion),
     source: terms("Nine months.", "$120 a month."),
   });
   expect(view.agreement.preparation?.status).not.toBe("ready");
@@ -480,11 +488,11 @@ it("renames from the terms, fences, replays, rechecks authority, keeps the last 
   const jordan = person("Jordan Lee", true);
   const { staff, id, view: published, actors } = await negotiating([jordan]);
   const jordanActor = must(actors[0]);
-  // The agreement title follows the saved terms' title; the same save on the old version is fenced.
+  // The agreement title follows the saved terms' title; the same save on the old draft is fenced.
   const rename = {
     kind: "save_draft",
     source: { ...terms("Twelve months."), title: "Renamed agreement" },
-    expectedVersion: published.agreement.version,
+    expectedDraftVersion: must(published.agreement.draftVersion),
   } as const;
   const renamed = await run(staff, id, rename);
   expect(renamed.agreement.title).toBe("Renamed agreement");
@@ -517,7 +525,10 @@ it("renames from the terms, fences, replays, rechecks authority, keeps the last 
   );
   const failed = await loadAgreementView(staff, id);
   expect(failed.agreement.preparation).toEqual({ status: "failed", error: refused.message });
-  await run(staff, id, { kind: "retry_preparation", expectedVersion: failed.agreement.version });
+  await run(staff, id, {
+    kind: "retry_preparation",
+    expectedDraftVersion: must(failed.agreement.draftVersion),
+  });
   const view = await publish(staff, id);
   const proposal: Command = {
     kind: "propose",

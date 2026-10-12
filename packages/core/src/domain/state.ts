@@ -27,6 +27,7 @@ export interface AgreementRow {
   readonly currentRevisionId: string | null;
   readonly draft: Draft;
   readonly draftDirty: boolean;
+  readonly draftVersion: number;
   readonly createdAt: Date;
   readonly updatedAt: Date;
   readonly voidedAt: Date | null;
@@ -69,7 +70,7 @@ export interface CommandContext {
 
 export const AGREEMENT_COLUMNS = `tenant_id AS "tenantId", id, title, status, version,
   current_revision_id AS "currentRevisionId", draft, draft_dirty AS "draftDirty",
-  created_at AS "createdAt", updated_at AS "updatedAt", voided_at AS "voidedAt",
+  draft_version AS "draftVersion", created_at AS "createdAt", updated_at AS "updatedAt", voided_at AS "voidedAt",
   void_reason AS "voidReason"`;
 
 /**
@@ -158,17 +159,24 @@ export async function lockGrant(
   if (found.rowCount !== 1) throw notFound();
 }
 
+/** `shared` is `agreement.version`, which recipients see; `draft` is the staff-private draft's. */
+export interface Fence {
+  readonly on: "shared" | "draft";
+  readonly expected: number;
+}
+
 /**
- * Locks the agreement row. With an expected version the lock is the document fence: the update
- * moves the version on, and a stale version is a conflict.
+ * Locks the agreement row; with a fence, a stale expected version is a conflict. The shared fence
+ * moves the version and the list order on; the draft fence is only checked here, because staging
+ * the draft moves it (see `stageDraft`).
  */
 export async function lockAgreement(
   db: Db,
   tenantId: string,
   agreementId: string,
-  expectedVersion: number | null,
+  fence: Fence | null,
 ): Promise<AgreementRow> {
-  if (expectedVersion === null) {
+  if (fence === null) {
     const locked = await db.query<AgreementRow>(
       `SELECT ${AGREEMENT_COLUMNS} FROM dripsign.agreement
        WHERE tenant_id = $1 AND id = $2 FOR UPDATE`,
@@ -179,10 +187,13 @@ export async function lockAgreement(
     return row;
   }
   const fenced = await db.query<AgreementRow>(
-    `UPDATE dripsign.agreement SET version = version + 1, updated_at = now()
-     WHERE tenant_id = $1 AND id = $2 AND version = $3
-     RETURNING ${AGREEMENT_COLUMNS}`,
-    [tenantId, agreementId, expectedVersion],
+    fence.on === "shared"
+      ? `UPDATE dripsign.agreement SET version = version + 1, updated_at = now()
+         WHERE tenant_id = $1 AND id = $2 AND version = $3
+         RETURNING ${AGREEMENT_COLUMNS}`
+      : `SELECT ${AGREEMENT_COLUMNS} FROM dripsign.agreement
+         WHERE tenant_id = $1 AND id = $2 AND draft_version = $3 FOR UPDATE`,
+    [tenantId, agreementId, fence.expected],
   );
   const row = fenced.rows[0];
   if (row === undefined) throw conflict();

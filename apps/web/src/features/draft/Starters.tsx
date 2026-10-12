@@ -15,15 +15,13 @@ import {
 
 type StartersProps = Readonly<{ view: AgreementView; run: RunCommand; busy: boolean }>;
 
-/** Starter texts as buttons: choosing one writes it as the draft, fenced on the version seen. */
+/** Starter texts as buttons: choosing one writes it as the draft, fenced on the draft seen. */
 export function Starters({ view, run, busy }: StartersProps) {
   async function start(id: TemplateId) {
     const check = buildSource(templateTitle(id), templateSections(id));
-    if (!check.ok) return;
-    await run(
-      { kind: "save_draft", expectedVersion: view.agreement.version, source: check.source },
-      "starter",
-    );
+    const expectedDraftVersion = view.agreement.draftVersion;
+    if (!check.ok || expectedDraftVersion === null) return;
+    await run({ kind: "save_draft", expectedDraftVersion, source: check.source }, "starter");
   }
 
   return (

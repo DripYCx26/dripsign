@@ -38,7 +38,7 @@ import type {
   TimelineRow,
 } from "./snapshot.ts";
 import { actionsFor, iso, isoOrNull, loadState, readAgreement, resolveAccess } from "./state.ts";
-import type { Access, AgreementState } from "./state.ts";
+import type { Access, AgreementRow, AgreementState } from "./state.ts";
 
 export { listInbox, listStaffAgreements } from "./lists.ts";
 
@@ -112,11 +112,8 @@ async function buildView(actor: Actor, rows: ViewRows): Promise<AgreementView> {
       updatedAt: iso(agreement.updatedAt),
       voidedAt: isoOrNull(agreement.voidedAt),
       voidReason: agreement.voidReason,
-      publicationNeeded: staff && agreement.draftDirty,
       currentRevisionNumber: current?.number ?? null,
-      preparation: staff
-        ? { status: agreement.draft.preparation.status, error: agreement.draft.preparation.error }
-        : null,
+      ...draftActivity(staff, agreement),
     },
     draft: staff ? agreement.draft : null,
     recipients: recipientViews(actor, rows.recipients),
@@ -147,6 +144,17 @@ async function buildView(actor: Actor, rows: ViewRows): Promise<AgreementView> {
       hasSigned: !staff && state.viewer.hasSigned,
     },
     orgName: access.orgName,
+  };
+}
+
+/** Draft activity, including its fence, is staff-private: recipients get none of it. */
+function draftActivity(staff: boolean, agreement: AgreementRow) {
+  if (!staff) return { publicationNeeded: false, preparation: null, draftVersion: null };
+  const { status, error } = agreement.draft.preparation;
+  return {
+    publicationNeeded: agreement.draftDirty,
+    preparation: { status, error },
+    draftVersion: agreement.draftVersion,
   };
 }
 

@@ -55,7 +55,9 @@ function CandidateStrip({
 }: Readonly<{ view: AgreementView; doc: DocumentState; run: RunCommand; busy: boolean }>) {
   const { candidate } = doc;
   if (candidate === null) return null;
-  const canApply = !candidate.stale && view.allowedActions.includes("apply_ai");
+  const expectedDraftVersion = view.agreement.draftVersion;
+  const canApply =
+    !candidate.stale && expectedDraftVersion !== null && view.allowedActions.includes("apply_ai");
   return (
     <Banner
       tone={candidate.stale ? "attention" : "info"}
@@ -71,7 +73,7 @@ function CandidateStrip({
                 void run(
                   {
                     kind: "apply_ai",
-                    expectedVersion: view.agreement.version,
+                    expectedDraftVersion,
                     suggestionId: candidate.id,
                   },
                   `apply_ai:${candidate.id}`,
@@ -122,21 +124,20 @@ function Strip({ view, target, run, busy }: TargetProps) {
     return <Banner live="polite">Preparing PDF…</Banner>;
   }
   if (status !== "failed") return null;
+  const expectedDraftVersion = view.agreement.draftVersion;
   return (
     <Banner
       tone="stop"
       live="alert"
       action={
+        expectedDraftVersion !== null &&
         view.allowedActions.includes("retry_preparation") && (
           <Button
             variant="secondary"
             size="sm"
             loading={busy}
             onClick={() => {
-              void run(
-                { kind: "retry_preparation", expectedVersion: view.agreement.version },
-                "retry_preparation",
-              );
+              void run({ kind: "retry_preparation", expectedDraftVersion }, "retry_preparation");
             }}
           >
             Retry

@@ -50,6 +50,8 @@ CREATE TABLE dripsign.agreement (
   current_revision_id uuid,
   draft jsonb NOT NULL CHECK (octet_length(draft::text) <= 600000),
   draft_dirty boolean NOT NULL DEFAULT true,
+  -- The private draft's own fence, so staff drafting never moves the shared version.
+  draft_version integer NOT NULL DEFAULT 1 CHECK (draft_version > 0),
   created_by dripsign.email NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),

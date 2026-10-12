@@ -107,8 +107,11 @@ locking.
   replays the stored result after rechecking authority; the same key with a different payload is a
   `conflict`. Every mutation carries a client key, reused on retry. No other idempotency mechanism
   exists.
-- **Version fence.** Document-shaping commands update `agreement.version` where it equals the
-  expected value; zero rows is a `conflict`. Lock order is receipt, agreement row, the actor's
+- **Version fence.** Shared document-shaping commands update `agreement.version` where it equals
+  the expected value; zero rows is a `conflict`. Staff-private draft commands (`save_draft`,
+  `retry_preparation`, `apply_ai`) fence on `agreement.draft_version` instead, which every staged
+  draft moves and recipients never see, so private drafting changes neither the version nor,
+  once published, the list order recipients see. Lock order is receipt, agreement row, the actor's
   grant row `FOR SHARE` (a revocation that committed while the command queued is seen, a later one
   waits), then job rows. Roster changes hold the admin's staff row the same way through
   `requireRole(..., "write")`.

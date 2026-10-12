@@ -13,11 +13,11 @@ function startingEdit(source: DocumentSource): Edit {
   return { title: source.title, sections: toEditable(source.sections) };
 }
 
-/** One editing session. `version` is the agreement version the form started from, frozen. */
-type Session = Readonly<{ baseline: Edit; edit: Edit; version: number }>;
+/** One editing session. `draftVersion` is the draft fence the form started from, frozen. */
+type Session = Readonly<{ baseline: Edit; edit: Edit; draftVersion: number }>;
 
 /**
- * The draft's edit session. Saving sends `save_draft` fenced on the version the form started from,
+ * The draft's edit session. Saving sends `save_draft` fenced on the draft the form started from,
  * not the live one, so a draft someone else changed meanwhile is refused instead of overwritten.
  * The command goes through the workspace's one channel (`run`, `busy`); leaving with unsaved text
  * asks first.
@@ -45,7 +45,7 @@ export function useDraftEdit(view: AgreementView, run: RunCommand) {
     const saved = await run(
       {
         kind: "save_draft",
-        expectedVersion: session.version,
+        expectedDraftVersion: session.draftVersion,
         source: check.source,
       },
       "save_draft",
@@ -58,9 +58,10 @@ export function useDraftEdit(view: AgreementView, run: RunCommand) {
     dirty,
     problem,
     begin: () => {
-      if (view.draft === null) return;
+      const { draftVersion } = view.agreement;
+      if (view.draft === null || draftVersion === null) return;
       const start = startingEdit(view.draft.source);
-      setSession({ baseline: start, edit: start, version: view.agreement.version });
+      setSession({ baseline: start, edit: start, draftVersion });
     },
     change: (next: Edit) => {
       setSession((current) => (current === null ? null : { ...current, edit: next }));

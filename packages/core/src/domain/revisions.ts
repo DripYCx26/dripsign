@@ -44,6 +44,7 @@ export interface FailedPreparation {
 }
 
 const PREPARATION_ERROR_LENGTH = 500;
+const WORKER_WRITE = { dirty: false, staged: false } as const;
 
 export function signerSetHash(signers: readonly LiveSigner[]): string {
   return canonicalSha256(signers.map(({ id, name, email }) => ({ id, name, email })));
@@ -122,23 +123,39 @@ async function enqueuePreparation(
   });
 }
 
-/** The agreement title is the draft's, for staff; recipients and mail read the published one. */
+/**
+ * The agreement title is the draft's, for staff; recipients and mail read the published one. A
+ * staged write moves the draft fence; the worker's preparation result does not, so an open editor
+ * stays current. Once published, no draft write moves the list order recipients see.
+ */
 async function writeDraft(
   db: Db,
   agreement: AgreementRow,
   draft: Draft,
-  dirty: boolean,
+  write: { readonly dirty: boolean; readonly staged: boolean },
 ): Promise<void> {
   const parsed = draftSchema.parse(draft);
   await db.query(
     `UPDATE dripsign.agreement
-     SET draft = $3, title = $5, draft_dirty = draft_dirty OR $4, updated_at = now()
+     SET draft = $3, title = $5, draft_dirty = draft_dirty OR $4,
+       draft_version = draft_version + CASE WHEN $6 THEN 1 ELSE 0 END,
+       updated_at = CASE WHEN current_revision_id IS NULL THEN now() ELSE updated_at END
      WHERE tenant_id = $1 AND id = $2`,
-    [agreement.tenantId, agreement.id, JSON.stringify(parsed), dirty, parsed.source.title],
+    [
+      agreement.tenantId,
+      agreement.id,
+      JSON.stringify(parsed),
+      write.dirty,
+      parsed.source.title,
+      write.staged,
+    ],
   );
 }
 
-/** Writes the next draft and enqueues preparation when its fence moved. */
+/**
+ * Writes the next draft and moves the draft fence, so a staff tab holding the earlier draft is
+ * refused; enqueues preparation when the preparation fence moved.
+ */
 export async function stageDraft(
   db: Db,
   agreement: AgreementRow,
@@ -155,7 +172,7 @@ export async function stageDraft(
     signers: change.signers,
     revision: await nextRevisionNumber(db, agreement.tenantId, agreement.id),
   });
-  await writeDraft(db, agreement, draft, change.dirty);
+  await writeDraft(db, agreement, draft, { dirty: change.dirty, staged: true });
   if (fence !== null) await enqueuePreparation(db, agreement, fence);
 }
 
@@ -260,7 +277,7 @@ export async function applyPreparedDraft(db: Db, prepared: PreparedDraft): Promi
       signingFields: fields,
       preparation: { ...agreement.draft.preparation, status: "ready", error: null },
     };
-    await writeDraft(tx, agreement, draft, false);
+    await writeDraft(tx, agreement, draft, WORKER_WRITE);
     return true;
   });
 }
@@ -272,7 +289,7 @@ export async function failPreparation(db: Db, failed: FailedPreparation): Promis
     if (agreement === null || !expects(agreement.draft, failed.fence)) return false;
     const error = failed.reason.slice(0, PREPARATION_ERROR_LENGTH);
     const preparation = { ...agreement.draft.preparation, status: "failed", error } as const;
-    await writeDraft(tx, agreement, { ...agreement.draft, preparation }, false);
+    await writeDraft(tx, agreement, { ...agreement.draft, preparation }, WORKER_WRITE);
     return true;
   });
 }

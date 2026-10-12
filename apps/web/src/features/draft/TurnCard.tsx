@@ -70,7 +70,12 @@ function PlanCard({ plan, view, newest, run, busy }: Readonly<{ plan: AiPlan }> 
 /** What a draft reply can still do: apply, bring its preview back, or say why it cannot. */
 function DraftFoot({ view, turn, candidateId, run, busy, preview }: TurnProps) {
   const candidate = turn.id === candidateId;
-  const canApply = candidate && !turn.stale && view.allowedActions.includes("apply_ai");
+  const expectedDraftVersion = view.agreement.draftVersion;
+  const canApply =
+    candidate &&
+    !turn.stale &&
+    expectedDraftVersion !== null &&
+    view.allowedActions.includes("apply_ai");
   if (turn.status === "applied") return <Pill tone="info">Used as draft</Pill>;
   return (
     <>
@@ -87,7 +92,7 @@ function DraftFoot({ view, turn, candidateId, run, busy, preview }: TurnProps) {
           disabled={busy}
           onClick={() => {
             void run(
-              { kind: "apply_ai", expectedVersion: view.agreement.version, suggestionId: turn.id },
+              { kind: "apply_ai", expectedDraftVersion, suggestionId: turn.id },
               `apply_ai:${turn.id}`,
             );
           }}

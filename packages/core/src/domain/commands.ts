@@ -21,7 +21,7 @@ import {
   resolveAccess,
   touchAgreement,
 } from "./state.ts";
-import type { CommandContext } from "./state.ts";
+import type { CommandContext, Fence } from "./state.ts";
 import { loadAgreementView } from "./view.ts";
 
 type Handlers = {
@@ -62,6 +62,14 @@ function dispatch<K extends CommandKind>(
   return HANDLERS[kind](ctx, command);
 }
 
+function fenceOf(command: Command): Fence | null {
+  if ("expectedVersion" in command) return { on: "shared", expected: command.expectedVersion };
+  if ("expectedDraftVersion" in command) {
+    return { on: "draft", expected: command.expectedDraftVersion };
+  }
+  return null;
+}
+
 /**
  * Runs one command under its receipt: take the receipt, lock and fence the agreement, recheck the
  * grant and allowedActions, apply, enqueue effects. Capacity is `actor.capacity`. A replay changes
@@ -91,8 +99,7 @@ export async function executeCommand(
         payload: parsed,
       },
       async () => {
-        const expectedVersion = "expectedVersion" in parsed ? parsed.expectedVersion : null;
-        const agreement = await lockAgreement(db, access.tenantId, agreementId, expectedVersion);
+        const agreement = await lockAgreement(db, access.tenantId, agreementId, fenceOf(parsed));
         await lockGrant(db, actor, { tenantId: access.tenantId, agreementId });
         const state = await loadState(db, agreement, actor);
         requireAction(state, actor.capacity, parsed.kind);

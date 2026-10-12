@@ -238,15 +238,17 @@ export const newAgreementInputSchema = z
   );
 
 const fenced = { expectedVersion: expectedVersionSchema };
+/** Staff-private draft commands fence on the draft's own version, which recipients never see. */
+const draftFenced = { expectedDraftVersion: expectedVersionSchema };
 
 export const commandSchema = z.discriminatedUnion("kind", [
   z.strictObject({
     kind: z.literal("save_draft"),
-    ...fenced,
+    ...draftFenced,
     source: documentSourceSchema,
   }),
   z.strictObject({ kind: z.literal("publish"), ...fenced, reviewedSha256: sha256Schema }),
-  z.strictObject({ kind: z.literal("retry_preparation"), ...fenced }),
+  z.strictObject({ kind: z.literal("retry_preparation"), ...draftFenced }),
   z.strictObject({
     kind: z.literal("add_recipient"),
     ...fenced,
@@ -300,7 +302,7 @@ export const commandSchema = z.discriminatedUnion("kind", [
     instruction: aiInstructionSchema,
     mode: aiModeSchema,
   }),
-  z.strictObject({ kind: z.literal("apply_ai"), ...fenced, suggestionId: uuidSchema }),
+  z.strictObject({ kind: z.literal("apply_ai"), ...draftFenced, suggestionId: uuidSchema }),
 ]);
 
 export const staffListQuerySchema = z.strictObject({

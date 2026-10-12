@@ -38,6 +38,14 @@ test("a staff member publishes, a recipient signs, and the signed PDF downloads"
   page.once("dialog", (dialog) => void dialog.dismiss());
   await page.getByRole("link", { name: "Back to agreements" }).click();
   await expect(page.getByLabel("Title")).toHaveValue("Unsaved title");
+  let askedOnBack = false;
+  page.once("dialog", (dialog) => {
+    askedOnBack = true;
+    void dialog.dismiss();
+  });
+  await page.goBack();
+  await expect.poll(() => askedOnBack).toBe(true);
+  await expect(page.getByLabel("Title")).toHaveValue("Unsaved title");
   await page.getByRole("button", { name: "Discard" }).click();
   await page.getByRole("button", { name: "More actions" }).click();
   await page.getByRole("menuitem", { name: "Recipients" }).click();

@@ -187,7 +187,7 @@ it("plans on a forced tool with a bounded history, spends once and never applies
     inCommand(actor, context.agreementId, (ctx) =>
       applyAi(ctx, {
         kind: "apply_ai",
-        expectedVersion: ctx.agreement.version,
+        expectedDraftVersion: ctx.agreement.draftVersion,
         suggestionId: queued.id,
       }),
     ),

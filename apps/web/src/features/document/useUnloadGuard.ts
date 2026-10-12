@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 
 const LEAVE_PROMPT = "Leave without saving your edits?";
+const SENTINEL = "__dripsignUnsavedGuard";
 
 /** Whether an editor is holding unsaved text; at most one draft is edited at a time. */
 let unsaved = false;
@@ -25,21 +26,46 @@ function guardLinks(event: MouseEvent): void {
 
 /**
  * While `active`, every way out of the page asks first: the browser's prompt for reload, close
- * and the address bar, a confirm for any link, and `confirmLeave` for the account menu.
+ * and the address bar, a confirm for any link, `confirmLeave` for the account menu, and for
+ * browser Back. Back works through a sentinel entry on top of the editor's own: Back pops onto
+ * the editor's entry (same URL, same tree, so nothing remounts) and, if declined, the sentinel
+ * is pushed again. Our capture listener swallows that popstate so Next never traverses.
  */
 export function useUnloadGuard(active: boolean): void {
   useEffect(() => {
     if (!active) return;
     unsaved = true;
+    const href = window.location.href;
+    const state = window.history.state as object | null;
+    const pushSentinel = () => {
+      window.history.pushState({ ...state, [SENTINEL]: true }, "", href);
+    };
+    const guardBack = (event: PopStateEvent) => {
+      if (confirmLeave()) {
+        // Next handles this popstate; from the editor's own entry we still need one more step.
+        unsaved = false;
+        window.removeEventListener("popstate", guardBack, true);
+        if (window.location.href === href) window.history.back();
+        return;
+      }
+      event.stopImmediatePropagation();
+      pushSentinel();
+    };
     const guard = (event: BeforeUnloadEvent) => {
       event.preventDefault();
     };
+    pushSentinel();
+    window.addEventListener("popstate", guardBack, true);
     window.addEventListener("beforeunload", guard);
     window.addEventListener("click", guardLinks, true);
     return () => {
       unsaved = false;
+      window.removeEventListener("popstate", guardBack, true);
       window.removeEventListener("beforeunload", guard);
       window.removeEventListener("click", guardLinks, true);
+      // Dropping the sentinel after a save or discard; a link that already left owns the history.
+      const current = window.history.state as Record<string, unknown> | null;
+      if (current?.[SENTINEL] === true) window.history.back();
     };
   }, [active]);
 }
