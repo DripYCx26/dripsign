@@ -447,6 +447,17 @@ it("cancels signing only by a signer's proposal, voids on removal, keeps one sig
     [secondRound],
   );
   expect(removed.rows[0]).toEqual({ status: "void", endReason: "signer_removed" });
+  // Removed recipients never crowd live ones out of the view, however long the history.
+  await getPool().query(
+    `INSERT INTO dripsign.recipient
+     (tenant_id, agreement_id, id, email, name, is_signer, added_at, revoked_at)
+     SELECT $1, $2, gen_random_uuid(), 'gone' || n || '@client.test', 'Gone', false,
+       now() - interval '1 day', now()
+     FROM generate_series(1, 200) AS n`,
+    [staff.tenantId, id],
+  );
+  const live = (await loadAgreementView(staff, id)).recipients.filter((r) => r.removedAt === null);
+  expect(live.map((r) => r.email).sort()).toEqual([jordan.email, taylor.email].sort());
 
   // Taylor, listed before Jordan, signs first once promoted: staging, the worker's signature
   // page and publication all follow the one signer order.

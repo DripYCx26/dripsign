@@ -125,12 +125,13 @@ export interface TimelineRow {
 
 type Scope = readonly [tenantId: string, agreementId: string];
 
+/** Live recipients first, so removed ones never crowd them past the limit; then in added order. */
 export async function loadRecipients(db: Db, scope: Scope): Promise<RecipientRow[]> {
   const found = await db.query<RecipientRow>(
     `SELECT id, email, name, is_signer AS "isSigner", added_at AS "addedAt",
        last_invited_at AS "lastInvitedAt", revoked_at AS "removedAt"
      FROM dripsign.recipient WHERE tenant_id = $1 AND agreement_id = $2
-     ORDER BY added_at, id LIMIT $3`,
+     ORDER BY (revoked_at IS NOT NULL), added_at, id LIMIT $3`,
     [...scope, VIEW_LIMITS.recipients],
   );
   return found.rows;
