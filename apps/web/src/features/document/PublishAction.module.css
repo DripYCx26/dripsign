@@ -4,6 +4,8 @@
   bottom: var(--ds-space-4);
   z-index: 1;
   display: grid;
+  width: min(var(--ds-page-width), 100%);
+  margin-inline: auto;
   gap: var(--ds-space-3);
   min-height: calc(var(--ds-space-14) + var(--ds-space-2));
   align-content: center;

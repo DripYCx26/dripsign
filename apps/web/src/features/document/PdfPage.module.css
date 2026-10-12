@@ -4,7 +4,7 @@
   position: relative;
   width: 100%;
   /* One US Letter page at 96 dpi: wider columns centre the page instead of enlarging it. */
-  max-width: 8.5in;
+  max-width: var(--ds-page-width);
   margin-inline: auto;
   overflow: clip;
   border-radius: var(--ds-radius-sheet);

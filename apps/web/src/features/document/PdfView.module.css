@@ -15,6 +15,8 @@
 /* The facts of the file as one card: caps labels over mono values, the way out to the PDF at the
    end, and the caller's note under a hairline. */
 .card {
+  width: min(var(--ds-page-width), 100%);
+  margin-inline: auto;
   display: grid;
   gap: var(--ds-space-2);
   padding: var(--ds-space-3) var(--ds-space-4);

@@ -98,6 +98,7 @@
   /* The workspace thread rail: wide enough for a real chat; the narrow one holds history only. */
   --ds-layout-rail: clamp(440px, 36vw, 640px);
   --ds-layout-rail-narrow: 320px;
+  --ds-page-width: 8.5in;
   --ds-layout-page: 1280px;
   --ds-layout-sheet-read: 1200px;
   --ds-layout-sheet-narrow: 440px;

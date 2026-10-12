@@ -42,6 +42,8 @@
   bottom: 0;
   z-index: 1;
   display: flex;
+  width: min(var(--ds-page-width), 100%);
+  margin-inline: auto;
   min-height: calc(var(--ds-size-control-lg) + var(--ds-space-5));
   flex-wrap: wrap;
   align-items: center;
