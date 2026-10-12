@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { Suspense } from "react";
 import { requireInbox } from "@/features/list/inbox.ts";
 import { InboxList } from "@/features/list/InboxList.tsx";
 import { AppShell } from "@/features/shell/AppShell.tsx";
 import { PageContainer } from "@/features/shell/PageContainer.tsx";
-import { PageHeader, SkeletonRows } from "@/ui";
+import { PageHeader } from "@/ui";
 
 export const metadata: Metadata = { title: "Agreements" };
 
@@ -17,9 +16,7 @@ export default async function InboxPage() {
     <AppShell session={session} home="recipient">
       <PageContainer>
         <PageHeader title="Agreements" />
-        <Suspense fallback={<SkeletonRows />}>
-          <InboxList actor={actor} />
-        </Suspense>
+        <InboxList actor={actor} />
       </PageContainer>
     </AppShell>
   );

@@ -16,6 +16,7 @@ export function SignedStep({ agreementId, view, autoFocus }: SignedStepProps) {
   const own = round?.signers.find((signer) => signer.recipientId === view.viewer.recipientId);
   const signedAt = own?.signature?.signedAt;
   const signed = round?.signers.filter((signer) => signer.signature !== null).length ?? 0;
+  const everyone = round !== null && signed === round.signers.length;
   return (
     <StepFrame title="Your signature is recorded." icon={<BadgeCheck />} autoFocus={autoFocus}>
       {round !== null && (
@@ -41,7 +42,9 @@ export function SignedStep({ agreementId, view, autoFocus }: SignedStepProps) {
         </dl>
       )}
       <p className={styles.next}>
-        When everyone has signed, you’ll get the signed PDF and audit record by email.
+        {everyone
+          ? "Everyone has signed. The signed PDF and audit record are being prepared and will arrive by email."
+          : "When everyone has signed, you’ll get the signed PDF and audit record by email."}
       </p>
       <StepActions>
         <ButtonLink variant="secondary" size="lg" href={`/agreements/${agreementId}`}>
