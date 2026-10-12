@@ -115,6 +115,14 @@
   cursor: not-allowed;
 }
 
+/* The lead action keeps its teal fill when it cannot act, faded, so it never reads as a secondary. */
+.button[data-variant="ink"]:disabled {
+  border-color: transparent;
+  background: var(--ds-accent);
+  color: var(--ds-on-accent);
+  opacity: var(--ds-opacity-disabled);
+}
+
 /* A boxless action stays boxless when it cannot act: never heavier than when it can. */
 .button[data-variant="quiet"]:disabled,
 .button[data-variant="link"]:disabled {

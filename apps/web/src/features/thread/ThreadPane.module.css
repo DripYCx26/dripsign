@@ -10,8 +10,7 @@
   justify-content: flex-end;
 }
 
-/* A short thread sits on the composer: the first item's auto margin takes the free space, and
-   unlike align-content: end it never pushes the top of a long list out of reach. */
+/* A short thread starts at the top; useOpenAtNewest keeps a long one at its newest end. */
 .list {
   display: flex;
   min-height: 0;
@@ -28,10 +27,6 @@
 .item {
   min-width: 0;
   flex: none;
-}
-
-.item:first-child {
-  margin-block-start: auto;
 }
 
 .item:focus-visible {

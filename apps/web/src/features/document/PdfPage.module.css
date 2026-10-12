@@ -15,14 +15,6 @@
   height: 100%;
 }
 
-/* Dimmed for display only: the page is still white, but not a lamp in a dark room. The PDF's
-   bytes, and so what is signed, are untouched. */
-@media (prefers-color-scheme: dark) {
-  .canvas {
-    filter: brightness(0.93);
-  }
-}
-
 /* pdf.js lays the text runs out in CSS pixels from --total-scale-factor (set by PdfPage) and sizes
    this box itself. The runs are transparent: they exist to select, search and read aloud. The
    rules are pdf.js's own text layer, kept to the ones its output needs. */

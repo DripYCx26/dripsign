@@ -23,7 +23,6 @@
 }
 
 .sheet[data-void] {
-  border-top: 1px solid var(--ds-quiet);
   color: var(--ds-text-secondary);
 }
 
