@@ -3,6 +3,7 @@
 import type { AgreementView, Capacity } from "@dripsign/core/types";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { guardNavigation } from "@/features/document/useUnloadGuard.ts";
 import { Mark, Pill, Segmented } from "@/ui";
 import { BackButton } from "./BackButton.tsx";
 import type { RunCommand } from "./commands.ts";
@@ -65,7 +66,7 @@ export function WorkspaceHeader({
   const secondRow = rail !== "none" || step.label !== "" || documentControls !== null;
   return (
     <header className={styles.header} data-tab={tab} data-second-row={secondRow ? "" : undefined}>
-      <Link href={HOME[capacity]} className={styles.brand}>
+      <Link href={HOME[capacity]} className={styles.brand} onNavigate={guardNavigation}>
         <Mark compact />
       </Link>
       <BackButton label="Back to agreements" href={HOME[capacity]} />

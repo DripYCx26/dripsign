@@ -11,7 +11,6 @@ import {
   uuidSchema,
 } from "@dripsign/core/schema";
 import type { Capacity } from "@dripsign/core/types";
-import { starterDraft } from "@/features/list/starterDraft.ts";
 import { action } from "../action.ts";
 import { actorFor, staffActor } from "../session.ts";
 
@@ -25,10 +24,24 @@ export const runCommand = action(
     executeCommand(await actorFor(capacity, agreementId), agreementId, receiptKey, command),
 );
 
+/** Constant, so a resubmitted "New agreement" form replays its draft instead of conflicting. */
+const STARTER_DRAFT = {
+  source: {
+    title: "Untitled agreement",
+    sections: [
+      {
+        id: "terms",
+        heading: "Terms",
+        paragraphs: ["Write the terms here, or start from a template."],
+      },
+    ],
+  },
+  recipients: [],
+};
+
 const startDraft = action(
   z.strictObject({ receiptKey: receiptKeySchema }),
-  async ({ receiptKey }) =>
-    createAgreement(await staffActor(), receiptKey, starterDraft(receiptKey)),
+  async ({ receiptKey }) => createAgreement(await staffActor(), receiptKey, STARTER_DRAFT),
 );
 
 /** The "New agreement" form: a signerless one-section draft, then its workspace. */

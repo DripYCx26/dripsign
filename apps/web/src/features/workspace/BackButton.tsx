@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { guardNavigation } from "@/features/document/useUnloadGuard.ts";
 import { ChevronLeft } from "@/ui";
 import styles from "./BackButton.module.css";
 
@@ -11,7 +12,7 @@ type BackButtonProps = Readonly<{
 /** The chevron that leaves a workspace, the publish review or the signing flow for its parent. */
 export function BackButton({ label, href }: BackButtonProps) {
   return (
-    <Link href={href} className={styles.back} aria-label={label}>
+    <Link href={href} className={styles.back} aria-label={label} onNavigate={guardNavigation}>
       <ChevronLeft aria-hidden="true" />
     </Link>
   );

@@ -32,6 +32,13 @@ test("a staff member publishes, a recipient signs, and the signed PDF downloads"
   await expect(page).toHaveURL(/\/staff\/agreements\/[^/]+$/u);
   // The starter is the AI-off path: choosing it sends no prompt, so the smoke never spends.
   await page.getByRole("button", { name: "Services agreement" }).click();
+  // Unsaved edits survive a declined client-side exit.
+  await page.getByRole("button", { name: "Edit draft" }).click();
+  await page.getByLabel("Title").fill("Unsaved title");
+  page.once("dialog", (dialog) => void dialog.dismiss());
+  await page.getByRole("link", { name: "Back to agreements" }).click();
+  await expect(page.getByLabel("Title")).toHaveValue("Unsaved title");
+  await page.getByRole("button", { name: "Discard" }).click();
   await page.getByRole("button", { name: "More actions" }).click();
   await page.getByRole("menuitem", { name: "Recipients" }).click();
   const recipients = page.getByRole("dialog", { name: "Recipients" });

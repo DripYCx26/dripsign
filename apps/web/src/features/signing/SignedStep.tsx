@@ -43,8 +43,8 @@ export function SignedStep({ agreementId, view, autoFocus }: SignedStepProps) {
       )}
       <p className={styles.next}>
         {everyone
-          ? "Everyone has signed. The signed PDF and audit record are being prepared and will arrive by email."
-          : "When everyone has signed, you’ll get the signed PDF and audit record by email."}
+          ? "Everyone has signed. The signed PDF and audit record are being prepared, and you’ll get an email with a link to them."
+          : "When everyone has signed, you’ll get an email with a link to the signed PDF and audit record."}
       </p>
       <StepActions>
         <ButtonLink variant="secondary" size="lg" href={`/agreements/${agreementId}`}>

@@ -4,6 +4,7 @@ import type { Theme } from "@dripsign/core/schema";
 import type { SessionView } from "@dripsign/core/types";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
+import { confirmLeave } from "@/features/document/useUnloadGuard.ts";
 import { selectTenant, signOut } from "@/server/actions/auth.ts";
 import { setTheme } from "@/server/actions/theme.ts";
 import { Avatar, Check, LogOut, Menu, User, Users } from "@/ui";
@@ -128,6 +129,7 @@ export function AccountMenu(props: AccountMenuProps) {
 
   async function run(id: ItemId) {
     setFailure(null);
+    if (!id.startsWith(THEME_PREFIX) && !confirmLeave()) return;
     if (id.startsWith(LINK_PREFIX)) {
       router.push(id.slice(LINK_PREFIX.length));
       return;
