@@ -1,7 +1,7 @@
 // Drives the real domain commands as the seeded people, and runs the queued PDF work in-process.
 import { setTimeout as sleep } from "node:timers/promises";
 import { getPool, tx } from "../db.ts";
-import { createAgreement, executeCommand, storeUpload } from "../domain/commands.ts";
+import { createAgreement, executeCommand } from "../domain/commands.ts";
 import { loadAgreementView } from "../domain/view.ts";
 import { createHandlers } from "../jobs/handlers.ts";
 import { claimJobs, finishJob } from "../jobs/outbox.ts";
@@ -16,7 +16,7 @@ const CLAIM_BATCH = 20;
 // A job that fails once retries after 10 seconds, so the wait outlasts one backoff.
 const SETTLE_TIMEOUT_MS = 45_000;
 const POLL_MS = 250;
-/** The only kinds seed data needs; mail and host events are marked done without being sent. */
+/** The only kinds seed data needs; mail is marked done without being sent. */
 const RUN_KINDS: readonly string[] = ["pdf_prepare", "archive"];
 
 export interface Script {
@@ -27,7 +27,6 @@ export interface Script {
     make: (view: AgreementView) => Command,
   ): Promise<AgreementView>;
   create(actor: StaffActor, input: NewAgreementInput): Promise<string>;
-  upload(actor: StaffActor, agreementId: string, bytes: Uint8Array): Promise<AgreementView>;
   /** Runs queued PDF preparation and archive work until none is open. */
   settle(): Promise<void>;
   /** A verified session per person, so signing sees a fresh verification. */
@@ -62,13 +61,6 @@ export function createScript(): Script {
       return executeCommand(actor, agreementId, nextKey(), make(view));
     },
     create: (actor, input) => createAgreement(actor, nextKey(), input),
-    async upload(actor, agreementId, bytes) {
-      const view = await loadAgreementView(actor, agreementId);
-      return storeUpload(actor, agreementId, nextKey(), {
-        expectedVersion: view.agreement.version,
-        bytes,
-      });
-    },
     settle: () => settleJobs(handlers),
     async staff(tenantId, person, role) {
       return {

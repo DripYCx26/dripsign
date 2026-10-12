@@ -57,11 +57,6 @@ Parameters:
     Type: String
     Default: ''
     Description: The DRIPSIGN_HOST JSON for a Dreach host app (public settings); empty turns the bridge entry off.
-  HostEventUrl:
-    Type: String
-    Default: ''
-    AllowedPattern: '^$|^https://[^/]+/v1/webhooks/dripsign$'
-    Description: Fixed https executed-event URL; set it and DRIPSIGN_COMPLETION_KEYS in both config secrets to turn completion export on.
   WebDesiredCount:
     Type: Number
     MinValue: 0
@@ -75,7 +70,6 @@ Parameters:
 Conditions:
   AiOn: !Equals [!Ref AiEnabled, 'true']
   HostOn: !Not [!Equals [!Ref HostIntegration, '']]
-  CompletionExportOn: !Not [!Equals [!Ref HostEventUrl, '']]
 Resources:
   Cluster:
     Type: AWS::ECS::Cluster
@@ -123,13 +117,13 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      Description: Web JSON keys, filled privately before starting ECS - DRIPSIGN_AUTH_SECRET (32+ bytes), DRIPSIGN_ANTHROPIC_API_KEY when AiEnabled, DRIPSIGN_COMPLETION_KEYS when HostEventUrl is set.
+      Description: Web JSON keys, filled privately before starting ECS - DRIPSIGN_AUTH_SECRET (32+ bytes), DRIPSIGN_ANTHROPIC_API_KEY when AiEnabled.
   WorkerConfig:
     Type: AWS::SecretsManager::Secret
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      Description: Worker JSON keys, filled privately before starting ECS - DRIPSIGN_AUTH_SECRET (the web value), DRIPSIGN_ANTHROPIC_API_KEY when AiEnabled, DRIPSIGN_COMPLETION_KEYS when HostEventUrl is set.
+      Description: Worker JSON keys, filled privately before starting ECS - DRIPSIGN_AUTH_SECRET (the web value), DRIPSIGN_ANTHROPIC_API_KEY when AiEnabled.
   WebLogs:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -407,11 +401,6 @@ Resources:
               - Name: DRIPSIGN_HOST
                 Value: !Ref HostIntegration
               - !Ref AWS::NoValue
-            - !If
-              - CompletionExportOn
-              - Name: DRIPSIGN_HOST_EVENT_URL
-                Value: !Ref HostEventUrl
-              - !Ref AWS::NoValue
           Secrets:
             - Name: DRIPSIGN_DATABASE_URL
               ValueFrom: !Ref DatabaseSecretArn
@@ -421,11 +410,6 @@ Resources:
               - AiOn
               - Name: DRIPSIGN_ANTHROPIC_API_KEY
                 ValueFrom: !Sub '${WebConfig}:DRIPSIGN_ANTHROPIC_API_KEY::'
-              - !Ref AWS::NoValue
-            - !If
-              - CompletionExportOn
-              - Name: DRIPSIGN_COMPLETION_KEYS
-                ValueFrom: !Sub '${WebConfig}:DRIPSIGN_COMPLETION_KEYS::'
               - !Ref AWS::NoValue
           LogConfiguration:
             LogDriver: awslogs
@@ -472,11 +456,6 @@ Resources:
               - Name: DRIPSIGN_HOST
                 Value: !Ref HostIntegration
               - !Ref AWS::NoValue
-            - !If
-              - CompletionExportOn
-              - Name: DRIPSIGN_HOST_EVENT_URL
-                Value: !Ref HostEventUrl
-              - !Ref AWS::NoValue
           Secrets:
             - Name: DRIPSIGN_DATABASE_URL
               ValueFrom: !Ref DatabaseSecretArn
@@ -486,11 +465,6 @@ Resources:
               - AiOn
               - Name: DRIPSIGN_ANTHROPIC_API_KEY
                 ValueFrom: !Sub '${WorkerConfig}:DRIPSIGN_ANTHROPIC_API_KEY::'
-              - !Ref AWS::NoValue
-            - !If
-              - CompletionExportOn
-              - Name: DRIPSIGN_COMPLETION_KEYS
-                ValueFrom: !Sub '${WorkerConfig}:DRIPSIGN_COMPLETION_KEYS::'
               - !Ref AWS::NoValue
           LogConfiguration:
             LogDriver: awslogs

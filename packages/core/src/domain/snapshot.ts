@@ -40,9 +40,8 @@ export interface RevisionRow {
   readonly sha256: string;
   readonly byteLength: number;
   readonly pageCount: number;
-  readonly uploadSha256: string | null;
   readonly publishedAt: Date;
-  readonly source: DocumentSource | null;
+  readonly source: DocumentSource;
   readonly signingFields: SigningField[];
   readonly signerIds: string[];
 }
@@ -141,8 +140,8 @@ export async function loadRecipients(db: Db, scope: Scope): Promise<RecipientRow
 export async function loadRevisions(db: Db, scope: Scope): Promise<RevisionRow[]> {
   const found = await db.query<RevisionRow>(
     `SELECT id, number, document_sha256 AS sha256, document_bytes AS "byteLength",
-       page_count AS "pageCount", upload_sha256 AS "uploadSha256", published_at AS "publishedAt",
-       source, signing_fields AS "signingFields", signer_ids AS "signerIds"
+       page_count AS "pageCount", published_at AS "publishedAt", source,
+       signing_fields AS "signingFields", signer_ids AS "signerIds"
      FROM dripsign.revision WHERE tenant_id = $1 AND agreement_id = $2
      ORDER BY number DESC LIMIT $3`,
     [...scope, VIEW_LIMITS.revisions],

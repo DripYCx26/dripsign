@@ -29,7 +29,6 @@ export async function fixture(tenantId = randomUUID()) {
   const email = "staff@example.test";
   const draft = {
     source,
-    upload: null,
     document: null,
     signingFields: [],
     signerIds: [recipientId],

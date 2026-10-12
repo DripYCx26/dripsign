@@ -1,7 +1,6 @@
 // The shared thread: messages and turn-based proposals. Accepting wording stages it into the
 // private draft; only a reviewed publish turns it into a revision.
 import { randomUUID } from "node:crypto";
-import { DomainError } from "../errors.ts";
 import type { CommandOf, DocumentSource } from "../schema.ts";
 import { stageDraft } from "./revisions.ts";
 import { endRound } from "./signing.ts";
@@ -73,7 +72,6 @@ async function insertProposal(
   },
 ): Promise<void> {
   const { db, agreement, actor } = ctx;
-  if (proposal.replacementSource !== null) await requireWrittenRevision(ctx);
   const replacement =
     proposal.replacementSource === null ? null : JSON.stringify(proposal.replacementSource);
   await uniqueOrConflict("one_pending_proposal", PENDING_EXISTS, () =>
@@ -97,19 +95,6 @@ async function insertProposal(
   );
 }
 
-/** Replacement terms rewrite written terms; an uploaded PDF has none to replace. */
-async function requireWrittenRevision(ctx: CommandContext): Promise<void> {
-  const { db, agreement } = ctx;
-  const found = await db.query(
-    `SELECT 1 FROM dripsign.revision
-     WHERE tenant_id = $1 AND id = $2 AND source IS NOT NULL`,
-    [agreement.tenantId, agreement.currentRevisionId],
-  );
-  if (found.rowCount !== 1) {
-    throw new DomainError("invalid", "Replacement wording applies only to written terms.");
-  }
-}
-
 export async function accept(ctx: CommandContext, command: CommandOf<"accept">): Promise<void> {
   const { db, agreement, state } = ctx;
   const replacement = await decide(ctx, command.proposalId, "accepted");
@@ -122,7 +107,7 @@ export async function accept(ctx: CommandContext, command: CommandOf<"accept">):
     return;
   }
   await stageDraft(db, agreement, {
-    content: { source: replacement, upload: null },
+    source: replacement,
     signers: state.signers,
     dirty: true,
   });

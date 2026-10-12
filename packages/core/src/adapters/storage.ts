@@ -8,7 +8,7 @@ import { LIMITS, sha256Schema, uuidSchema } from "../schema.ts";
 import { azureToken } from "./azure.ts";
 import { readBoundedBody } from "./http.ts";
 
-const MAX_OBJECT_BYTES = LIMITS.pdfBytes * 2;
+const MAX_OBJECT_BYTES = LIMITS.pdfBytes;
 const OPERATION_TIMEOUT_MS = 60_000;
 /** Pinned: the newest Blob service version deployed in every public region on 2026-09-23. */
 export const BLOB_SERVICE_VERSION = "2026-04-06";

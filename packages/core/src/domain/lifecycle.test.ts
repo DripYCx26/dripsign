@@ -1,7 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { PDFDocument } from "pdf-lib";
-import { expect, it, vi } from "vitest";
-import { loadConfig } from "../config.ts";
+import { expect, it } from "vitest";
 import { getPool, tx } from "../db.ts";
 import { DomainError } from "../errors.ts";
 import { createHandlers } from "../jobs/handlers.ts";
@@ -11,43 +9,16 @@ import { LIMITS, SIGNING_CONSENT } from "../schema.ts";
 import type { Command, DocumentSource, JobPayload } from "../schema.ts";
 import type { NewAgreementInput, NewRecipient } from "../schema.ts";
 import type { Actor, AgreementView, RecipientActor, StaffActor } from "../types.ts";
-import { createAgreement, executeCommand, storeUpload } from "./commands.ts";
-import {
-  readCompletionExportSettings,
-  recoverCompletionExport,
-  saveCompletionExportConfig,
-} from "./completionExport.ts";
+import { createAgreement, executeCommand } from "./commands.ts";
 import { sha256Hex } from "./receipts.ts";
 import { addStaff, revokeStaff, upsertStaff } from "./staff.ts";
 import { loadArchiveEvidence } from "./archive.ts";
 import { renderAuditRecord } from "../pdf/archive.ts";
 import { loadAgreementView } from "./view.ts";
 
-// Delivery on, so export pins are checked against this server; loadConfig memoizes per file.
-vi.stubEnv("DRIPSIGN_HOST_EVENT_URL", "https://host.example.test/v1/webhooks/dripsign");
-vi.stubEnv(
-  "DRIPSIGN_COMPLETION_KEYS",
-  JSON.stringify([{ keyId: "dripsign-1", keyVersion: 1, seed: "09".repeat(32) }]),
-);
-
 function must<T>(value: T | null | undefined): T {
   if (value === null || value === undefined) throw new Error("Expected a value");
   return value;
-}
-
-/** Pins this test server can deliver: its own origin, the event URL's origin, a key it holds. */
-function sendablePins() {
-  return {
-    hostTenantId: randomUUID(),
-    senderBindingId: randomUUID(),
-    senderBindingRevision: 1,
-    senderGrantId: randomUUID(),
-    issuer: loadConfig().publicOrigin,
-    audience: "https://host.example.test",
-    keyId: "dripsign-1",
-    keyVersion: 1,
-    freshnessSeconds: 300,
-  };
 }
 
 function terms(term: string): DocumentSource {
@@ -171,7 +142,7 @@ async function negotiating(recipients: readonly NewRecipient[], recipientIds?: r
   const staff = await staffActor();
   const id = await createAgreement(staff, `key-${randomUUID()}`, {
     title: "Services agreement",
-    document: { kind: "source", source: terms("Twelve months.") },
+    source: terms("Twelve months."),
     recipients: [...recipients],
   });
   if (recipientIds) {
@@ -231,7 +202,7 @@ it("negotiates, publishes, collects every signature and archives the signed agre
   const morgan = person("Morgan Diaz", true);
   const id = await createAgreement(staff, `key-${randomUUID()}`, {
     title: "Services agreement",
-    document: { kind: "source", source: terms("Twelve months.") },
+    source: terms("Twelve months."),
     recipients: [jordan, morgan],
   });
   const created = await loadAgreementView(staff, id);
@@ -316,72 +287,11 @@ it("negotiates, publishes, collects every signature and archives the signed agre
      RETURNING id, lease_token AS "leaseToken"`,
     [id],
   );
-  // Pins saved while delivery was off were never checked; they name another destination.
-  const offline = { ...sendablePins(), audience: "https://old-host.example.test" };
-  await getPool().query(
-    `INSERT INTO dripsign.completion_export_config
-       (tenant_id, revision, host_tenant_id, sender_binding_id, sender_binding_revision,
-        sender_grant_id, issuer, audience, key_id, key_version, freshness_seconds, created_by)
-     VALUES ($1, 1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-    [
-      staff.tenantId,
-      offline.hostTenantId,
-      offline.senderBindingId,
-      offline.senderBindingRevision,
-      offline.senderGrantId,
-      offline.issuer,
-      offline.audience,
-      offline.keyId,
-      offline.keyVersion,
-      offline.freshnessSeconds,
-      staff.email,
-    ],
-  );
-  const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
   const archive = job({ kind: "archive", roundId: round.id }, staff, id, must(leased.rows[0]));
   await createHandlers().archive.handler(archive, new AbortController().signal);
-  expect(log.mock.calls).toEqual([
-    ["dripsign: completion export held", { id: round.id, code: "undeliverable" }],
-  ]);
-  log.mockRestore();
   view = await loadAgreementView(jordanActor, id);
   // The completion gate admits "signed" only with both archived artifacts.
   expect(view.agreement.status).toBe("signed");
-
-  // Undeliverable pins freeze nothing; once fixed, recovering the held round freezes and queues it.
-  const exported = () =>
-    getPool().query<{ revision: number }>(
-      `SELECT config_revision AS revision FROM dripsign.completion_export WHERE round_id = $1`,
-      [round.id],
-    );
-  expect((await exported()).rows).toEqual([]);
-  const settings = await readCompletionExportSettings(staff);
-  expect(settings.undelivered).toMatchObject([{ roundId: round.id, state: "held", eventId: null }]);
-  await expect(recoverCompletionExport(staff, round.id)).rejects.toMatchObject({ code: "invalid" });
-  await saveCompletionExportConfig(staff, { expectedRevision: 1, config: sendablePins() });
-  // Three recoveries wait on the round lock: the admin revoked meanwhile is refused, and of the
-  // other two, the one that waited longer finds the round frozen.
-  const second = await colleague(staff);
-  const roundLock = await holdLocks([
-    "SELECT 1 FROM dripsign.signing_round WHERE id = $1 FOR UPDATE",
-    [round.id],
-  ]);
-  const recovered = Promise.allSettled([
-    recoverCompletionExport(staff, round.id),
-    recoverCompletionExport(second, round.id),
-    recoverCompletionExport(second, round.id),
-  ]);
-  await roundLock.queue(3);
-  await revokeStaff(second, staff.email);
-  await roundLock.release();
-  expect((await recovered).map((outcome) => outcome.status)).toEqual([
-    "rejected",
-    "fulfilled",
-    "fulfilled",
-  ]);
-  expect((await recovered)[0]).toMatchObject({ reason: { code: "not_found" } });
-  expect((await exported()).rows).toEqual([{ revision: 2 }]);
-  expect(await jobCount(id, "host_event")).toBe(1);
 });
 
 it("cancels signing only by a signer's proposal, voids on removal, keeps one signer order", async () => {
@@ -492,26 +402,23 @@ it("cancels signing only by a signer's proposal, voids on removal, keeps one sig
   ).not.toEqual(await renderAuditRecord(evidence));
 });
 
-it("keeps an upload on rename, fences, replays, rechecks authority, refuses unsendable pins", async () => {
+it("keeps terms on rename, fences, replays, rechecks authority, keeps the last admin", async () => {
   const jordan = person("Jordan Lee", true);
   const { staff, id, view: published, actors } = await negotiating([jordan]);
   const jordanActor = must(actors[0]);
-  // A stale save is fenced; a title-only save keeps the upload, which takes no replacement wording.
-  const pdf = await PDFDocument.create();
-  pdf.addPage();
-  const uploaded = await storeUpload(staff, id, `key-${randomUUID()}`, {
+  // A title-only save keeps the terms; the same save on the old version is fenced.
+  const rename = {
+    kind: "save_draft",
+    title: "Renamed agreement",
     expectedVersion: published.agreement.version,
-    bytes: await pdf.save(),
-  });
-  const rename = { kind: "save_draft", title: "Renamed agreement" } as const;
-  const stale = { ...rename, expectedVersion: published.agreement.version };
-  await expect(run(staff, id, stale)).rejects.toMatchObject({ code: "conflict" });
-  const renamed = await run(staff, id, { ...rename, expectedVersion: uploaded.agreement.version });
-  expect(renamed.draft?.upload).toEqual(must(uploaded.draft?.upload));
-  // A refused PDF reaches staff as the worker's sentence, not its code; a retry prepares again.
+  } as const;
+  const renamed = await run(staff, id, rename);
+  expect(renamed.draft?.source).toEqual(must(published.draft?.source));
+  await expect(run(staff, id, rename)).rejects.toMatchObject({ code: "conflict" });
+  // Terms the renderer refuses reach staff as its sentence, not its code; a retry prepares again.
   const { inputSha256, signerSetHash } = must(renamed.draft).preparation;
   const fence = { inputSha256: must(inputSha256), signerSetHash: must(signerSetHash) };
-  const refused = new DomainError("invalid", "The PDF is encrypted.");
+  const refused = new DomainError("invalid", "The signer label is too long.");
   await tx((db) =>
     createHandlers().pdf_prepare.onFinalFailure(
       db,
@@ -529,10 +436,6 @@ it("keeps an upload on rename, fences, replays, rechecks authority, refuses unse
     expectedVersion: view.agreement.version,
     text: "Shorter term.",
   };
-  await expect(
-    run(jordanActor, id, { ...proposal, replacementSource: terms("Six months.") }),
-  ).rejects.toMatchObject({ code: "invalid" });
-
   const key = `key-${randomUUID()}`;
   await executeCommand(jordanActor, id, key, proposal);
   const replayed = await executeCommand(jordanActor, id, key, proposal);
@@ -553,26 +456,12 @@ it("keeps an upload on rename, fences, replays, rechecks authority, refuses unse
   expect(must(withdrawn.proposals.at(-1)).status).toBe("superseded");
   expect((await loadAgreementView(staff, id)).allowedActions).toContain("request_signatures");
 
-  // Pins freeze into immutable events, so ones this server cannot send are refused at save.
-  const pins = sendablePins();
-  const savePins = (changed: Partial<typeof pins>) =>
-    saveCompletionExportConfig(staff, { expectedRevision: 0, config: { ...pins, ...changed } });
-  for (const wrong of [
-    { issuer: "https://other.example.test" },
-    { audience: "https://other.example.test" },
-    { keyId: "dripsign-2" },
-    { keyVersion: 2 },
-  ]) {
-    await expect(savePins(wrong)).rejects.toMatchObject({ code: "invalid" });
-  }
-  expect(await savePins({})).toBe(1);
-
-  // Revoked while a message waits on the agreement, a create replay on its receipt and a pins
-  // save on the staff row: all three fail.
+  // Revoked while a message waits on the agreement, a create replay on its receipt and a roster
+  // change on the staff row: all three fail.
   const second = await colleague(staff);
   const draft: NewAgreementInput = {
     title: "Second agreement",
-    document: { kind: "upload" },
+    source: terms("Twelve months."),
     recipients: [person("Casey Park", true)],
   };
   const createKey = `key-${randomUUID()}`;
@@ -588,7 +477,7 @@ it("keeps an upload on rename, fences, replays, rechecks authority, refuses unse
   const queued = Promise.allSettled([
     run(staff, id, { kind: "message", body: "Checking in." }),
     createAgreement(staff, createKey, draft),
-    saveCompletionExportConfig(staff, { expectedRevision: 1, config: pins }),
+    addStaff(staff, { email: `late-${randomUUID()}@acme.test`, role: "member" }),
   ]);
   await held.queue(3);
   await held.release();
@@ -596,7 +485,6 @@ it("keeps an upload on rename, fences, replays, rechecks authority, refuses unse
     expect(outcome).toMatchObject({ status: "rejected", reason: { code: "not_found" } });
   }
   expect((await loadAgreementView(jordanActor, id)).messages).toHaveLength(0);
-  expect((await readCompletionExportSettings(second)).history).toHaveLength(1);
 
   // The last admin cannot step down, and two admins revoking each other leave one.
   await expect(addStaff(second, { email: second.email, role: "member" })).rejects.toMatchObject({

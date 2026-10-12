@@ -12,7 +12,6 @@ export const JOB_MAX_ATTEMPTS: Readonly<Record<JobKind, number | null>> = {
   // At most once: a second claim means the first may have spent, so it fails instead.
   ai_suggest: 1,
   archive: null,
-  host_event: 20,
 };
 
 export interface NewJob {

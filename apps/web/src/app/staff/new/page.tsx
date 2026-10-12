@@ -6,7 +6,7 @@ import { requireStaff } from "@/server/session.ts";
 
 export const metadata: Metadata = { title: "New agreement" };
 
-/** Staff only: a title, the terms (written here or a PDF) and the people who will review and sign. */
+/** Staff only: a title, the written terms and the people who will review and sign. */
 export default async function NewAgreementPage() {
   await requireStaff();
   return (

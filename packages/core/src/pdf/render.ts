@@ -35,10 +35,9 @@ export function textWriter(document: PDFDocument, font: PDFFont, maxPages: numbe
   };
 }
 
-export function pageNumbers(document: PDFDocument, font: PDFFont, firstPage = 0): void {
+export function pageNumbers(document: PDFDocument, font: PDFFont): void {
   const pages = document.getPages();
   for (const [index, page] of pages.entries()) {
-    if (index < firstPage) continue;
     const label = `${String(index + 1)} / ${String(pages.length)}`;
     page.drawText(label, {
       x: page.getWidth() - PAPER.margin - font.widthOfTextAtSize(label, 8),
@@ -49,12 +48,9 @@ export function pageNumbers(document: PDFDocument, font: PDFFont, firstPage = 0)
   }
 }
 
-export async function savePdf(
-  document: PDFDocument,
-  byteLimit = LIMITS.pdfBytes * 2,
-): Promise<Uint8Array> {
+export async function savePdf(document: PDFDocument): Promise<Uint8Array> {
   const bytes = await document.save({ useObjectStreams: false, updateFieldAppearances: false });
-  if (bytes.byteLength > byteLimit)
+  if (bytes.byteLength > LIMITS.pdfBytes)
     throw new DomainError("invalid", "The PDF exceeds its size limit.");
   return bytes;
 }

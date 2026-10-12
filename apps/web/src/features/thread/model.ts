@@ -165,7 +165,7 @@ export function baseSourceOf(view: AgreementView, proposal: ProposalView): Docum
   return view.revisions.find((revision) => revision.id === proposal.baseRevisionId)?.source ?? null;
 }
 
-/** "a change to Term" or, for a PDF or an unchanged-terms proposal, "a change". */
+/** "a change to Term" or, for a proposal without changed terms, "a change". */
 export function describeChange(view: AgreementView, proposal: ProposalView): string {
   const changed = changedSection(baseSourceOf(view, proposal), proposal.replacementSource);
   if (changed === null) return "a change";

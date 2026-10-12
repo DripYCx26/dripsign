@@ -1,19 +1,16 @@
 import type { Db } from "../db.ts";
-import { getPool, pgErrorCode, readTx } from "../db.ts";
+import { getPool, readTx } from "../db.ts";
 import { DomainError } from "../errors.ts";
 import { draftSchema } from "../schema.ts";
 import type { JobKind } from "../schema.ts";
 import { suggestEdits } from "../adapters/anthropic.ts";
-import { RetryableDeliveryError, retryableDelivery, sendEmail } from "../adapters/email.ts";
-import { getStorage, objectKey, readBytes, storeBytes } from "../adapters/storage.ts";
+import { retryableDelivery, sendEmail } from "../adapters/email.ts";
+import { getStorage, readBytes, storeBytes } from "../adapters/storage.ts";
 import type { StorageDriver } from "../adapters/storage.ts";
-import { readBoundedJson } from "../adapters/http.ts";
 import { loadSuggestionInput, completeSuggestion, failSuggestion } from "../domain/ai.ts";
-import { loadCompletionExport, recordCompletionDelivery } from "../domain/completionExport.ts";
 import { applyPreparedDraft, failPreparation } from "../domain/revisions.ts";
 import { loadArchiveEvidence, completeArchive } from "../domain/signing.ts";
 import { liveSigners } from "../domain/state.ts";
-import { parseExecutedReceipt, prepareExecutedEvent } from "../host/event.ts";
 import { prepareDraftPdf } from "../pdf/prepare.ts";
 import { renderAuditRecord, renderSignedPdf } from "../pdf/archive.ts";
 import { scrubEmailParams } from "./outbox.ts";
@@ -36,7 +33,7 @@ function tenant(job: ClaimedJob): string {
   return job.tenantId;
 }
 
-/** The sentence of a PDF the worker refused as invalid; null for any other failure. */
+/** The sentence of terms the renderer refused as invalid; null for any other failure. */
 function refusal(error: unknown): string | null {
   return error instanceof DomainError && error.code === "invalid" ? error.message : null;
 }
@@ -60,38 +57,20 @@ async function prepare(
     );
     const row = result.rows[0];
     if (!row) return null;
-    const draft = draftSchema.parse(row.draft);
+    const { source, preparation } = draftSchema.parse(row.draft);
     if (
-      draft.preparation.inputSha256 !== job.payload.inputSha256 ||
-      draft.preparation.signerSetHash !== job.payload.signerSetHash
+      source === null ||
+      preparation.inputSha256 !== job.payload.inputSha256 ||
+      preparation.signerSetHash !== job.payload.signerSetHash
     )
       return null;
     // The domain's one signer order, the order the draft's signer-set hash was taken in.
     const signers = await liveSigners(db, tenantId, agreementId);
-    return { title: row.title, draft, signers };
+    return { title: row.title, source, signers };
   });
   if (!input) return;
   signal.throwIfAborted();
-  const upload = input.draft.upload;
-  const uploadBytes = upload
-    ? await readBytes(
-        {
-          key: objectKey(tenantId, upload.sha256),
-          sha256: upload.sha256,
-          byteLength: upload.byteLength,
-        },
-        storage,
-      )
-    : undefined;
-  const prepared = await prepareDraftPdf(
-    {
-      title: input.title,
-      signers: input.signers,
-      ...(input.draft.source ? { source: input.draft.source } : {}),
-      ...(uploadBytes ? { uploadBytes } : {}),
-    },
-    signal,
-  );
+  const prepared = await prepareDraftPdf(input);
   signal.throwIfAborted();
   const document = await storeBytes(tenantId, prepared.bytes, storage);
   await applyPreparedDraft(getPool(), {
@@ -146,50 +125,6 @@ async function ai(job: JobOf<"ai_suggest">, signal: AbortSignal): Promise<void> 
   } catch (error: unknown) {
     throw Object.assign(new Error("AI suggestion failed", { cause: error }), { providerCalled });
   }
-}
-
-/** Dreach's receipt is four short fields. */
-const RECEIPT_BYTES = 1024;
-
-/** Delivered only once the host returns its receipt for exactly this body. */
-async function hostEvent(job: JobOf<"host_event">, signal: AbortSignal): Promise<void> {
-  const tenantId = tenant(job);
-  const roundId = job.payload.roundId;
-  const frozen = await loadCompletionExport(getPool(), { tenantId, roundId });
-  if (frozen === null) throw new Error("Round has no completion export");
-  const event = prepareExecutedEvent(frozen);
-  const response = await fetch(event.url, {
-    method: "POST",
-    headers: event.headers,
-    body: event.body,
-    redirect: "error",
-    signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
-  }).catch((error: unknown) => {
-    throw new RetryableDeliveryError({ cause: error });
-  });
-  if (!response.ok) {
-    await response.body?.cancel();
-    if (response.status === 408 || response.status === 429 || response.status >= 500)
-      throw new RetryableDeliveryError();
-    throw new Error("Host refused executed event");
-  }
-  const answer = await readBoundedJson(response, RECEIPT_BYTES).catch((error: unknown) => {
-    throw new RetryableDeliveryError({ cause: error });
-  });
-  const receipt = parseExecutedReceipt(answer, event.body);
-  if (receipt === null) throw new RetryableDeliveryError();
-  await recordCompletionDelivery(getPool(), { tenantId, roundId, receipt });
-}
-
-function retryableHostEvent(error: unknown): boolean {
-  if (retryableDelivery(error)) return true;
-  // Transactions wrap busy/deadlock errors; inspect their bounded cause chain as well.
-  for (let depth = 0; depth < 4 && error instanceof Error; depth++) {
-    const code = pgErrorCode(error);
-    if (code && /^(?:08|57|40)/u.test(code)) return true;
-    error = error.cause;
-  }
-  return false;
 }
 
 export function createHandlers(storage = getStorage()): Record<JobKind, HandlerDefinition> {
@@ -248,14 +183,6 @@ export function createHandlers(storage = getStorage()): Record<JobKind, HandlerD
               error.providerCalled === false
             ),
           });
-      },
-    },
-    host_event: {
-      retryable: retryableHostEvent,
-      onFinalFailure: none,
-      handler: async (job, signal) => {
-        if (job.payload.kind === "host_event")
-          await hostEvent({ ...job, payload: job.payload }, signal);
       },
     },
   };

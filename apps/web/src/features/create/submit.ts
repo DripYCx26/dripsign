@@ -1,83 +1,24 @@
 import type { NewAgreementInput } from "@dripsign/core/schema";
-import { createAgreement, refreshView } from "@/server/actions/agreements";
-import { UNCERTAIN, uploadPdf } from "../document/upload.ts";
+import { createAgreement } from "@/server/actions/agreements";
 
-export type CreatePhase = "idle" | "creating" | "uploading" | "preparing";
-
-export interface CreateKeys {
-  readonly create: string;
-  readonly upload: string;
-}
-
-/**
- * The upload as one intent: the file, its receipt key and the draft version it was first sent
- * against. A retry resends exactly this, so the server replays the stored result; a re-read
- * version under the old key would be a different request.
- */
-export interface UploadIntent {
-  readonly file: File;
-  readonly key: string;
-  readonly version: number;
-}
+const UNCERTAIN =
+  "We couldn’t confirm whether that went through. Reload to check before trying again.";
 
 export type SubmitOutcome =
   Readonly<{ ok: true; id: string }> | Readonly<{ ok: false; message: string }>;
 
-type SubmitArgs = Readonly<{
-  input: NewAgreementInput;
-  /** The PDF on the upload path, else null. */
-  file: File | null;
-  keys: CreateKeys;
-  /** Set once the draft exists, so a retry after a failed upload does not create it again. */
-  createdId: string | null;
-  /** Set once the upload was first attempted; a retry resends it unchanged. */
-  upload: UploadIntent | null;
-  onPhase: (phase: CreatePhase) => void;
-  onCreated: (id: string) => void;
-  onUploadIntent: (intent: UploadIntent) => void;
-}>;
-
-/** A thrown server action means the network failed before we heard the outcome. */
-async function attempt<T>(call: () => Promise<T>): Promise<T | null> {
-  try {
-    return await call();
-  } catch {
-    return null;
-  }
-}
-
 /**
- * Creates the draft, and on the PDF path sends the file to the draft just created. Both steps
- * carry their own receipt key, so repeating this call with the same keys and upload intent never
- * creates two drafts or stores the file twice.
+ * Creates the draft under the intent's receipt key, so repeating this call with the same key never
+ * creates two drafts. A thrown server action means the network failed before we heard the outcome.
  */
-export async function submitCreate(args: SubmitArgs): Promise<SubmitOutcome> {
-  let id = args.createdId;
-  if (id === null) {
-    args.onPhase("creating");
-    const created = await attempt(() =>
-      createAgreement({ receiptKey: args.keys.create, input: args.input }),
-    );
-    if (created === null) return { ok: false, message: UNCERTAIN };
-    if (!created.ok) return { ok: false, message: created.message };
-    id = created.value.id;
-    args.onCreated(id);
+export async function submitCreate(
+  input: NewAgreementInput,
+  receiptKey: string,
+): Promise<SubmitOutcome> {
+  try {
+    const created = await createAgreement({ receiptKey, input });
+    return created.ok ? { ok: true, id: created.value.id } : created;
+  } catch {
+    return { ok: false, message: UNCERTAIN };
   }
-  const { file } = args;
-  if (file === null) return { ok: true, id };
-
-  args.onPhase("uploading");
-  const draftId = id;
-  let intent = args.upload;
-  if (intent === null) {
-    const fresh = await attempt(() => refreshView({ agreementId: draftId, capacity: "staff" }));
-    if (fresh === null) return { ok: false, message: UNCERTAIN };
-    if (!fresh.ok) return { ok: false, message: fresh.message };
-    intent = { file, key: args.keys.upload, version: fresh.value.agreement.version };
-    args.onUploadIntent(intent);
-  }
-  const uploaded = await uploadPdf(draftId, intent.file, intent.key, intent.version);
-  if (!uploaded.ok) return { ok: false, message: uploaded.message };
-  args.onPhase("preparing");
-  return { ok: true, id };
 }

@@ -1,7 +1,7 @@
 import "server-only";
-import { isLoopbackHostname, loadConfig } from "@dripsign/core/config";
+import { isLoopbackHostname } from "@dripsign/core/config";
 import type { DomainErrorCode } from "@dripsign/core/errors";
-import { failure, toFailure, type ActionResult } from "./action.ts";
+import { failure, toFailure } from "./action.ts";
 
 export const PRIVATE_NO_STORE = "private, no-store";
 
@@ -31,18 +31,14 @@ export function statusFor(code: DomainErrorCode): number {
   return STATUS[code];
 }
 
-export function jsonResult<T>(result: ActionResult<T>, status?: number): Response {
-  return Response.json(result, {
-    status: status ?? (result.ok ? 200 : STATUS[result.code]),
-    headers: { "Cache-Control": PRIVATE_NO_STORE },
-  });
-}
-
 /** Route handlers' one catch: transport refusals keep their status, the rest map like actions. */
 export function failureResponse(error: unknown): Response {
-  if (error instanceof HttpError)
-    return jsonResult(failure(error.code, error.message), error.status);
-  return jsonResult(toFailure(error));
+  const transport = error instanceof HttpError;
+  const result = transport ? failure(error.code, error.message) : toFailure(error);
+  return Response.json(result, {
+    status: transport ? error.status : STATUS[result.code],
+    headers: { "Cache-Control": PRIVATE_NO_STORE },
+  });
 }
 
 /** True only when every host the request names (Host and any X-Forwarded-Host) is loopback. */
@@ -54,17 +50,6 @@ export function isLoopbackRequest(requestHeaders: Headers): boolean {
     const hostname = hostnameOf(value);
     return hostname !== null && isLoopbackHostname(hostname);
   });
-}
-
-/** Browser mutations outside server actions must come from the configured public origin. */
-export function requirePublicOrigin(requestHeaders: Headers): void {
-  const site = requestHeaders.get("sec-fetch-site");
-  if (
-    requestHeaders.get("origin") !== loadConfig().publicOrigin ||
-    (site !== null && site !== "same-origin")
-  ) {
-    throw new HttpError(403, "invalid", "This request came from another site.");
-  }
 }
 
 export function mediaType(requestHeaders: Headers): string | null {
@@ -91,7 +76,7 @@ export async function readBoundedBody(request: Request, limit: BodyLimit): Promi
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(() => {
-      reject(new HttpError(408, "invalid", "The upload took too long. Try again."));
+      reject(new HttpError(408, "invalid", "The request took too long. Try again."));
     }, limit.ms);
   });
   try {

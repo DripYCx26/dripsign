@@ -39,12 +39,11 @@ function proposalCommand(
   view: AgreementView,
   target: ProposalView | null,
   text: string,
-  replacementSource: DocumentSource | null,
+  replacementSource: DocumentSource,
 ): Command {
   const expectedVersion = view.agreement.version;
-  const replacement = replacementSource === null ? {} : { replacementSource };
-  if (target === null) return { kind: "propose", expectedVersion, text, ...replacement };
-  return { kind: "counter", expectedVersion, proposalId: target.id, text, ...replacement };
+  if (target === null) return { kind: "propose", expectedVersion, text, replacementSource };
+  return { kind: "counter", expectedVersion, proposalId: target.id, text, replacementSource };
 }
 
 /** Leaving proposal mode returns the cursor to the message field, where typing goes on. */
@@ -115,50 +114,6 @@ function useFocusOnMount(field: RefObject<HTMLTextAreaElement | null>) {
   useEffect(() => {
     field.current?.focus();
   }, [field]);
-}
-
-/** A PDF cannot be edited in the browser, so the change is described in words. */
-function PdfProposal({ view, scope, target, run, busy, onSent }: ProposalComposerProps) {
-  const [stored, setStored, clearSent] = useStoredText(scope, `${target?.id ?? "propose"}:text`);
-  const text = stored ?? "";
-  const field = useAutosize(text);
-  useFocusOnMount(field);
-  const ready = text.trim() !== "" && !busy;
-
-  async function send() {
-    if (!ready) return;
-    const intent = target === null ? "propose" : `counter:${target.id}`;
-    if (await run(proposalCommand(view, target, text.trim(), null), intent)) {
-      clearSent(stored);
-      onSent();
-      leave();
-    }
-  }
-
-  return (
-    <ProposalFrame
-      title={titleOf(target)}
-      warning={warningOf(view)}
-      canSend={ready}
-      onSubmit={() => void send()}
-    >
-      <textarea
-        ref={field}
-        className={styles.field}
-        rows={1}
-        aria-label="Describe the change you need"
-        placeholder="Describe the change you need"
-        maxLength={LIMITS.proposalText}
-        value={text}
-        onChange={(event) => {
-          setStored(event.target.value);
-        }}
-        onKeyDown={(event) => {
-          sendOnEnter(event, () => void send());
-        }}
-      />
-    </ProposalFrame>
-  );
 }
 
 /** The section being rewritten, and the wording the field starts from. */
@@ -294,11 +249,10 @@ function SectionProposal(props: ProposalComposerProps & Readonly<{ source: Docum
 }
 
 /**
- * Proposal mode of the composer: terms are edited by section with a live diff, a PDF is described
- * in words. Starting from "Propose a change", a document section or a Counter lands here.
+ * Proposal mode of the composer: the terms are edited by section with a live diff. Starting from
+ * "Propose a change", a document section or a Counter lands here.
  */
 export function ProposalComposer(props: ProposalComposerProps) {
-  const source = currentRevision(props.view)?.source ?? null;
-  if (source === null) return <PdfProposal {...props} />;
-  return <SectionProposal {...props} source={source} />;
+  const revision = currentRevision(props.view);
+  return revision === null ? null : <SectionProposal {...props} source={revision.source} />;
 }

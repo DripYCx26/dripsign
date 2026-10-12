@@ -16,7 +16,8 @@ export const LIMITS = {
   paragraphsPerSection: 100,
   sourceBytes: 500_000,
   draftBytes: 600_000,
-  pdfBytes: 10 * 1024 * 1024,
+  /** The largest PDF the app renders or stores: a revision, a signed PDF or an audit record. */
+  pdfBytes: 20 * 1024 * 1024,
   pdfPages: 200,
   recipients: 50,
   requiredSigners: 10,
@@ -55,7 +56,7 @@ const TEXT_FORBIDDEN = /[^\P{Cc}\t\n]/u;
 
 export const uuidSchema = z.uuid();
 export const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/u, "Expected a sha256 hex digest");
-export const expectedVersionSchema = z.number().int().positive();
+const expectedVersionSchema = z.number().int().positive();
 export const receiptKeySchema = z
   .string()
   .regex(/^[A-Za-z0-9_.:-]+$/u)
@@ -141,12 +142,6 @@ export const documentAssetSchema = z.strictObject({
   pageCount: z.number().int().positive(),
 });
 
-/** Raw uploaded PDF bytes; the page count is known only after the worker parses them. */
-export const uploadAssetSchema = z.strictObject({
-  sha256: sha256Schema,
-  byteLength: z.number().int().positive(),
-});
-
 export const signingFieldSchema = z
   .strictObject({
     recipientId: uuidSchema,
@@ -168,7 +163,6 @@ export const PREPARATION_STATUSES = ["empty", "preparing", "ready", "failed"] as
 export const draftSchema = z
   .strictObject({
     source: documentSourceSchema.nullable(),
-    upload: uploadAssetSchema.nullable(),
     document: documentAssetSchema.nullable(),
     signingFields: z.array(signingFieldSchema).max(LIMITS.requiredSigners * 2),
     signerIds: z.array(uuidSchema).max(LIMITS.requiredSigners),
@@ -179,10 +173,6 @@ export const draftSchema = z
       signerSetHash: sha256Schema.nullable(),
     }),
   })
-  .refine(
-    (draft) => draft.source === null || draft.upload === null,
-    "Use terms or a PDF, not both.",
-  )
   .refine(
     (draft) => utf8Bytes(JSON.stringify(draft)) <= LIMITS.draftBytes,
     "The draft is too large.",
@@ -203,11 +193,7 @@ export const newRecipientSchema = z.strictObject({
 export const newAgreementInputSchema = z
   .strictObject({
     title: titleSchema,
-    document: z.discriminatedUnion("kind", [
-      z.strictObject({ kind: z.literal("source"), source: documentSourceSchema }),
-      // The PDF bytes follow through the upload route once the draft exists.
-      z.strictObject({ kind: z.literal("upload") }),
-    ]),
+    source: documentSourceSchema,
     recipients: z.array(newRecipientSchema).min(1).max(LIMITS.recipients),
   })
   .refine(
@@ -306,43 +292,6 @@ export const EMAIL_TEMPLATES = [
   "voided",
 ] as const;
 
-const hostUuid = (field: string) =>
-  z
-    .string()
-    .trim()
-    .toLowerCase()
-    .pipe(z.uuid(`Enter the ${field} as a UUID.`));
-const hostIdentifier = (field: string) =>
-  z
-    .string()
-    .trim()
-    .regex(/^[\x21-\x7e]{1,100}$/u, `Enter the ${field} as 1 to 100 visible ASCII characters.`);
-const positiveCount = (field: string, max: number) =>
-  z
-    .number(`Enter the ${field} as a whole number.`)
-    .int(`Enter the ${field} as a whole number.`)
-    .min(1, `The ${field} is at least 1.`)
-    .max(max, `The ${field} is at most ${String(max)}.`);
-
-/** The public pins Dreach issued for this tenant's executed event; no secret, no URL. */
-export const completionExportConfigSchema = z.strictObject({
-  hostTenantId: hostUuid("host tenant id"),
-  senderBindingId: hostUuid("sender binding id"),
-  senderBindingRevision: positiveCount("sender binding revision", Number.MAX_SAFE_INTEGER),
-  senderGrantId: hostUuid("sender grant id"),
-  issuer: hostIdentifier("issuer"),
-  audience: hostIdentifier("audience"),
-  keyId: hostIdentifier("key id"),
-  keyVersion: positiveCount("key version", 4_294_967_295),
-  freshnessSeconds: positiveCount("freshness", 300),
-});
-
-/** A save names the revision it replaces (0 for the first), so a stale form cannot win. */
-export const completionExportSaveSchema = z.strictObject({
-  expectedRevision: z.number().int().min(0),
-  config: completionExportConfigSchema,
-});
-
 /** Tenant and agreement ids live on the outbox row, not in the payload. */
 export const jobPayloadSchema = z
   .discriminatedUnion("kind", [
@@ -355,20 +304,18 @@ export const jobPayloadSchema = z
     }),
     z.strictObject({
       kind: z.literal("pdf_prepare"),
-      // canonicalJson sha256 of { title, source, upload sha256 }: what the renderer consumes.
+      // canonicalJson sha256 of { title, source }: what the renderer consumes.
       inputSha256: sha256Schema,
       signerSetHash: sha256Schema,
     }),
     z.strictObject({ kind: z.literal("archive"), roundId: uuidSchema }),
     z.strictObject({ kind: z.literal("ai_suggest"), suggestionId: uuidSchema }),
-    z.strictObject({ kind: z.literal("host_event"), roundId: uuidSchema }),
   ])
   .refine((payload) => utf8Bytes(JSON.stringify(payload)) <= LIMITS.jobPayloadBytes);
 
 export type DocumentSection = z.infer<typeof documentSectionSchema>;
 export type DocumentSource = z.infer<typeof documentSourceSchema>;
 export type DocumentAsset = z.infer<typeof documentAssetSchema>;
-export type UploadAsset = z.infer<typeof uploadAssetSchema>;
 export type SigningField = z.infer<typeof signingFieldSchema>;
 export type PreparationStatus = (typeof PREPARATION_STATUSES)[number];
 export type Draft = z.infer<typeof draftSchema>;
@@ -381,6 +328,4 @@ export type CommandOf<K extends CommandKind> = Extract<Command, { kind: K }>;
 export type StaffListQuery = z.infer<typeof staffListQuerySchema>;
 export type EmailTemplate = (typeof EMAIL_TEMPLATES)[number];
 export type JobPayload = z.infer<typeof jobPayloadSchema>;
-export type CompletionExportConfig = z.infer<typeof completionExportConfigSchema>;
-export type CompletionExportSave = z.input<typeof completionExportSaveSchema>;
 export type JobKind = JobPayload["kind"];

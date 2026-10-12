@@ -8,7 +8,6 @@ export { Checkbox } from "./Checkbox/Checkbox.tsx";
 export { CODE_LENGTH, CodeField } from "./CodeField/CodeField.tsx";
 export { Dialog } from "./Dialog/Dialog.tsx";
 export { Drawer } from "./Drawer/Drawer.tsx";
-export { Dropzone } from "./Dropzone/Dropzone.tsx";
 export { EmptyState } from "./EmptyState/EmptyState.tsx";
 export { IconButton } from "./IconButton/IconButton.tsx";
 export { Mark } from "./Mark/Mark.tsx";

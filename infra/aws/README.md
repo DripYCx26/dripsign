@@ -35,8 +35,8 @@ Creation makes two empty config secrets. Fill them privately before raising a se
 
 | Secret | Keys |
 | --- | --- |
-| `WebConfig` | `DRIPSIGN_AUTH_SECRET` (32+ bytes); `DRIPSIGN_ANTHROPIC_API_KEY` when `AiEnabled=true`; `DRIPSIGN_COMPLETION_KEYS` (the same value as the worker) when `HostEventUrl` is set |
-| `WorkerConfig` | `DRIPSIGN_AUTH_SECRET` (the same value; the migrate task reads it here too); `DRIPSIGN_ANTHROPIC_API_KEY` when `AiEnabled=true`; `DRIPSIGN_COMPLETION_KEYS` (JSON array of 1 to 8 `{keyId, keyVersion, seed}`) when `HostEventUrl` is set |
+| `WebConfig` | `DRIPSIGN_AUTH_SECRET` (32+ bytes); `DRIPSIGN_ANTHROPIC_API_KEY` when `AiEnabled=true` |
+| `WorkerConfig` | `DRIPSIGN_AUTH_SECRET` (the same value; the migrate task reads it here too); `DRIPSIGN_ANTHROPIC_API_KEY` when `AiEnabled=true` |
 
 ECS injects secrets at task start; replace tasks after a rotation. Each execution role reads only
 its own config secret and its database secret. Task roles cannot read Secrets Manager or change
@@ -57,7 +57,6 @@ every key.
 | `DRIPSIGN_DATABASE_URL`, `DRIPSIGN_AUTH_SECRET` | the database secret, the config secret key |
 | `DRIPSIGN_ANTHROPIC_API_KEY` | config secret key, web and worker, with `AiEnabled` |
 | `DRIPSIGN_HOST` | `HostIntegration` (public JSON), web and worker; unset when empty |
-| `DRIPSIGN_HOST_EVENT_URL`, `DRIPSIGN_COMPLETION_KEYS` | `HostEventUrl` and each runtime's config secret key, web and worker; unset when `HostEventUrl` is empty |
 
 `DRIPSIGN_S3_KMS_KEY_ID` is not set; to use a customer-managed key, extend the stack with the
 variable and the key grants for both task roles. Other keys keep their defaults.
@@ -89,8 +88,7 @@ the bucket on stack deletion or replacement.
 Only the worker may send mail, restricted by the verified identity ARN and by `ses:FromAddress`
 equal to the configured sender. SES verification, production access, DKIM and delivery evidence
 are operator prerequisites. Task egress is limited to TCP 443 and the database port; NAT or
-equivalent endpoints must exist. The host event destination is the fixed `HostEventUrl` because a
-security group cannot enforce hostnames. Web readiness is `/api/health`, which answers 200 only
+equivalent endpoints must exist. Web readiness is `/api/health`, which answers 200 only
 when the database responds and holds the schema this build expects.
 
 Private configuration must not grant this public repository or any fork an AWS OIDC trust

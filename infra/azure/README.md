@@ -48,8 +48,7 @@ until the operator raises the replica counts, and no custom domain exists until 
 - **Edge.** Front Door Standard routes `/*` to the web app over HTTPS, redirects HTTP to HTTPS, and
   caches nothing. Until `host` is set, the deployment serves on the Front Door endpoint host and
   `DRIPSIGN_PUBLIC_ORIGIN` is that host.
-- **Egress.** A NAT gateway with one static address for outbound calls to the AI provider and the
-  host event endpoint.
+- **Egress.** A NAT gateway with one static address for outbound calls to the AI provider.
 
 ## Environment mapping
 
@@ -66,7 +65,6 @@ parsed by [`config.ts`](../../packages/core/src/config.ts) and listed in
 | `DRIPSIGN_DATABASE_URL`, `DRIPSIGN_AUTH_SECRET` | Key Vault secrets `database-url`, `auth-secret` |
 | `DRIPSIGN_ANTHROPIC_API_KEY` | Key Vault secret `anthropic-api-key`, web and worker, only with `ai_enabled` |
 | `DRIPSIGN_HOST` | `host_integration`, web and worker, plain (public settings); unset when null |
-| `DRIPSIGN_HOST_EVENT_URL`, `DRIPSIGN_COMPLETION_KEYS` | `host_event_url` and Key Vault secret `completion-keys`, web and worker; both unset when `host_event_url` is null |
 
 Not set, so the defaults apply: `DRIPSIGN_AI_MODEL`, `DRIPSIGN_AI_DAILY_LIMIT_USD`,
 `DRIPSIGN_JOBS_CONCURRENCY`, `DRIPSIGN_S3_*`, `AWS_REGION`, `DRIPSIGN_SMTP_URL`. Production refuses
@@ -84,10 +82,9 @@ file storage, SMTP and the dev sign-in.
 - The DripSign image and a PostgreSQL 17 client image (`psql`), both pinned by digest. A private
   registry is optional: set `registry` and each identity receives `AcrPull` on it.
 - Optional features, each off by default: `ai_enabled` with `operator_secrets.anthropic_api_key`;
-  `host_integration` for a Dreach host app's staff entry; `host_event_url` with
-  `operator_secrets.completion_keys` (a JSON array of 1 to 8 `{keyId, keyVersion, seed}` entries)
-  for the executed-event export. `operator_secrets` is ephemeral: Terraform writes the values only
-  when the secret is created or `operator_secrets_version` changes and never records them.
+  `host_integration` for a Dreach host app's staff entry. `operator_secrets` is ephemeral:
+  Terraform writes the values only when the secret is created or `operator_secrets_version`
+  changes and never records them.
 - For a custom host: the domain, then the CNAME and `_dnsauth` TXT records from `dns_records`.
 - For production mail volume: a sending domain in `mail_domain`, then its verification, SPF, and
   DKIM records from `dns_records`. The Azure-managed domain has very low sending limits.
@@ -101,7 +98,7 @@ From this directory, with `az login` done and the values in a private `.tfvars` 
 
 ```sh
 terraform init -backend-config=<private backend file>
-export TF_VAR_operator_secrets='{"anthropic_api_key":"...","completion_keys":"[...]"}'
+export TF_VAR_operator_secrets='{"anthropic_api_key":"..."}'
 terraform plan -var-file=<private tfvars> -out=dripsign.tfplan
 terraform apply dripsign.tfplan
 ```
@@ -136,8 +133,7 @@ To validate without Azure access: `terraform init -backend=false`, `terraform fm
 - Session secret: bump `auth_secret_version`, apply, and restart the web and worker apps. Every
   session ends.
 - Operator secrets: set the new values in `operator_secrets`, bump `operator_secrets_version`,
-  apply, and restart the apps that read them. Completion keys rotate by listing the new and the old
-  entry together; each executed event is signed with the key its frozen body names.
+  apply, and restart the apps that read them.
 
 A running revision keeps the values it started with until it restarts.
 

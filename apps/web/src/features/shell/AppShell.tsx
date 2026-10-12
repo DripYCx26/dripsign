@@ -14,11 +14,7 @@ type AppShellProps = Readonly<{
 }>;
 
 const STAFF_LINKS = [{ href: "/staff", label: "Agreements" }] as const;
-const ADMIN_LINKS = [
-  ...STAFF_LINKS,
-  { href: "/staff/team", label: "Team" },
-  { href: "/staff/settings", label: "Settings" },
-] as const;
+const ADMIN_LINKS = [...STAFF_LINKS, { href: "/staff/team", label: "Team" }] as const;
 
 /**
  * The signed-in page frame: the one banner (brand, navigation, account) and the one `<main>`.

@@ -3,16 +3,12 @@ import {
   titleSchema,
   type NewAgreementInput,
 } from "@dripsign/core/schema";
-import { buildSource, type EditableSection, type SourceCheck } from "../document/sections.ts";
+import { buildSource, type EditableSection } from "../document/sections.ts";
 import { duplicateKeys, rowErrors, type RecipientRow, type RowErrors } from "./recipients.ts";
-
-export type Mode = "write" | "upload";
 
 export interface FormValues {
   readonly title: string;
-  readonly mode: Mode;
   readonly sections: readonly EditableSection[];
-  readonly file: File | null;
   readonly rows: readonly RecipientRow[];
 }
 
@@ -27,25 +23,17 @@ export interface FormErrors {
 export type Validation =
   Readonly<{ ok: true; input: NewAgreementInput }> | Readonly<{ ok: false; errors: FormErrors }>;
 
-function termsError(values: FormValues, source: SourceCheck | null): string | undefined {
-  if (values.mode === "upload") return values.file === null ? "Choose a PDF." : undefined;
-  return source !== null && !source.ok ? source.message : undefined;
-}
-
 /**
  * The form's checks, in the words of the shared schemas, so a refusal reads the same here and on
  * the server. Field messages show beside their field; the whole-input schema is the last word.
  */
 export function validateForm(values: FormValues): Validation {
   const title = titleSchema.safeParse(values.title);
-  const source = values.mode === "write" ? buildSource(values.title, values.sections) : null;
-  const terms = termsError(values, source);
+  const source = buildSource(values.title, values.sections);
+  const terms = source.ok ? undefined : source.message;
   const rows = rowErrors(values.rows);
   const fieldsOk =
-    title.success &&
-    terms === undefined &&
-    rows.size === 0 &&
-    duplicateKeys(values.rows).size === 0;
+    title.success && source.ok && rows.size === 0 && duplicateKeys(values.rows).size === 0;
   if (!fieldsOk) {
     return {
       ok: false,
@@ -54,7 +42,7 @@ export function validateForm(values: FormValues): Validation {
   }
   const parsed = newAgreementInputSchema.safeParse({
     title: values.title,
-    document: source?.ok === true ? { kind: "source", source: source.source } : { kind: "upload" },
+    source: source.source,
     recipients: values.rows.map(({ name, email, isSigner }) => ({ name, email, isSigner })),
   });
   if (!parsed.success) {
@@ -70,7 +58,6 @@ export function validateForm(values: FormValues): Validation {
 export function hasContent(values: FormValues): boolean {
   return (
     values.title.trim() !== "" ||
-    values.file !== null ||
     values.sections.some((section) => section.heading !== "" || section.body !== "") ||
     values.rows.some((row) => row.name !== "" || row.email !== "")
   );

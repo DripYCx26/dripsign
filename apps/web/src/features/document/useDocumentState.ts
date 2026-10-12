@@ -53,8 +53,8 @@ function canEditDocument(view: AgreementView, capacity: Capacity, target: Docume
 
 /**
  * Everything the document's controls (in the workspace header) and its pane (beside the thread)
- * share, held once by the workspace: which revision, Reading or PDF, the draft's edit session and
- * the PDF replacement. `rev` comes from the `?rev=` parameter; one that names no revision falls
+ * share, held once by the workspace: which revision, Reading or PDF, and the draft's edit
+ * session. `rev` comes from the `?rev=` parameter; one that names no revision falls
  * back to the default, and a view with nothing to show has a null `target`.
  */
 export function useDocumentState(
@@ -68,7 +68,6 @@ export function useDocumentState(
   const [mode, setModeState] = useState<DocumentMode>("reading");
   // The PDF is built only once it is first chosen, then kept so switching back does not reload it.
   const [pdfOpened, setPdfOpened] = useState(false);
-  const [replacing, setReplacing] = useState(false);
   const options = revisionOptions(view, capacity);
   const hasBothForms =
     target !== null && targetSource(target) !== null && targetSha(target) !== null;
@@ -88,10 +87,6 @@ export function useDocumentState(
       if (next === "pdf") setPdfOpened(true);
     },
     editable: target !== null && canEditDocument(view, capacity, target),
-    /** The draft is an uploaded file: it is replaced, not edited. */
-    uploaded: (view.draft?.upload ?? null) !== null,
-    replacing,
-    setReplacing,
     /** The viewer may propose a change, and this is the revision a proposal would be based on. */
     suggestable:
       view.allowedActions.includes("propose") && target?.kind === "revision" && target.isCurrent,

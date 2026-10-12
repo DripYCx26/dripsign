@@ -49,8 +49,8 @@ Product decisions are dated in `docs/DECISIONS.md`; a new entry supersedes an ol
 ## Boundaries
 
 `packages/core` is Next-free and decides: schema, domain, auth, PDF, adapters, worker, CLI.
-`apps/web` presents and transports: pages, server actions, route handlers, components. Uploaded
-PDFs are parsed only by the worker. The dev sign-in exists only when `DRIPSIGN_DEV_LOGIN=1`, the
+`apps/web` presents and transports: pages, server actions, route handlers, components. PDFs are
+rendered only by the worker. The dev sign-in exists only when `DRIPSIGN_DEV_LOGIN=1`, the
 environment is not production and the origin is loopback; config refuses to start otherwise.
 
 ## Verification

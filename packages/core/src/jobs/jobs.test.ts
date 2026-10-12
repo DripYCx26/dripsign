@@ -243,14 +243,6 @@ describe("outbox execution", () => {
     expect(outbox.rows[0]?.status).toBe("failed");
     await assertModelPrices();
     const handlers = createHandlers();
-    for (const code of ["08006", "57P01", "40001"]) {
-      const error = Object.assign(new Error("Synthetic database failure"), { code });
-      expect(handlers.host_event.retryable(error)).toBe(true);
-      expect(handlers.host_event.retryable(new Error("Wrapped", { cause: error }))).toBe(true);
-    }
-    expect(
-      handlers.host_event.retryable(Object.assign(new Error("Invalid data"), { code: "23503" })),
-    ).toBe(false);
     let emailJob = [...first, ...second].find((job) => job.id === emailId);
     if (!emailJob) throw new Error("Email job not claimed");
     await getPool().query("UPDATE dripsign.outbox SET attempts=9 WHERE id=$1", [emailJob.id]);

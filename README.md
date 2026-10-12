@@ -34,7 +34,7 @@ Every identity is synthetic. Sign in at `/dev/sign-in`.
 
 | Identity | Try |
 |---|---|
-| `avery@northwind.test` (staff admin) | Create an agreement, publish a revision, request signatures; answer Jordan's counter on "Mutual NDA"; open the team page and settings |
+| `avery@northwind.test` (staff admin) | Create an agreement, publish a revision, request signatures; answer Jordan's counter on "Mutual NDA"; open the team page |
 | `sam@northwind.test` (staff member) | Open "Photography license", where Sam's proposal awaits Morgan; republish after an accepted change |
 | `jordan@client.test` (recipient) | Counter on "Mutual NDA"; propose a change to "Logo design brief"; read the signed "Office sublease" and its audit record |
 | `morgan@client.test` (recipient) | Decide Sam's proposal on "Photography license"; sign "Q4 retainer"; download the signed PDF |
@@ -48,7 +48,7 @@ The eight seeded agreements cover every status:
 |---|---|
 | Website redesign services | Draft |
 | Mutual NDA | In review; Jordan's counter on the term is pending |
-| Photography license | In review (uploaded PDF); Sam's proposal is pending |
+| Photography license | In review; Sam's proposal is pending |
 | Logo design brief | In review; nothing proposed |
 | Q4 retainer | Signing; Jordan signed, Morgan has not |
 | Office sublease | Signed, both artifacts archived |

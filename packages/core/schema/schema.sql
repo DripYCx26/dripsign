@@ -95,10 +95,9 @@ CREATE TABLE dripsign.revision (
   number integer NOT NULL CHECK (number > 0),
   document_sha256 dripsign.sha256 NOT NULL,
   document_bytes integer NOT NULL CHECK (document_bytes > 0),
-  -- 200 uploaded pages plus up to 4 signature pages for 10 signers.
+  -- 200 pages of terms plus up to 4 signature pages for 10 signers.
   page_count integer NOT NULL CHECK (page_count BETWEEN 1 AND 204),
-  upload_sha256 dripsign.sha256,
-  source jsonb CHECK (octet_length(source::text) <= 500000),
+  source jsonb NOT NULL CHECK (octet_length(source::text) <= 500000),
   signing_fields jsonb NOT NULL CHECK (jsonb_typeof(signing_fields) = 'array'),
   signer_ids uuid[] NOT NULL CHECK (cardinality(signer_ids) BETWEEN 1 AND 10),
   published_by dripsign.email NOT NULL,
@@ -106,8 +105,7 @@ CREATE TABLE dripsign.revision (
   PRIMARY KEY (tenant_id, id),
   UNIQUE (tenant_id, agreement_id, id),
   UNIQUE (tenant_id, agreement_id, number),
-  FOREIGN KEY (tenant_id, agreement_id) REFERENCES dripsign.agreement (tenant_id, id),
-  CHECK ((source IS NULL) <> (upload_sha256 IS NULL))
+  FOREIGN KEY (tenant_id, agreement_id) REFERENCES dripsign.agreement (tenant_id, id)
 );
 
 ALTER TABLE dripsign.agreement
@@ -253,58 +251,6 @@ CREATE TABLE dripsign.artifact (
     REFERENCES dripsign.signing_round (tenant_id, agreement_id, id)
 );
 
--- Completion export -------------------------------------------------------------------------
-
--- The sender pins an admin sets for the host's executed event. Each save is a new revision.
-CREATE TABLE dripsign.completion_export_config (
-  tenant_id uuid NOT NULL REFERENCES dripsign.tenant (id),
-  revision integer NOT NULL CHECK (revision > 0),
-  host_tenant_id uuid NOT NULL,
-  sender_binding_id uuid NOT NULL,
-  sender_binding_revision bigint NOT NULL
-    CHECK (sender_binding_revision BETWEEN 1 AND 9007199254740991),
-  sender_grant_id uuid NOT NULL,
-  issuer text NOT NULL CHECK (issuer ~ '^[!-~]{1,100}$'),
-  audience text NOT NULL CHECK (audience ~ '^[!-~]{1,100}$'),
-  key_id text NOT NULL CHECK (key_id ~ '^[!-~]{1,100}$'),
-  key_version bigint NOT NULL CHECK (key_version BETWEEN 1 AND 4294967295),
-  freshness_seconds integer NOT NULL CHECK (freshness_seconds BETWEEN 1 AND 300),
-  created_by dripsign.email NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (tenant_id, revision),
-  FOREIGN KEY (tenant_id, created_by) REFERENCES dripsign.staff (tenant_id, email)
-);
-
--- The executed event's canonical body, frozen when the round completes; retries sign it again.
-CREATE TABLE dripsign.completion_export (
-  tenant_id uuid NOT NULL,
-  agreement_id uuid NOT NULL,
-  round_id uuid NOT NULL,
-  event_id uuid NOT NULL UNIQUE,
-  config_revision integer NOT NULL,
-  body text NOT NULL CHECK (octet_length(body) <= 8192),
-  freshness_seconds integer NOT NULL CHECK (freshness_seconds BETWEEN 1 AND 300),
-  created_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (tenant_id, round_id),
-  FOREIGN KEY (tenant_id, agreement_id, round_id)
-    REFERENCES dripsign.signing_round (tenant_id, agreement_id, id),
-  FOREIGN KEY (tenant_id, config_revision)
-    REFERENCES dripsign.completion_export_config (tenant_id, revision)
-);
-
-CREATE INDEX completion_export_recent ON dripsign.completion_export (tenant_id, created_at DESC);
-
--- The host's receipt. Outbox rows are swept; this is what says the event arrived.
-CREATE TABLE dripsign.completion_delivery (
-  tenant_id uuid NOT NULL,
-  round_id uuid NOT NULL,
-  evidence_id uuid NOT NULL,
-  recorded_at_micros bigint NOT NULL,
-  delivered_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (tenant_id, round_id),
-  FOREIGN KEY (tenant_id, round_id) REFERENCES dripsign.completion_export (tenant_id, round_id)
-);
-
 -- Private staff assistant --------------------------------------------------------------------
 
 CREATE TABLE dripsign.ai_suggestion (
@@ -348,7 +294,7 @@ CREATE TABLE dripsign.outbox (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid REFERENCES dripsign.tenant (id),
   agreement_id uuid,
-  kind text NOT NULL CHECK (kind IN ('email', 'pdf_prepare', 'archive', 'ai_suggest', 'host_event')),
+  kind text NOT NULL CHECK (kind IN ('email', 'pdf_prepare', 'archive', 'ai_suggest')),
   payload jsonb NOT NULL CHECK (octet_length(payload::text) <= 65536),
   status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'done', 'failed')),
   attempts integer NOT NULL DEFAULT 0 CHECK (attempts >= 0),
@@ -471,18 +417,6 @@ CREATE TRIGGER immutable_artifact
   BEFORE UPDATE OR DELETE ON dripsign.artifact
   FOR EACH ROW EXECUTE FUNCTION dripsign.reject_evidence_change();
 
-CREATE TRIGGER immutable_completion_export_config
-  BEFORE UPDATE OR DELETE ON dripsign.completion_export_config
-  FOR EACH ROW EXECUTE FUNCTION dripsign.reject_evidence_change();
-
-CREATE TRIGGER immutable_completion_export
-  BEFORE UPDATE OR DELETE ON dripsign.completion_export
-  FOR EACH ROW EXECUTE FUNCTION dripsign.reject_evidence_change();
-
-CREATE TRIGGER immutable_completion_delivery
-  BEFORE UPDATE OR DELETE ON dripsign.completion_delivery
-  FOR EACH ROW EXECUTE FUNCTION dripsign.reject_evidence_change();
-
 CREATE TRIGGER immutable_signing_round_delete
   BEFORE DELETE ON dripsign.signing_round
   FOR EACH ROW EXECUTE FUNCTION dripsign.reject_evidence_change();
@@ -593,28 +527,6 @@ $$;
 CREATE TRIGGER artifact_requires_finalizing
   BEFORE INSERT ON dripsign.artifact
   FOR EACH ROW EXECUTE FUNCTION dripsign.require_finalizing_round();
-
--- Only a completed round has an executed event to export.
-CREATE FUNCTION dripsign.require_completed_round() RETURNS trigger
-LANGUAGE plpgsql AS $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1
-    FROM dripsign.signing_round
-    WHERE tenant_id = NEW.tenant_id
-      AND agreement_id = NEW.agreement_id
-      AND id = NEW.round_id
-      AND status = 'completed'
-  ) THEN
-    RAISE EXCEPTION 'A completion export belongs to a completed round';
-  END IF;
-  RETURN NEW;
-END;
-$$;
-
-CREATE TRIGGER completion_export_requires_completed
-  BEFORE INSERT ON dripsign.completion_export
-  FOR EACH ROW EXECUTE FUNCTION dripsign.require_completed_round();
 
 -- Only a pending proposal changes, and only its decision columns.
 CREATE FUNCTION dripsign.guard_proposal() RETURNS trigger

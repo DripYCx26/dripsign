@@ -33,7 +33,7 @@ Required in production, enforced at startup by `packages/core/src/config.ts`:
 - `DRIPSIGN_EMAIL_TRANSPORT=ses` or `azure` (with `DRIPSIGN_AZURE_EMAIL_ENDPOINT`), and
   `DRIPSIGN_EMAIL_FROM`
 
-Optional keys (AI, host integration, completion export, concurrency) are described in
+Optional keys (AI, host integration, concurrency) are described in
 [`.env.example`](../.env.example). Migrate before starting either process: run
 `pnpm --filter @dripsign/core cli migrate` with the owner login (each template has a one-off task
 or job for it). The schema has no migration chain, so a changed baseline needs a rebuilt database.

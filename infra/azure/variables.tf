@@ -192,22 +192,10 @@ variable "host_integration" {
   default = null
 }
 
-variable "host_event_url" {
-  description = "The host's fixed https executed-event URL, ending /v1/webhooks/dripsign. Setting it turns completion export on for the worker and requires completion_keys in operator_secrets; null leaves it off."
-  type        = string
-  default     = null
-
-  validation {
-    condition     = var.host_event_url == null || can(regex("^https://[^/]+/v1/webhooks/dripsign$", var.host_event_url))
-    error_message = "An https URL ending /v1/webhooks/dripsign."
-  }
-}
-
 variable "operator_secrets" {
-  description = "Values only the operator holds, needed for the features that are on: anthropic_api_key with ai_enabled, completion_keys (the DRIPSIGN_COMPLETION_KEYS JSON array) with host_event_url. They are written once through the control plane and never stored in state."
+  description = "Values only the operator holds, needed for the features that are on: anthropic_api_key with ai_enabled. They are written once through the control plane and never stored in state."
   type = object({
     anthropic_api_key = optional(string)
-    completion_keys   = optional(string)
   })
   default   = null
   ephemeral = true

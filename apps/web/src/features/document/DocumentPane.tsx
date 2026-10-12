@@ -1,13 +1,11 @@
 "use client";
 
 import type { AgreementView, Capacity } from "@dripsign/core/types";
-import { useRouter } from "next/navigation";
 import { fileUrl } from "@/features/files";
 import type { RunCommand } from "@/features/workspace/commands.ts";
 import { Banner, Button, EmptyState } from "@/ui";
 import styles from "./DocumentPane.module.css";
 import { DraftForm } from "./DraftForm.tsx";
-import { PdfReplacer } from "./PdfReplacer.tsx";
 import { PdfView } from "./PdfView.tsx";
 import { ReadingView } from "./ReadingView.tsx";
 import {
@@ -144,21 +142,10 @@ type PaneProps = Readonly<{
 
 function LoadedPane({ doc, target, ...pane }: PaneProps & Readonly<{ target: DocumentTarget }>) {
   const { view, capacity, run, busy } = pane;
-  const router = useRouter();
   return (
     <div className={styles.pane}>
       <Strip view={view} target={target} run={run} busy={busy} />
       <div className={styles.body}>
-        {doc.editable && doc.uploaded && doc.replacing && (
-          <PdfReplacer
-            agreementId={view.agreement.id}
-            version={view.agreement.version}
-            onUploaded={() => {
-              doc.setReplacing(false);
-              router.refresh();
-            }}
-          />
-        )}
         {doc.draft.edit === null ? (
           <Body
             view={view}

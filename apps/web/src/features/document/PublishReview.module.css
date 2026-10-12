@@ -13,11 +13,6 @@
   background: var(--ds-surface);
 }
 
-.muted {
-  color: var(--ds-text-secondary);
-  font-size: var(--ds-text-sm);
-}
-
 .signers {
   display: flex;
   flex-wrap: wrap;
@@ -33,21 +28,4 @@
   display: inline-flex;
   align-items: center;
   gap: var(--ds-space-2);
-}
-
-.facts {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: var(--ds-space-1) var(--ds-space-4);
-  margin: 0;
-  font-size: var(--ds-text-sm);
-}
-
-.facts dt {
-  color: var(--ds-text-secondary);
-}
-
-.facts dd {
-  margin: 0;
-  font-family: var(--ds-mono);
 }

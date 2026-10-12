@@ -12,7 +12,8 @@ import {
   NDA_TERM_RECIPIENT_COUNTER,
   NDA_TERM_STAFF_COUNTER,
   OFFICE_SUBLEASE,
-  photographyPdf,
+  PHOTOGRAPHY_GRANT_WITHOUT_ADS,
+  PHOTOGRAPHY_LICENSE,
   Q4_RETAINER,
   SPEAKING_ENGAGEMENT,
   WEBSITE_REDESIGN,
@@ -124,11 +125,7 @@ async function startDraft(
   source: DocumentSource,
   recipients: NewAgreementInput["recipients"],
 ): Promise<string> {
-  const id = await script.create(staff, {
-    title: source.title,
-    document: { kind: "source", source },
-    recipients,
-  });
+  const id = await script.create(staff, { title: source.title, source, recipients });
   await script.settle();
   return id;
 }
@@ -203,18 +200,14 @@ async function photographyLicense(
   avery: StaffActor,
   sam: StaffActor,
 ): Promise<void> {
-  const id = await script.create(avery, {
-    title: "Photography license",
-    document: { kind: "upload" },
-    recipients: [recipient(MORGAN, true)],
-  });
-  await script.upload(avery, id, await photographyPdf());
+  const id = await startDraft(script, avery, PHOTOGRAPHY_LICENSE, [recipient(MORGAN, true)]);
   await publishDraft(script, avery, id);
   await script.step(
     sam,
     id,
     propose(
       "We would like to limit the license to your website and print marketing, and leave out paid social advertising. Does that work for you?",
+      withSection(PHOTOGRAPHY_LICENSE, "grant", PHOTOGRAPHY_GRANT_WITHOUT_ADS),
     ),
   );
 }

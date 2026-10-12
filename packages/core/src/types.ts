@@ -2,7 +2,6 @@
 import type {
   AiSuggestionResult,
   CommandKind,
-  CompletionExportConfig,
   DocumentSource,
   Draft,
   PreparationStatus,
@@ -95,9 +94,8 @@ export interface RevisionView {
   readonly sha256: string;
   readonly byteLength: number;
   readonly pageCount: number;
-  readonly uploadSha256: string | null;
   readonly publishedAt: string;
-  readonly source: DocumentSource | null;
+  readonly source: DocumentSource;
   readonly signingFields: readonly SigningField[];
   readonly signerIds: readonly string[];
 }
@@ -282,39 +280,4 @@ export interface AgreementFile {
   readonly sha256: string;
   readonly filename: string;
   readonly contentType: "application/pdf";
-}
-
-export interface CompletionExportRevision {
-  readonly revision: number;
-  readonly config: CompletionExportConfig;
-  readonly createdBy: string;
-  readonly createdAt: string;
-}
-
-/**
- * queued: a delivery attempt is due or running; failed: attempts stopped, an admin may retry;
- * held: completion froze nothing because the pins were undeliverable, an admin sends it once fixed.
- */
-export type CompletionDeliveryState = "queued" | "failed" | "held";
-
-/** A completed round whose executed event the host has not yet acknowledged. */
-export interface UndeliveredCompletion {
-  readonly roundId: string;
-  readonly agreementId: string;
-  readonly title: string;
-  /** Null while held: no event was frozen yet. */
-  readonly eventId: string | null;
-  readonly completedAt: string;
-  readonly state: CompletionDeliveryState;
-}
-
-export interface CompletionExportSettings {
-  /** False when this deployment has no event URL and keys: nothing is frozen or sent. */
-  readonly deliveryEnabled: boolean;
-  /** What a delivered event must carry: this deployment's origin and the event URL's origin. */
-  readonly expected: { readonly issuer: string; readonly audience: string | null };
-  readonly current: CompletionExportRevision | null;
-  /** Newest first, including the current revision. */
-  readonly history: readonly CompletionExportRevision[];
-  readonly undelivered: readonly UndeliveredCompletion[];
 }

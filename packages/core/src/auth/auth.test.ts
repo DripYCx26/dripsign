@@ -51,8 +51,8 @@ async function addRecipient(email: string): Promise<{ agreementId: string; recip
   );
   await pool.query(
     `INSERT INTO dripsign.revision (tenant_id, agreement_id, id, number, document_sha256,
-       document_bytes, page_count, upload_sha256, signing_fields, signer_ids, published_by)
-     VALUES ($1, $2, $3, 1, repeat('a', 64), 100, 1, repeat('b', 64), '[]', ARRAY[$4::uuid],
+       document_bytes, page_count, source, signing_fields, signer_ids, published_by)
+     VALUES ($1, $2, $3, 1, repeat('a', 64), 100, 1, '{}', '[]', ARRAY[$4::uuid],
        'owner@dripsign.test')`,
     [tenantId, agreementId, revisionId, recipientId],
   );

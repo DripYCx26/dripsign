@@ -13,7 +13,6 @@ each a component and its CSS module, drawn only from `tokens/`. No feature logic
 | `TextField` `TextArea` `Select`       | Labelled fields with hint and error (`Field` owns ids); TextArea counts from 90% of `maxLength`                                                                  |
 | `Checkbox` `Switch` `Segmented`       | Native checkbox, switch role, radiogroup with arrow keys (`size="sm"` is the 28 px toolbar control)                                                              |
 | `CodeField`                           | Six-digit code: autofill, paste splits, `onComplete`                                                                                                             |
-| `Dropzone`                            | PDF drop target and file picker with the type and size refusals                                                                                                  |
 | `Pill` `Notice` `Banner`              | Agreement status and tone words with icons; `live` is `polite` or `alert`                                                                                        |
 | `EmptyState` `Skeleton`               | Empty and loading states                                                                                                                                         |
 | `Dialog` `Drawer`                     | Native `<dialog>` through `Modal/useModal`; focus returns to the opener                                                                                          |

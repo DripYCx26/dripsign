@@ -1,6 +1,6 @@
 # apps/web/
 
-**Job:** present and transport: pages, server actions and four route handlers for the staff
+**Job:** present and transport: pages, server actions and three route handlers for the staff
 workspace, recipient portal and signing flow. Decisions live in `packages/core`.
 
 ## Routes
@@ -17,9 +17,7 @@ workspace, recipient portal and signing flow. Decisions live in `packages/core`.
 | `/staff/agreements/[id]` | Staff of the agreement's tenant: workspace |
 | `/staff/agreements/[id]/publish` | Staff of the tenant: review the draft PDF, then publish |
 | `/staff/team` | Staff admins; anyone else gets not found |
-| `/staff/settings` | Staff admins: completion export settings and undelivered exports; anyone else gets not found |
 | `GET /api/agreements/[id]/files/[kind]` | Staff or recipient of the agreement; kinds `draft`, `current`, `revision`, `signed`, `audit` |
-| `POST /api/agreements/[id]/upload` | Staff of the tenant; raw PDF |
 | `POST /api/bridge/session` | A host with a valid signed assertion; off unless `DRIPSIGN_HOST` |
 | `GET /api/health` | Anyone |
 

@@ -1,6 +1,4 @@
-// The demo documents: plain-language terms and one generated PDF standing in for an upload.
-// Text is ASCII so it always fits the signature font.
-import { PDFDocument, StandardFonts } from "pdf-lib";
+// The demo documents: plain-language terms. Text is ASCII so it always fits the signature font.
 import type { DocumentSource } from "../schema.ts";
 
 type Sections = DocumentSource["sections"];
@@ -268,37 +266,41 @@ export function withSection(
   };
 }
 
-const PHOTOGRAPHY_PAGES: readonly (readonly string[])[] = [
-  [
-    "Photography license",
-    "",
-    "1. Grant. The Photographer grants the Client a non-exclusive license to use the photographs",
-    "delivered under this agreement on the Client's website and in print marketing.",
-    "",
-    "2. Credit. The Client will credit the Photographer where reasonably possible.",
-    "",
-    "3. Fee. The license fee is 1,800 USD, due within 30 days of delivery.",
+export const PHOTOGRAPHY_LICENSE: DocumentSource = {
+  title: "Photography license",
+  sections: [
+    {
+      id: "grant",
+      heading: "Grant",
+      paragraphs: [
+        "The Photographer grants the Client a non-exclusive license to use the photographs delivered under this agreement on the Client's website, in print marketing and in paid social advertising.",
+      ],
+    },
+    {
+      id: "fee",
+      heading: "Fee and credit",
+      paragraphs: [
+        "The license fee is 1,800 USD, due within 30 days of delivery. The Client will credit the Photographer where reasonably possible.",
+      ],
+    },
+    {
+      id: "term",
+      heading: "Term and territory",
+      paragraphs: [
+        "The license lasts for three years from delivery and covers the United States and Canada.",
+      ],
+    },
+    {
+      id: "ownership",
+      heading: "Ownership",
+      paragraphs: [
+        "The Photographer keeps copyright in all photographs. The Client may not sell or sublicense them.",
+      ],
+    },
   ],
-  [
-    "4. Term. The license lasts for three years from delivery and covers the territory of the",
-    "United States and Canada.",
-    "",
-    "5. Ownership. The Photographer keeps copyright in all photographs. The Client may not",
-    "sell or sublicense them.",
-    "",
-    "6. Changes. Any change to this agreement must be in writing and agreed by both sides.",
-  ],
-];
+};
 
-/** The bytes staff "upload" for the Photography license. */
-export async function photographyPdf(): Promise<Uint8Array> {
-  const document = await PDFDocument.create();
-  const font = await document.embedFont(StandardFonts.Helvetica);
-  for (const lines of PHOTOGRAPHY_PAGES) {
-    const page = document.addPage([612, 792]);
-    lines.forEach((line, index) => {
-      page.drawText(line, { x: 54, y: 720 - index * 20, size: index === 0 ? 18 : 11, font });
-    });
-  }
-  return document.save();
-}
+/** Sam's proposed grant for the Photography license: no paid social advertising. */
+export const PHOTOGRAPHY_GRANT_WITHOUT_ADS = [
+  "The Photographer grants the Client a non-exclusive license to use the photographs delivered under this agreement on the Client's website and in print marketing.",
+];

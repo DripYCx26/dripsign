@@ -62,10 +62,7 @@ locals {
   }
 
   # Only the secrets of the features that are on; the operator_secrets field holds each value.
-  operator_secret_fields = merge(
-    local.ai_enabled ? { "anthropic-api-key" = "anthropic_api_key" } : {},
-    local.completion_export_enabled ? { "completion-keys" = "completion_keys" } : {},
-  )
+  operator_secret_fields = local.ai_enabled ? { "anthropic-api-key" = "anthropic_api_key" } : {}
 }
 
 resource "azapi_resource" "database_secret" {

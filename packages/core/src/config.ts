@@ -39,12 +39,6 @@ export type EmailConfig =
       readonly identity: AzureIdentity;
     };
 
-export interface CompletionExportDelivery {
-  /** The host's fixed https `/v1/webhooks/dripsign` URL. */
-  readonly url: string;
-  readonly keys: readonly CompletionKey[];
-}
-
 export interface AiConfig {
   readonly apiKey: string;
   readonly model: string;
@@ -67,8 +61,6 @@ export interface Config {
   readonly jobsConcurrency: number;
   /** Null when no host is configured: the bridge entry is off. */
   readonly host: HostConfig | null;
-  /** Null when the URL and keys are unset: no executed event is frozen or delivered. */
-  readonly completionExport: CompletionExportDelivery | null;
 }
 
 const base64url32 = z.string().regex(/^[A-Za-z0-9_-]{43}$/u, "Expected 32 bytes, base64url");
@@ -88,27 +80,6 @@ const hostSchema = z.strictObject({
 });
 
 export type HostConfig = z.infer<typeof hostSchema>;
-/** A private Ed25519 seed; a retired key stays while a frozen event still names it. */
-export type CompletionKey = Readonly<z.infer<typeof completionKeysSchema>[number]>;
-
-/** The executed event's path, fixed by Dreach's receiver. */
-export const HOST_EVENT_PATH = "/v1/webhooks/dripsign";
-
-const completionKeysSchema = z
-  .array(
-    z.strictObject({
-      keyId: hostText,
-      keyVersion: z.number().int().min(1).max(4_294_967_295),
-      seed: z.string().regex(/^[a-f0-9]{64}$/u, "Expected 32 bytes, lowercase hex"),
-    }),
-  )
-  .min(1)
-  .max(8)
-  .refine(
-    (keys) =>
-      new Set(keys.map((key) => `${key.keyId}:${String(key.keyVersion)}`)).size === keys.length,
-    "Each keyId and keyVersion appears once",
-  );
 
 /** Credentials, a query or a fragment in a configured endpoint are refused. */
 const bareUrl = (value: string): boolean => {
@@ -164,10 +135,6 @@ const envSchema = z.object({
   // The ten-connection pool reserves one connection for LISTEN and one for lease renewal.
   DRIPSIGN_JOBS_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(4),
   DRIPSIGN_HOST: text,
-  DRIPSIGN_HOST_EVENT_URL: httpsEndpoint
-    .refine((value) => new URL(value).pathname === HOST_EVENT_PATH, `Must end ${HOST_EVENT_PATH}`)
-    .optional(),
-  DRIPSIGN_COMPLETION_KEYS: text,
 });
 
 type Env = z.infer<typeof envSchema>;
@@ -191,13 +158,8 @@ export function parseConfig(raw: Readonly<Record<string, string | undefined>>): 
   }
   const env = parsed.data;
   const host = parseJson("DRIPSIGN_HOST", env.DRIPSIGN_HOST, hostSchema);
-  const keys = parseJson(
-    "DRIPSIGN_COMPLETION_KEYS",
-    env.DRIPSIGN_COMPLETION_KEYS,
-    completionKeysSchema,
-  );
-  const issues: Issue[] = [...host.issues, ...keys.issues];
-  const config = build(env, host.value, keys.value, requirer(env, issues));
+  const issues: Issue[] = [...host.issues];
+  const config = build(env, host.value, requirer(env, issues));
   issues.push(...crossFieldIssues(env, config));
   if (issues.length > 0) fail(issues);
   return config;
@@ -263,10 +225,10 @@ function crossFieldIssues(env: Env, config: Config): Issue[] {
   } else if (config.email.transport === "azure" && config.email.from === "") {
     issues.push(["DRIPSIGN_EMAIL_FROM", "Azure email needs an address on a connected domain"]);
   }
-  return [...issues, ...integrationIssues(env, config)];
+  return [...issues, ...hostIssues(config)];
 }
 
-function integrationIssues(env: Env, config: Config): Issue[] {
+function hostIssues(config: Config): Issue[] {
   const issues: Issue[] = [];
   if (config.production && config.host && !config.host.origin.startsWith("https://")) {
     issues.push(["DRIPSIGN_HOST", "Production requires an https host origin"]);
@@ -275,20 +237,10 @@ function integrationIssues(env: Env, config: Config): Issue[] {
   if (config.host && firms.size !== config.host.tenants.length) {
     issues.push(["DRIPSIGN_HOST", "Each firm maps to one tenant"]);
   }
-  const urlMissing = env.DRIPSIGN_HOST_EVENT_URL === undefined;
-  if (urlMissing !== (env.DRIPSIGN_COMPLETION_KEYS === undefined)) {
-    const missing = urlMissing ? "DRIPSIGN_HOST_EVENT_URL" : "DRIPSIGN_COMPLETION_KEYS";
-    issues.push([missing, "Set the event URL and the completion keys together"]);
-  }
   return issues;
 }
 
-function build(
-  env: Env,
-  host: HostConfig | null,
-  completionKeys: readonly CompletionKey[] | null,
-  need: Need,
-): Config {
+function build(env: Env, host: HostConfig | null, need: Need): Config {
   return {
     nodeEnv: env.NODE_ENV,
     production: env.NODE_ENV === "production",
@@ -308,10 +260,6 @@ function build(
       : null,
     jobsConcurrency: env.DRIPSIGN_JOBS_CONCURRENCY,
     host,
-    completionExport:
-      env.DRIPSIGN_HOST_EVENT_URL && completionKeys
-        ? { url: env.DRIPSIGN_HOST_EVENT_URL, keys: completionKeys }
-        : null,
   };
 }
 

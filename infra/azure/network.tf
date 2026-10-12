@@ -57,7 +57,7 @@ resource "azurerm_subnet" "data" {
   }
 }
 
-# The egress address: static, so a host can allowlist DripSign's executed events.
+# The egress address: static, so a provider can allowlist DripSign's outbound calls.
 resource "azurerm_public_ip" "egress" {
   name                = "pip-${var.name}-egress"
   location            = var.location

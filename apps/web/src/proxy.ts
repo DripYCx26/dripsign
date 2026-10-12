@@ -4,8 +4,7 @@ import { PATH_HEADER } from "@/server/navigation";
 
 /**
  * Every page response gets a fresh script nonce. Next reads the nonce from the request's CSP
- * header and stamps it on its own scripts. Route handlers under /api set their own headers: the
- * proxy would buffer (and past 10 MB truncate) upload bodies.
+ * header and stamps it on its own scripts. Route handlers under /api set their own headers.
  */
 export function proxy(request: NextRequest): NextResponse {
   const settings = loadConfig();

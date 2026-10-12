@@ -94,7 +94,7 @@ export async function applyAi(ctx: CommandContext, command: CommandOf<"apply_ai"
     throw conflict("The draft changed after this suggestion was prepared. Ask again.");
   }
   await stageDraft(db, agreement, {
-    content: { source: suggestion.result.source, upload: null },
+    source: suggestion.result.source,
     signers: state.signers,
     dirty: true,
   });

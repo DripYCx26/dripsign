@@ -3,6 +3,16 @@
 Dated product and architecture decisions. A newer entry supersedes an older one where they
 conflict; superseded text is deleted rather than kept as history (Git holds it).
 
+## 2026-10-11: V1 removes uploaded PDFs and completion export
+
+V1 removes uploaded PDFs and completion export; staff write terms in the app; host completion
+delivery returns when a host needs it. Gone with them: the upload route, the isolated parser and
+its inflation preflight, the active-content checks, the executed event, its pins, tables, job and
+keys, and the staff settings page. The host bridge sign-in stays. Every revision now holds written
+terms, which the database requires.
+
+Rejected: keeping either behind a flag (dead code and configuration before any customer).
+
 ## 2026-10-11: Review round two and design pass
 
 **Context.** A second adversarial review of the rebuilt product found evidence, session, upload
@@ -21,19 +31,16 @@ and roster gaps; a design pass then reworked the workspace.
   contexts that never share a request. Bridge assertions live at most 60 seconds.
 - A signature records the request's IP (trusted proxy hops only) and a bounded user agent.
 - PDFs shared with recipients show signer names only; the audit record masks emails.
-- Uploads are parsed in an isolated worker, one at a time, under a 64 MiB cumulative inflation
-  budget checked before parsing.
 - The chat shows milestones only. Storage and mail are chosen by `DRIPSIGN_STORAGE` and
-  `DRIPSIGN_EMAIL_TRANSPORT`; completion export is configured by URL plus keys, both or neither.
+  `DRIPSIGN_EMAIL_TRANSPORT`.
 
 **Decided: design.** A full-height workspace of two regions: the thread rail
 `clamp(440px, 36vw, 640px)` (320 px when only history remains; hidden on a closed draft) beside the document. A chat-style composer starts proposals. Status
 tabs are gone from the lists. Completion is a single-line strip. On a phone the open tab derives
 from state: the document when the chat has nothing to offer, else chat.
 
-**Rejected.** Sampling process RSS to bound upload memory (polling is racy and reacts after the
-spike; the inflation budget and worker limits bound it up front). Keeping Activity as a tab
-(it duplicated the audit record; milestones in the thread cover what a participant needs).
+**Rejected.** Keeping Activity as a tab (it duplicated the audit record; milestones in the thread
+cover what a participant needs).
 
 ## 2026-10-11: V1 architecture after the simplification review
 
@@ -53,14 +60,13 @@ store inheritance chain, reads taking row locks, and no way to run without AWS.
 - The last signature enqueues archival in the same transaction, and archival never becomes
   terminal. A sweep re-enqueues any finalizing round that has no live job.
 - Only a required signer of the live round can close it by proposing a change.
-- Uploaded PDFs are parsed only in the worker.
 - AI suggestions are optional, staff-private, budgeted, and never triggered by recipients.
 - Local development needs Docker only: Postgres, Mailpit, file storage, and a dev sign-in that
   runs the real code path and cannot start in production.
 - One container image runs web and worker.
 
 **Rejected.** One package without tenancy; cutting host integration; jobs inside the web process
-(couples leases to hot reload and puts untrusted PDF parsing in web requests).
+(couples leases to hot reload and puts PDF rendering in web requests).
 
 **Residual risk.** Dreach DRE-201 is still marked proposed; if its contract changes, the host
 module changes with it. At-least-once email may duplicate a message after a crash. A permanent
@@ -126,7 +132,6 @@ retention operations without an established pilot requirement.
 A recipient may propose a change while signing is open; that closes the unfinished round and keeps
 earlier signatures as evidence. A completed agreement needs a separate amendment. AI may draft a
 private candidate; staff review it and publish a new immutable revision before anyone signs.
-Uploaded PDFs are never rewritten; staff upload a replacement.
 
 Release gates outside this repository: deployment, SES production sending, legal review of the
 consent text and templates, and a controlled signing run.

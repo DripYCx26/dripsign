@@ -9,8 +9,6 @@ import styles from "./PublishReview.module.css";
 import { PublishAction } from "./PublishAction.tsx";
 import { SectionDiff } from "./SectionDiff.tsx";
 
-const SHORT_LENGTH = 12;
-
 function fieldWords(fields: readonly SigningField[]): string {
   if (fields.length === 0) return "No signature field";
   const types = fields.map((field) => (field.type === "signature" ? "Signature" : "Date"));
@@ -49,41 +47,6 @@ function SignerFields({
   );
 }
 
-function PdfChange({
-  draftPages,
-  draftSha,
-  previous,
-}: Readonly<{ draftPages: number; draftSha: string; previous: RevisionView }>) {
-  if (previous.sha256 === draftSha) {
-    return <p className={styles.muted}>The PDF is the same as revision {previous.number}.</p>;
-  }
-  return (
-    <dl className={styles.facts}>
-      <dt>{`Revision ${String(previous.number)} PDF`}</dt>
-      <dd>{`${String(previous.pageCount)} pages · ${previous.sha256.slice(0, SHORT_LENGTH)}`}</dd>
-      <dt>Draft PDF</dt>
-      <dd>{`${String(draftPages)} pages · ${draftSha.slice(0, SHORT_LENGTH)}`}</dd>
-    </dl>
-  );
-}
-
-function WhatChanged({
-  draft,
-  document,
-  previous,
-}: Readonly<{
-  draft: NonNullable<AgreementView["draft"]>;
-  document: { readonly pageCount: number; readonly sha256: string };
-  previous: RevisionView;
-}>) {
-  if (draft.source === null) {
-    return (
-      <PdfChange draftPages={document.pageCount} draftSha={document.sha256} previous={previous} />
-    );
-  }
-  return <SectionDiff before={previous.source} after={draft.source} />;
-}
-
 /**
  * The last look before a revision is published: what changed since the current revision (a first
  * revision has nothing to compare), and the exact PDF that will be published with its SHA and who
@@ -115,7 +78,7 @@ export function PublishReview({ view }: Readonly<{ view: AgreementView }>) {
       {previous !== undefined && (
         <section className={styles.changes} aria-labelledby="what-changed">
           <h2 id="what-changed">{`What changed since revision ${String(previous.number)}`}</h2>
-          <WhatChanged draft={draft} document={document} previous={previous} />
+          <SectionDiff before={previous.source} after={draft.source} />
         </section>
       )}
       <section aria-label="The PDF that will be published">

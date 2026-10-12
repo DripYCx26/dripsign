@@ -9,15 +9,15 @@ mechanics, files, host integration and configuration. Product decisions and thei
 
 | Part | Runs | Owns |
 |---|---|---|
-| Web (`apps/web`) | Next.js server | Pages, server actions, four route handlers; transport and presentation only |
-| Worker (`packages/core/src/jobs/main.ts`) | Node process, same image | Outbox jobs, PDF parsing and rendering, mail, archival, sweep |
+| Web (`apps/web`) | Next.js server | Pages, server actions, three route handlers; transport and presentation only |
+| Worker (`packages/core/src/jobs/main.ts`) | Node process, same image | Outbox jobs, PDF rendering, mail, archival, sweep |
 | PostgreSQL 17 | Database | All state; evidence triggers; the signing state machine |
 | Storage | Local files, S3 or Azure Blob (`DRIPSIGN_STORAGE`) | Content-addressed PDFs and artifacts |
 | Mail | SMTP (Mailpit), SES or Azure Communication Services (`DRIPSIGN_EMAIL_TRANSPORT`) | Codes, invitations, notifications |
 
 `packages/core` is Next-free and holds every decision; web imports it as `@dripsign/core/<path>`.
 Web and worker never call each other: the web enqueues a row in the outbox and the worker claims
-it. Uploaded PDFs are parsed only in the worker, never in a web request.
+it. PDFs are rendered only in the worker, never in a web request.
 
 ## 2. Data and lifecycle
 
@@ -107,8 +107,8 @@ locking.
 - **Version fence.** Document-shaping commands update `agreement.version` where it equals the
   expected value; zero rows is a `conflict`. Lock order is receipt, agreement row, the actor's
   grant row `FOR SHARE` (a revocation that committed while the command queued is seen, a later one
-  waits), then job rows. Admin writes (roster, export pins, export recovery after its round lock)
-  hold the admin's staff row the same way through `requireRole(..., "write")`.
+  waits), then job rows. Roster changes hold the admin's staff row the same way through
+  `requireRole(..., "write")`.
 - **Read snapshots.** Reads use a `REPEATABLE READ READ ONLY` transaction and take no row locks.
   Writes use `READ COMMITTED` with statement, lock and idle timeouts.
 - **Errors.** `DomainError` codes: `not_found`, `conflict`, `invalid`, `rate_limited`,
@@ -123,10 +123,9 @@ change is fenced by that token, so a stale holder cannot finish a job. `NOTIFY` 
 | Kind | Does | Attempts |
 |---|---|---|
 | `email` | Sends a message; parameters are scrubbed when done | 10 (about 85 minutes) |
-| `pdf_prepare` | Parses an uploaded PDF in the worker, prepares signer fields | 2 |
+| `pdf_prepare` | Renders the draft's terms and signature pages; staff read a refusal's sentence | 2 |
 | `ai_suggest` | Optional staff-private suggestion | 1 (a second claim fails and keeps its spend) |
 | `archive` | Writes the signed PDF and audit record | never terminal |
-| `host_event` | Posts the executed event to the host | 20 |
 
 Retry backoff is `min(10s * 2^(attempts-1), 1h)` plus up to one second of jitter. Archive retries
 forever with capped backoff; the first committed artifact pair wins and an already completed round
@@ -141,40 +140,27 @@ Storage is content-addressed: a file's key derives from its sha256, so identical
 object. File responses are `application/pdf` with `nosniff` and `Content-Security-Policy:
 sandbox`.
 
-Uploads (10 MB, 200 pages) are stored, then a `pdf_prepare` job parses them in an isolated worker
-thread (`pdf/isolate.ts`): one parse at a time, 128 MB old-generation limit, 30 second timeout,
-cancellable, with at most eight uploads waiting. A preflight inflates the metadata streams pdf-lib
-decodes on load (object and cross-reference streams) against a 64 MiB cumulative budget and refuses
-the PDF beyond it or when such a stream's type is indirect; page and image streams are copied, not
-inflated. Scripts and encrypted files are refused. The commit is fenced on
-the upload sha and the signer-set hash of the current draft. Text agreements render in the
-worker with one embedded font ([`assets/`](../packages/core/assets)), the same file the signature
-preview uses. The signed PDF is an electronic-signature rendition with a signature page, not
-certificate-based signing. The audit record is a second artifact built from the signature,
+Staff write the terms in the app; there is no PDF upload. A `pdf_prepare` job renders the title
+and sections (at most 200 pages) and one signature page per three required signers in the worker,
+with one embedded font ([`assets/`](../packages/core/assets)), the same file the signature preview
+uses. Its commit is fenced on the hash of the title and terms and on the signer-set hash of the
+current draft. A rendered or stored PDF is at most 20 MB.
+
+The signed PDF is an electronic-signature rendition with a signature page, not certificate-based
+signing. The audit record is a second artifact built from the signature,
 verification, consent and request-evidence rows. PDFs shared with recipients (revisions, the
 signature page, the signed PDF) show signer names only; the audit record masks emails
-(`s***@example.test`). Both artifacts render deterministically from the evidence. Uploaded PDFs
-are never rewritten.
+(`s***@example.test`). Both artifacts render deterministically from the evidence.
 
 ## 7. Host integration
 
-Off unless `DRIPSIGN_HOST` is set. Two Ed25519 contracts (the completion export is configured apart from `DRIPSIGN_HOST`), with
-separate keys:
+Off unless `DRIPSIGN_HOST` is set. One Ed25519 contract:
 
 - **Entry.** `POST /api/bridge/session` takes a compact signed token in the `assertion` form field
   (`typ=dripsign-staff+jwt`, lifetime at most 60 seconds, nonce accepted once, even when the email
   is not live staff). The form's origin must be the configured host. The firm maps to a tenant in
   configuration and must be a live staff member. On success it sets the embed cookie and redirects
   to `/staff`.
-- **Completion export.** Needs `DRIPSIGN_HOST_EVENT_URL` and `DRIPSIGN_COMPLETION_KEYS` together.
-  Admins pin the receiver's public sender settings on `/staff/settings` (immutable revisions);
-  completion freezes one canonical body under the current revision and enqueues `host_event`; the
-  worker signs each delivery attempt with an Ed25519 key and retries until the host returns its
-  receipt. One rule (`host/event.ts` `undeliverableReason`: issuer is the public origin, audience
-  the event URL's origin, the key id and version configured) gates saving pins while delivery is
-  on, freezing and every delivery. Pins that fail it at completion freeze nothing: the round is
-  listed as held, and an admin's send freezes and queues it once the pins pass. Undelivered
-  completions are listed for admins.
 
 `proxy.ts` sets a nonce-based CSP; `/staff/**` and the entry route allow the host origin as a
 frame ancestor when configured, everything else forbids framing.

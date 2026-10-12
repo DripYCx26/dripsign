@@ -20,7 +20,7 @@ output "dns_records" {
 }
 
 output "egress_ip" {
-  description = "The one address outbound traffic leaves from; what a host allowlists for executed events."
+  description = "The one address outbound traffic leaves from."
   value       = azurerm_public_ip.egress.ip_address
 }
 

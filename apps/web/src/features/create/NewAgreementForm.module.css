@@ -11,17 +11,6 @@
   gap: var(--ds-space-4);
 }
 
-.section {
-  display: grid;
-  gap: var(--ds-space-4);
-}
-
-.file {
-  color: var(--ds-text-secondary);
-  font-family: var(--ds-mono);
-  font-size: var(--ds-text-sm);
-}
-
 .error {
   color: var(--ds-stop);
   font-size: var(--ds-text-sm);

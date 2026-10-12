@@ -38,9 +38,8 @@ export async function insertAgreement(
       ],
     );
   }
-  const source = input.document.kind === "source" ? input.document.source : null;
   await stageDraft(db, agreement, {
-    content: { source, upload: null },
+    source: input.source,
     signers: await liveSigners(db, agreement.tenantId, agreement.id),
     dirty: true,
   });

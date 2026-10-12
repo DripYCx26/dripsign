@@ -38,23 +38,9 @@ function RevisionMenu({ doc }: Readonly<{ doc: DocumentState }>) {
   );
 }
 
-/** Edit draft, or Save and Discard while the form is open; for an uploaded PDF, Replace PDF. */
+/** Edit draft, or Save and Discard while the form is open. */
 function DraftActions({ doc, busy }: Readonly<{ doc: DocumentState; busy: boolean }>) {
-  const { draft, uploaded, replacing, setReplacing } = doc;
-  if (uploaded) {
-    return (
-      <Button
-        variant="secondary"
-        size="sm"
-        pressed={replacing}
-        onClick={() => {
-          setReplacing(!replacing);
-        }}
-      >
-        Replace PDF
-      </Button>
-    );
-  }
+  const { draft } = doc;
   if (draft.edit === null) {
     return (
       <Button variant="secondary" size="sm" onClick={draft.begin}>
