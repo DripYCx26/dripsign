@@ -39,3 +39,8 @@
   font-size: var(--ds-text-sm);
   line-height: var(--ds-leading-sm);
 }
+
+/* A disabled box shows no example request, so it never reads as ready to type into. */
+.dock:disabled ::placeholder {
+  color: transparent;
+}
