@@ -66,7 +66,7 @@ parsed by [`config.ts`](../../packages/core/src/config.ts) and listed in
 | `DRIPSIGN_DATABASE_URL`, `DRIPSIGN_AUTH_SECRET` | Key Vault secrets `database-url`, `auth-secret` |
 | `DRIPSIGN_ANTHROPIC_API_KEY` | Key Vault secret `anthropic-api-key`, web and worker, only with `ai_enabled` |
 | `DRIPSIGN_HOST` | `host_integration`, web and worker, plain (public settings); unset when null |
-| `DRIPSIGN_HOST_EVENT_URL`, `DRIPSIGN_COMPLETION_KEYS` | `host_event_url` (worker) and Key Vault secret `completion-keys` (worker); both unset when `host_event_url` is null |
+| `DRIPSIGN_HOST_EVENT_URL`, `DRIPSIGN_COMPLETION_KEYS` | `host_event_url` and Key Vault secret `completion-keys`, web and worker; both unset when `host_event_url` is null |
 
 Not set, so the defaults apply: `DRIPSIGN_AI_MODEL`, `DRIPSIGN_AI_DAILY_LIMIT_USD`,
 `DRIPSIGN_JOBS_CONCURRENCY`, `DRIPSIGN_S3_*`, `AWS_REGION`, `DRIPSIGN_SMTP_URL`. Production refuses

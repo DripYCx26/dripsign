@@ -11,4 +11,4 @@ unprivileged `node` user with `NODE_ENV=production`.
 The default command is `pnpm --filter @dripsign/web start` (port 3000). The jobs worker uses the
 same image with `pnpm --filter @dripsign/core worker`. No credential is accepted at build time;
 runtime configuration is the `DRIPSIGN_*` set in [`.env.example`](../../.env.example), and
-production requires an https origin with S3 storage and SES email.
+production requires an https origin, S3 or Azure Blob storage, and SES or Azure email.

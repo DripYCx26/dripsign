@@ -36,7 +36,8 @@ migrations. Every tenant table carries `tenant_id` with composite `(tenant_id, .
   reviewed publish (the client sends the draft PDF sha it reviewed) creates a revision. The first
   publish moves `draft` to `negotiating` and sends invitations.
 - **Proposals** follow a turn rule: one pending proposal per agreement (`one_pending_proposal`),
-  decided by the other side. A proposal is accepted, rejected or superseded. Messages are
+  decided by the other side. A proposal is accepted, rejected or superseded (countered by the
+  other side, or withdrawn by its author; staff withdraw as one side). Messages are
   immutable and interleave with proposals in one thread. The thread shows milestones only
   (revision published, signatures, completion), one line each, grouped by minute; the rest of the
   timeline stays in the audit record.
@@ -94,8 +95,9 @@ loopback. `loadConfig()` refuses to start otherwise, and the dev action rechecks
 ## 4. Commands and idempotency
 
 `domain/policy.ts` holds `allowedActions(snapshot, capacity)`, the only home of lifecycle and
-permission rules. Views return its result; every command recomputes it inside its transaction
-after locking.
+permission rules. Views and list rows return its result (the web words both a row's next step and
+the workspace's primary action from it); every command recomputes it inside its transaction after
+locking.
 
 - **Receipts.** One `command_receipt` table keyed `(tenant_id, actor_email, key)` stores operation,
   capacity, resource, a hash of the canonical payload and the result. The same key and payload
@@ -119,7 +121,7 @@ change is fenced by that token, so a stale holder cannot finish a job. `NOTIFY` 
 
 | Kind | Does | Attempts |
 |---|---|---|
-| `email` | Sends a message; parameters are scrubbed when done | 5 |
+| `email` | Sends a message; parameters are scrubbed when done | 10 (about 85 minutes) |
 | `pdf_prepare` | Parses an uploaded PDF in the worker, prepares signer fields | 2 |
 | `ai_suggest` | Optional staff-private suggestion | 1 (a second claim fails and keeps its spend) |
 | `archive` | Writes the signed PDF and audit record | never terminal |
@@ -129,7 +131,8 @@ Retry backoff is `min(10s * 2^(attempts-1), 1h)` plus up to one second of jitter
 forever with capped backoff; the first committed artifact pair wins and an already completed round
 is done. The UI says the signed files are delayed after three attempts. The sweep
 (`jobs/sweep.ts`) re-enqueues `archive` for any finalizing round without a live job, and deletes
-expired challenges, sessions, rate-limit rows, nonces and old finished jobs.
+expired challenges, sessions, rate-limit rows, nonces, old finished jobs, command receipts after 30
+days and finished AI suggestions after 90 days.
 
 ## 6. Files and PDF
 
@@ -166,7 +169,11 @@ separate keys:
   Admins pin the receiver's public sender settings on `/staff/settings` (immutable revisions);
   completion freezes one canonical body under the current revision and enqueues `host_event`; the
   worker signs each delivery attempt with an Ed25519 key and retries until the host returns its
-  receipt. Undelivered completions are listed for admins.
+  receipt. One rule (`host/event.ts` `undeliverableReason`: issuer is the public origin, audience
+  the event URL's origin, the key id and version configured) gates saving pins while delivery is
+  on, freezing and every delivery. Pins that fail it at completion freeze nothing: the round is
+  listed as held, and an admin's send freezes and queues it once the pins pass. Undelivered
+  completions are listed for admins.
 
 `proxy.ts` sets a nonce-based CSP; `/staff/**` and the entry route allow the host origin as a
 frame ancestor when configured, everything else forbids framing.

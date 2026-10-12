@@ -61,7 +61,7 @@ Parameters:
     Type: String
     Default: ''
     AllowedPattern: '^$|^https://[^/]+/v1/webhooks/dripsign$'
-    Description: Fixed https executed-event URL; set it and DRIPSIGN_COMPLETION_KEYS in the worker config secret to turn completion export on.
+    Description: Fixed https executed-event URL; set it and DRIPSIGN_COMPLETION_KEYS in both config secrets to turn completion export on.
   WebDesiredCount:
     Type: Number
     MinValue: 0
@@ -123,7 +123,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      Description: Web JSON keys, filled privately before starting ECS - DRIPSIGN_AUTH_SECRET (32+ bytes), and DRIPSIGN_ANTHROPIC_API_KEY when AiEnabled.
+      Description: Web JSON keys, filled privately before starting ECS - DRIPSIGN_AUTH_SECRET (32+ bytes), DRIPSIGN_ANTHROPIC_API_KEY when AiEnabled, DRIPSIGN_COMPLETION_KEYS when HostEventUrl is set.
   WorkerConfig:
     Type: AWS::SecretsManager::Secret
     DeletionPolicy: Retain
@@ -407,6 +407,11 @@ Resources:
               - Name: DRIPSIGN_HOST
                 Value: !Ref HostIntegration
               - !Ref AWS::NoValue
+            - !If
+              - CompletionExportOn
+              - Name: DRIPSIGN_HOST_EVENT_URL
+                Value: !Ref HostEventUrl
+              - !Ref AWS::NoValue
           Secrets:
             - Name: DRIPSIGN_DATABASE_URL
               ValueFrom: !Ref DatabaseSecretArn
@@ -416,6 +421,11 @@ Resources:
               - AiOn
               - Name: DRIPSIGN_ANTHROPIC_API_KEY
                 ValueFrom: !Sub '${WebConfig}:DRIPSIGN_ANTHROPIC_API_KEY::'
+              - !Ref AWS::NoValue
+            - !If
+              - CompletionExportOn
+              - Name: DRIPSIGN_COMPLETION_KEYS
+                ValueFrom: !Sub '${WebConfig}:DRIPSIGN_COMPLETION_KEYS::'
               - !Ref AWS::NoValue
           LogConfiguration:
             LogDriver: awslogs

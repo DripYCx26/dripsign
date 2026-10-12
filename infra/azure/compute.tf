@@ -238,7 +238,7 @@ locals {
       command = ["pnpm"]
       args    = ["--filter", "@dripsign/core", "cli", "migrate"]
       secrets = { DRIPSIGN_DATABASE_URL = "migration-database-url", DRIPSIGN_AUTH_SECRET = "auth-secret" }
-      env     = local.shared_env
+      env     = merge(local.shared_env, { AZURE_CLIENT_ID = azurerm_user_assigned_identity.app["release"].client_id })
     }
     # Adds one staff member; start it with the person's arguments (README: Commands).
     staff = {
@@ -246,7 +246,7 @@ locals {
       command = ["pnpm"]
       args    = ["--filter", "@dripsign/core", "cli", "add-staff"]
       secrets = { DRIPSIGN_DATABASE_URL = "database-url", DRIPSIGN_AUTH_SECRET = "auth-secret" }
-      env     = local.shared_env
+      env     = merge(local.shared_env, { AZURE_CLIENT_ID = azurerm_user_assigned_identity.app["release"].client_id })
     }
   }
 }

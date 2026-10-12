@@ -28,6 +28,7 @@ locals {
     web = concat(
       ["database-url", "auth-secret"],
       local.ai_enabled ? ["anthropic-api-key"] : [],
+      local.completion_export_enabled ? ["completion-keys"] : [],
     )
     worker = concat(
       ["database-url", "auth-secret"],
@@ -38,13 +39,15 @@ locals {
   }
 
   # Environment variable to secret, per runtime.
-  ai_secret_env = local.ai_enabled ? { DRIPSIGN_ANTHROPIC_API_KEY = "anthropic-api-key" } : {}
+  ai_secret_env         = local.ai_enabled ? { DRIPSIGN_ANTHROPIC_API_KEY = "anthropic-api-key" } : {}
+  completion_secret_env = local.completion_export_enabled ? { DRIPSIGN_COMPLETION_KEYS = "completion-keys" } : {}
   web_secret_env = merge(
     {
       DRIPSIGN_DATABASE_URL = "database-url"
       DRIPSIGN_AUTH_SECRET  = "auth-secret"
     },
     local.ai_secret_env,
+    local.completion_secret_env,
   )
   worker_secret_env = merge(
     {
@@ -52,7 +55,7 @@ locals {
       DRIPSIGN_AUTH_SECRET  = "auth-secret"
     },
     local.ai_secret_env,
-    local.completion_export_enabled ? { DRIPSIGN_COMPLETION_KEYS = "completion-keys" } : {},
+    local.completion_secret_env,
   )
 
   # What every process parses at startup (packages/core/src/config.ts); the web and the worker
@@ -72,11 +75,8 @@ locals {
   # The Dreach host integration: public settings, so a plain value. Off while null.
   host_env = var.host_integration == null ? {} : { DRIPSIGN_HOST = jsonencode(var.host_integration) }
 
-  # The executed-event destination belongs to the worker, which delivers it.
-  worker_env = merge(
-    local.shared_env,
-    local.host_env,
-    local.completion_export_enabled ? { DRIPSIGN_HOST_EVENT_URL = var.host_event_url } : {},
-  )
-  web_env = merge(local.shared_env, local.host_env, { PORT = "3000" })
+  # Web validates and freezes exports; the worker delivers them with the same settings.
+  completion_env = local.completion_export_enabled ? { DRIPSIGN_HOST_EVENT_URL = var.host_event_url } : {}
+  worker_env     = merge(local.shared_env, local.host_env, local.completion_env)
+  web_env        = merge(local.shared_env, local.host_env, local.completion_env, { PORT = "3000" })
 }
