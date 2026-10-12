@@ -1,12 +1,23 @@
-/* The search at 320 px; the full width of the page under 640. */
+/* The search: 360 px at most, the full width under 640. The glyph sits over the field's start
+   edge; the input keeps its own padding, widened to clear it. */
 
 .search {
-  width: calc(var(--ds-space-10) * 8);
-  max-width: 100%;
+  position: relative;
+  width: 100%;
+  max-width: calc(var(--ds-space-10) * 9);
 }
 
-@media (max-width: 639px) {
-  .search {
-    width: 100%;
-  }
+.icon {
+  position: absolute;
+  z-index: 1;
+  inset-block-end: calc((var(--ds-size-control-md) - var(--ds-size-icon)) / 2);
+  inset-inline-start: var(--ds-space-3);
+  width: var(--ds-size-icon);
+  height: var(--ds-size-icon);
+  color: var(--ds-text-tertiary);
+  pointer-events: none;
+}
+
+.search input {
+  padding-inline-start: calc(var(--ds-space-3) * 2 + var(--ds-size-icon));
 }

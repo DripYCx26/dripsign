@@ -17,9 +17,9 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--ds-space-3) var(--ds-space-4);
-  border: var(--ds-hairline);
   border-radius: var(--ds-radius-card);
-  background: var(--ds-surface);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-card);
   padding: var(--ds-space-4);
 }
 
@@ -44,13 +44,14 @@
 }
 
 .email {
+  color: var(--ds-text-secondary);
   font-family: var(--ds-mono);
   font-size: var(--ds-text-sm);
   line-height: var(--ds-leading-sm);
 }
 
 .role {
-  color: var(--ds-text-secondary);
+  color: var(--ds-text-tertiary);
   font-size: var(--ds-text-sm);
   line-height: var(--ds-leading-sm);
 }

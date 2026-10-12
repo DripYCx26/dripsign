@@ -58,6 +58,7 @@ export function DevIdentityPicker({
             </div>
             <Button
               variant="secondary"
+              size="sm"
               loading={choosing === identity.email}
               disabled={choosing !== null && choosing !== identity.email}
               onClick={() => void choose(identity)}

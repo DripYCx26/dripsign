@@ -8,14 +8,16 @@
 
 .link {
   display: inline-flex;
-  min-height: var(--ds-size-control-md);
+  min-height: var(--ds-size-control-sm);
   align-items: center;
   border-radius: var(--ds-radius-control);
   padding: 0 var(--ds-space-3);
   color: var(--ds-text-secondary);
   font-size: var(--ds-text-md);
   font-weight: var(--ds-weight-medium);
+  line-height: var(--ds-leading-md);
   text-decoration: none;
+  transition: background-color var(--ds-motion-quick) var(--ds-ease-enter);
 }
 
 .link:hover {
@@ -25,5 +27,5 @@
 
 .link[aria-current="page"] {
   background: var(--ds-accent-soft);
-  color: var(--ds-text);
+  color: var(--ds-accent);
 }

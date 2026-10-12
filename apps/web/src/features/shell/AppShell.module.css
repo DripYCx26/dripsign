@@ -45,9 +45,9 @@
   inset-inline-start: var(--ds-space-2);
   translate: 0 -200%;
   border-radius: var(--ds-radius-control);
-  background: var(--ds-ink);
+  background: var(--ds-accent);
   padding: var(--ds-space-2) var(--ds-space-3);
-  color: var(--ds-on-ink);
+  color: var(--ds-on-accent);
   font-size: var(--ds-text-sm);
 }
 

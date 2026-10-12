@@ -1,24 +1,31 @@
-/* The development strip: one quiet line on the surface, an attention rule on its start edge, so a
-   local identity is never mistaken for a verified one without a loud slab on every page. */
+/* The development strip: one quiet 28 px line on a subtle ground, an attention dot before the
+   words, so a local identity is never mistaken for a verified one without a slab on every page. */
 
 .banner {
   display: flex;
-  min-height: var(--ds-layout-dev-bar);
+  height: var(--ds-layout-dev-bar);
   flex-wrap: nowrap;
   overflow: hidden;
   white-space: nowrap;
   align-items: center;
-  gap: var(--ds-space-1) var(--ds-space-2);
-  padding: var(--ds-space-1) var(--ds-space-4);
-  border-bottom: var(--ds-hairline);
-  border-inline-start: var(--ds-space-1) solid var(--ds-attention);
-  background: var(--ds-surface);
+  gap: var(--ds-space-2);
+  padding: 0 var(--ds-space-6);
+  background: var(--ds-surface-subtle);
   color: var(--ds-text-secondary);
   font-size: var(--ds-text-xs);
   line-height: var(--ds-leading-xs);
 }
 
+.dot {
+  width: calc(var(--ds-space-half) * 3);
+  height: calc(var(--ds-space-half) * 3);
+  flex: none;
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-attention);
+}
+
 .switch {
+  flex: none;
   color: var(--ds-text);
   font-weight: var(--ds-weight-medium);
 }
@@ -34,15 +41,15 @@
   text-overflow: ellipsis;
 }
 
-.switch {
-  flex: none;
-}
-
 .short {
   display: none;
 }
 
 @media (max-width: 639px) {
+  .banner {
+    padding-inline: var(--ds-space-4);
+  }
+
   .full {
     display: none;
   }

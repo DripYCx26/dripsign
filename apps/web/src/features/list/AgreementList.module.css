@@ -3,29 +3,30 @@
 .list {
   display: grid;
   overflow: hidden;
-  border: var(--ds-hairline);
   border-radius: var(--ds-radius-card);
-  background: var(--ds-surface);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-card);
 }
 
 .heading {
   display: flex;
   align-items: baseline;
   gap: var(--ds-space-2);
-  padding: var(--ds-space-2) var(--ds-space-4);
+  padding: calc(var(--ds-space-1) * 1.5) var(--ds-space-4);
   border-bottom: var(--ds-hairline);
   background: var(--ds-surface-subtle);
-  color: var(--ds-text-secondary);
-  font-size: var(--ds-text-sm);
+  color: var(--ds-text-tertiary);
+  font-size: var(--ds-text-xs);
   font-weight: var(--ds-weight-medium);
-  line-height: var(--ds-leading-sm);
+  letter-spacing: var(--ds-tracking-caps);
+  line-height: var(--ds-leading-xs);
+  text-transform: uppercase;
 }
 
 .count {
-  color: var(--ds-text-tertiary);
   font-family: var(--ds-mono);
-  font-size: var(--ds-text-xs);
   font-weight: var(--ds-weight-regular);
+  letter-spacing: 0;
 }
 
 .rows {
@@ -34,7 +35,7 @@
   list-style: none;
 }
 
-/* A group's last row ends on the next subheader or on the surface's own border. */
+/* A group's last row ends on the next subheader or on the card's own edge. */
 .rows > li:last-child > a {
   border-bottom: 0;
 }

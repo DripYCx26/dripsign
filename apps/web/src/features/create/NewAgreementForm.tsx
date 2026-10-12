@@ -58,6 +58,7 @@ export function NewAgreementForm() {
         <TextField
           label="Title"
           hideLabel
+          size="lg"
           placeholder="Title"
           name="title"
           value={title}

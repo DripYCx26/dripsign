@@ -1,6 +1,17 @@
+/* The one card on the page: the question, and the work of answering it. */
 .flow {
   display: grid;
   gap: var(--ds-space-4);
+  padding: var(--ds-space-8);
+  border-radius: var(--ds-radius-card);
+  background: var(--ds-surface-raised);
+  box-shadow: var(--ds-shadow-card);
+}
+
+@media (max-width: 639px) {
+  .flow {
+    padding: var(--ds-space-5);
+  }
 }
 
 .form {

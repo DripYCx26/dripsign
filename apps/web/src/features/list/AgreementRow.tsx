@@ -6,7 +6,7 @@ import { SignerProgress } from "./SignerProgress.tsx";
 import { StatusPill } from "./StatusPill.tsx";
 
 /**
- * One agreement as a 64 px row, a single link: title and who it is with, what happens next (and
+ * One agreement as a 56 px row, a single link: title and who it is with, what happens next (and
  * signature progress), the status, and when it last changed.
  */
 export function AgreementRow({ row }: Readonly<{ row: RowModel }>) {

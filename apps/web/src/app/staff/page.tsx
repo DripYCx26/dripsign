@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { ListControls } from "@/features/list/ListControls.tsx";
 import { parseSearch } from "@/features/list/query.ts";
 import { StaffAgreementList } from "@/features/list/StaffAgreementList.tsx";
+import { AppShell } from "@/features/shell/AppShell.tsx";
 import { PageContainer } from "@/features/shell/PageContainer.tsx";
 import { requireStaff } from "@/server/session.ts";
 import { ButtonLink, PageHeader } from "@/ui";
@@ -13,20 +14,22 @@ type Props = Readonly<{ searchParams: Promise<Record<string, string | string[] |
 
 export default async function StaffDashboardPage({ searchParams }: Props) {
   const q = parseSearch(await searchParams);
-  const { actor } = await requireStaff();
+  const { actor, session } = await requireStaff();
   const page = await listStaffAgreements(actor, q === "" ? {} : { q });
   return (
-    <PageContainer>
-      <PageHeader
-        title="Agreements"
-        actions={
-          <ButtonLink variant="ink" href="/staff/new">
-            New agreement
-          </ButtonLink>
-        }
-      />
-      <ListControls q={q} />
-      <StaffAgreementList initial={page} q={q} />
-    </PageContainer>
+    <AppShell session={session} home="staff">
+      <PageContainer>
+        <PageHeader
+          title="Agreements"
+          actions={
+            <ButtonLink variant="ink" href="/staff/new">
+              New agreement
+            </ButtonLink>
+          }
+        />
+        <ListControls q={q} />
+        <StaffAgreementList initial={page} q={q} />
+      </PageContainer>
+    </AppShell>
   );
 }

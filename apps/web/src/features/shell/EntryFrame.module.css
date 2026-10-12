@@ -53,7 +53,18 @@
   }
 }
 
+.intro {
+  display: grid;
+  gap: var(--ds-space-2);
+}
+
 .title {
   font-size: var(--ds-display-md);
   line-height: var(--ds-display-md-leading);
+}
+
+.lead {
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-lg);
+  line-height: var(--ds-leading-lg);
 }

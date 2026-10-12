@@ -9,13 +9,17 @@ type ErrorActionsProps = Readonly<{
   retry: () => void;
 }>;
 
-/** What a failed page offers: try again, and the request ID to quote. */
+/** What a failed page offers: try again or go back, and the request ID to quote. */
 export function ErrorActions({ digest, retry }: ErrorActionsProps) {
   return (
     <div className={styles.actions}>
-      <Button variant="ink" onClick={retry}>
-        Try again
-      </Button>
+      <div className={styles.row}>
+        <Button variant="secondary" onClick={retry}>
+          Try again
+        </Button>
+        {/* A plain anchor: global-error renders where the app router is not running. */}
+        <a href="/">Back to agreements</a>
+      </div>
       {digest !== undefined && <p className={styles.id}>Request ID {digest}</p>}
     </div>
   );

@@ -2,54 +2,43 @@ import type { SessionView } from "@dripsign/core/types";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Mark, TopBar } from "@/ui";
-import { AccountMenu } from "./AccountMenu.tsx";
+import { accountMenuFor } from "./accountMenuFor.tsx";
 import styles from "./AppShell.module.css";
+import { navLinksFor } from "./navLinks.ts";
 import { ShellNav } from "./ShellNav.tsx";
-import { hasBothHomes, selectedTenant, type Home } from "./standing.ts";
+import type { Home } from "./standing.ts";
 
 type AppShellProps = Readonly<{
   session: SessionView;
   home: Home;
+  /** `false` when the page draws its own bar (a workspace), so the shell adds none. */
+  bar?: false | undefined;
   children: ReactNode;
 }>;
-
-const STAFF_LINKS = [{ href: "/staff", label: "Agreements" }] as const;
-const ADMIN_LINKS = [...STAFF_LINKS, { href: "/staff/team", label: "Team" }] as const;
 
 /**
  * The signed-in page frame: the one banner (brand, navigation, account) and the one `<main>`.
  * Pages inside it render no landmark of their own; the main fills the height left under the bar
  * so a workspace can claim it.
  */
-export function AppShell({ session, home, children }: AppShellProps) {
-  const tenant = selectedTenant(session);
-  const links = tenant?.role === "admin" ? ADMIN_LINKS : STAFF_LINKS;
-  const roleLabel =
-    home === "staff" ? (tenant === null ? "Staff" : `Staff · ${tenant.name}`) : "Shared with me";
+export function AppShell({ session, home, bar, children }: AppShellProps) {
+  const links = navLinksFor(session, home);
   return (
     <div className={styles.shell}>
       <a className={styles.skip} href="#main">
         Skip to content
       </a>
-      <TopBar
-        brand={
-          <Link href={home === "staff" ? "/staff" : "/"} className={styles.brand}>
-            <Mark />
-          </Link>
-        }
-        {...(home === "staff" ? { nav: <ShellNav links={links} /> } : {})}
-        account={
-          <AccountMenu
-            email={session.email}
-            roleLabel={roleLabel}
-            home={home}
-            bothHomes={hasBothHomes(session)}
-            links={home === "staff" ? links : []}
-            tenants={session.staffTenants}
-            selectedTenantId={tenant?.id ?? null}
-          />
-        }
-      />
+      {bar !== false && (
+        <TopBar
+          brand={
+            <Link href={home === "staff" ? "/staff" : "/"} className={styles.brand}>
+              <Mark />
+            </Link>
+          }
+          {...(links.length > 0 ? { nav: <ShellNav links={links} /> } : {})}
+          account={accountMenuFor(session, home)}
+        />
+      )}
       <main id="main" className={styles.main}>
         {children}
       </main>

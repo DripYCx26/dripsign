@@ -16,7 +16,10 @@ export default function GlobalError({ error, retry }: GlobalErrorProps) {
     <html lang="en">
       <body>
         <title>Something went wrong · DripSign</title>
-        <EntryFrame title="We couldn’t load this page.">
+        <EntryFrame
+          title="We couldn’t load this page."
+          lead="Something went wrong on our side. Try again, or go back to your agreements."
+        >
           <ErrorActions digest={error.digest} retry={retry} />
         </EntryFrame>
       </body>

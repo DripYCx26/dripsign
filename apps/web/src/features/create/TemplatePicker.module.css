@@ -9,9 +9,16 @@
   line-height: var(--ds-leading-sm);
 }
 
+/* A segmented well of toggle buttons: the chosen one is the accent fill. The well's radius is the
+   button's plus the padding, so the corners stay concentric. */
 .chips {
   display: flex;
   flex-wrap: wrap;
+  justify-self: start;
   align-items: center;
-  gap: var(--ds-space-2);
+  gap: var(--ds-space-half);
+  padding: var(--ds-space-half);
+  border-radius: var(--ds-radius-card);
+  background: var(--ds-surface-subtle);
+  box-shadow: inset 0 0 0 1px var(--ds-border);
 }

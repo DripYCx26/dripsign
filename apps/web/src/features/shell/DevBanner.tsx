@@ -14,6 +14,7 @@ export async function DevBanner() {
   const name = session === null ? null : await devIdentityLabel(session.email);
   return (
     <div className={styles.banner}>
+      <span className={styles.dot} aria-hidden="true" />
       <span className={styles.full}>Development sign-in is on</span>
       <span className={styles.short}>Dev</span>
       <span className={styles.who}>

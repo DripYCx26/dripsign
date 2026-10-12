@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { revokeStaff } from "@/server/actions/staff.ts";
-import { Button, Dialog, Moment, Notice } from "@/ui";
+import { Button, Dialog, Moment, Notice, Pill } from "@/ui";
 import { AddStaffForm } from "./AddStaffForm.tsx";
 import type { RosterMember } from "./roster.ts";
 import { settle } from "./settle.ts";
@@ -48,7 +48,9 @@ export function TeamRoster({ members, selfEmail }: Props) {
               <p className={styles.name}>{member.name ?? "—"}</p>
               <p className={styles.detail}>{member.email}</p>
               <p className={styles.meta}>
-                <span>{member.role === "admin" ? "Admin" : "Member"}</span>
+                <span>
+                  <Pill tone="info">{member.role === "admin" ? "Admin" : "Member"}</Pill>
+                </span>
                 <span>
                   <Moment value={member.addedAt} format="relative" />
                 </span>

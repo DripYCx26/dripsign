@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { TextField } from "@/ui";
+import { Search, TextField } from "@/ui";
 import styles from "./ListControls.module.css";
 import { listHref } from "./query.ts";
 
@@ -37,6 +37,7 @@ export function ListControls({ q }: Readonly<{ q: string }>) {
 
   return (
     <div className={styles.search} aria-busy={pending}>
+      <Search className={styles.icon} aria-hidden="true" />
       <TextField
         label="Search"
         hideLabel
