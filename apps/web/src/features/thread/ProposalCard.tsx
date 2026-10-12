@@ -3,7 +3,7 @@
 import type { AgreementView, Capacity, ProposalView } from "@dripsign/core/types";
 import { useState } from "react";
 import { SectionDiff } from "@/features/document/SectionDiff.tsx";
-import { Avatar, Button, Pill } from "@/ui";
+import { Avatar, Button, ChevronDown, Pill } from "@/ui";
 import { Ago } from "./Ago.tsx";
 import { startProposal } from "./intent.ts";
 import { EarlierVersions } from "./EarlierVersions.tsx";
@@ -168,7 +168,10 @@ function ProposalBody(props: ProposalCardProps) {
           <div className={styles.diff}>{diff}</div>
         ) : (
           <details className={styles.change}>
-            <summary>Show change</summary>
+            <summary className={styles.toggle}>
+              Show change
+              <ChevronDown aria-hidden="true" />
+            </summary>
             <div className={styles.diff}>{diff}</div>
           </details>
         ))}

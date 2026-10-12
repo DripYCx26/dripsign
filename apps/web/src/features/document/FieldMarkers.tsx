@@ -34,6 +34,7 @@ export function FieldMarkers({
         key={`${field.recipientId}-${field.type}-${String(field.x)}-${String(field.y)}`}
         className={styles.marker}
         data-own={own || undefined}
+        data-recipient={field.recipientId}
         style={{
           left: `${String(field.x * 100)}%`,
           top: `${String(field.y * 100)}%`,

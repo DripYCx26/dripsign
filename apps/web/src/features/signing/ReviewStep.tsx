@@ -3,6 +3,7 @@
 import { useRef } from "react";
 import type { RecipientView, RevisionView } from "@dripsign/core/types";
 import { PdfView } from "@/features/document/PdfView.tsx";
+import { scrollToField } from "@/features/document/scrollToField.ts";
 import { Button, Checkbox } from "@/ui";
 import { StepActions, StepFrame } from "./StepFrame.tsx";
 import styles from "./ReviewStep.module.css";
@@ -38,10 +39,8 @@ export function ReviewStep({
   );
 
   function goToField() {
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     // The drawn marker is exact; before the pages draw, the page-fraction anchor is close.
-    const target = frame.current?.querySelector("[data-own]") ?? anchor.current;
-    target?.scrollIntoView({ block: "center", behavior: reduced ? "auto" : "smooth" });
+    scrollToField(frame.current?.querySelector("[data-own]") ?? anchor.current);
   }
 
   return (

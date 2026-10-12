@@ -53,6 +53,7 @@ export function AddRecipientForm({ view, run, busy }: AddRecipientFormProps) {
         autoComplete="off"
         value={name}
         onChange={setName}
+        disabled={busy}
         error={problems.name}
       />
       <TextField
@@ -62,9 +63,10 @@ export function AddRecipientForm({ view, run, busy }: AddRecipientFormProps) {
         autoComplete="off"
         value={email}
         onChange={setEmail}
+        disabled={busy}
         error={problems.email}
       />
-      <Checkbox label="Required signer" checked={isSigner} onChange={setIsSigner} />
+      <Checkbox label="Required signer" checked={isSigner} onChange={setIsSigner} disabled={busy} />
       {isSigner && published && (
         <p className={styles.note}>
           Required signers are part of the published revision. Publish again before requesting

@@ -24,9 +24,15 @@
 
 .column {
   display: grid;
-  width: min(var(--ds-layout-sign), 100%);
+  width: min(var(--ds-layout-page), 100%);
   align-content: start;
   justify-self: center;
   gap: var(--ds-space-6);
-  padding: var(--ds-space-8) var(--ds-space-4);
+  padding: var(--ds-space-8) var(--ds-space-6);
+}
+
+@media (max-width: 639px) {
+  .column {
+    padding-inline: var(--ds-space-4);
+  }
 }

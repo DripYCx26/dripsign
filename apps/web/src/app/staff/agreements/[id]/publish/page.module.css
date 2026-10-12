@@ -15,6 +15,11 @@
   gap: var(--ds-space-1) var(--ds-space-3);
 }
 
+/* The chevron's 32 px circle has room around the glyph; pull it out so the glyph meets the edge. */
+.back {
+  margin-inline-start: calc(-1 * var(--ds-space-3));
+}
+
 .title {
   min-width: 0;
   overflow: hidden;

@@ -31,5 +31,5 @@
    drops to its own line when there is no room beside them. */
 .body {
   flex: 1 1 0;
-  min-inline-size: 16ch;
+  min-inline-size: var(--ds-measure-banner-min);
 }

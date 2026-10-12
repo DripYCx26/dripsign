@@ -32,14 +32,12 @@
   white-space: pre-wrap;
 }
 
-.change > summary {
-  cursor: pointer;
-  color: var(--ds-text-secondary);
-  font-size: var(--ds-text-sm);
-  line-height: var(--ds-leading-sm);
+/* The same disclosure as "N earlier versions": text, then a chevron that turns when open. */
+.toggle {
+  composes: summary from "./EarlierVersions.module.css";
 }
 
-.change[open] > summary {
+.change[open] > .toggle {
   margin-block-end: var(--ds-space-3);
 }
 

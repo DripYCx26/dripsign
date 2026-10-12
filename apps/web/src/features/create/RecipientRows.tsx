@@ -64,12 +64,13 @@ function RecipientFields({
             onEdit({ name });
           }}
         />
-        <IconButton
-          label={`Remove recipient ${String(index + 1)}`}
-          icon={<X aria-hidden="true" />}
-          disabled={onlyRow}
-          onClick={onRemove}
-        />
+        {!onlyRow && (
+          <IconButton
+            label={`Remove recipient ${String(index + 1)}`}
+            icon={<X aria-hidden="true" />}
+            onClick={onRemove}
+          />
+        )}
       </div>
       <TextField
         label="Email"

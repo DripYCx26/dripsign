@@ -6,7 +6,7 @@
 
 .ink {
   display: flex;
-  height: 72px;
+  height: var(--ds-size-signature-ink);
   align-items: flex-end;
   border-bottom: var(--ds-hairline);
   overflow: hidden;

@@ -11,6 +11,12 @@
   line-height: var(--ds-leading-read);
 }
 
+/* The sheet fills the pane; the text keeps a measure a reader can follow, centred on it. */
+.sheet > * {
+  max-width: var(--ds-layout-reading);
+  margin-inline: auto;
+}
+
 .title {
   margin-bottom: var(--ds-space-6);
   font-size: var(--ds-display-sm);

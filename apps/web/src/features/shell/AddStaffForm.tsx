@@ -49,9 +49,16 @@ export function AddStaffForm() {
           {problem}
         </Notice>
       )}
-      <TextField label="Email" name="email" type="email" autoComplete="off" required />
-      <TextField label="Name (optional)" name="name" autoComplete="off" />
-      <Select label="Role" name="role" options={ROLES} defaultValue="member" />
+      <TextField
+        label="Email"
+        name="email"
+        type="email"
+        autoComplete="off"
+        required
+        disabled={pending}
+      />
+      <TextField label="Name (optional)" name="name" autoComplete="off" disabled={pending} />
+      <Select label="Role" name="role" options={ROLES} defaultValue="member" disabled={pending} />
       <Button type="submit" variant="ink" loading={pending}>
         Add person
       </Button>

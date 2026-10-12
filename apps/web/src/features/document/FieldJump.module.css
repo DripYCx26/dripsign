@@ -1,0 +1,18 @@
+/* Reads as the quiet line it replaces; a box on hover says it acts. */
+.jump {
+  border: 0;
+  background: transparent;
+  min-height: var(--ds-size-control-sm);
+  border-radius: var(--ds-radius-control);
+  /* The hover box grows outward, so the text stays on the toolbar's edge. */
+  margin-inline: calc(-1 * var(--ds-space-2));
+  padding: 0 var(--ds-space-2);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.jump:hover {
+  background: var(--ds-surface-subtle);
+  color: var(--ds-text);
+}

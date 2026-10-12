@@ -125,21 +125,21 @@ h3 {
 @keyframes ds-enter {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(var(--ds-space-1));
   }
 }
 
 @keyframes ds-leave {
   to {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(var(--ds-space-1));
   }
 }
 
 @keyframes ds-slide {
   from {
     opacity: 0;
-    transform: translateX(12px);
+    transform: translateX(var(--ds-space-3));
   }
 }
 

@@ -69,30 +69,27 @@ function SectionFields({
             }}
           />
         </div>
-        <div className={styles.actions}>
-          <IconButton
-            label="Move section up"
-            icon={<ArrowUp aria-hidden="true" />}
-            disabled={index === 0}
-            onClick={() => {
-              onMove(-1);
-            }}
-          />
-          <IconButton
-            label="Move section down"
-            icon={<ArrowDown aria-hidden="true" />}
-            disabled={last}
-            onClick={() => {
-              onMove(1);
-            }}
-          />
-          <IconButton
-            label="Remove section"
-            icon={<X aria-hidden="true" />}
-            disabled={only}
-            onClick={onRemove}
-          />
-        </div>
+        {!only && (
+          <div className={styles.actions}>
+            <IconButton
+              label="Move section up"
+              icon={<ArrowUp aria-hidden="true" />}
+              disabled={index === 0}
+              onClick={() => {
+                onMove(-1);
+              }}
+            />
+            <IconButton
+              label="Move section down"
+              icon={<ArrowDown aria-hidden="true" />}
+              disabled={last}
+              onClick={() => {
+                onMove(1);
+              }}
+            />
+            <IconButton label="Remove section" icon={<X aria-hidden="true" />} onClick={onRemove} />
+          </div>
+        )}
       </div>
       <div className={styles.body}>
         <TextArea

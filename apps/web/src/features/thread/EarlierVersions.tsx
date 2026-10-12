@@ -1,6 +1,6 @@
 import type { AgreementView, ProposalView } from "@dripsign/core/types";
 import { SectionDiff } from "@/features/document/SectionDiff.tsx";
-import { ChevronRight } from "@/ui";
+import { ChevronDown } from "@/ui";
 import styles from "./EarlierVersions.module.css";
 import { baseSourceOf, counteredBy } from "./model.ts";
 
@@ -16,7 +16,7 @@ export function EarlierVersions({ view, versions }: EarlierVersionsProps) {
     <details className={styles.earlier}>
       <summary className={styles.summary}>
         {`${String(versions.length)} earlier ${versions.length === 1 ? "version" : "versions"}`}
-        <ChevronRight />
+        <ChevronDown aria-hidden="true" />
       </summary>
       <ul className={styles.list}>
         {versions.map((version) => {
@@ -28,7 +28,7 @@ export function EarlierVersions({ view, versions }: EarlierVersionsProps) {
                   {by === null ? "Countered" : `Countered by ${by.label}`}
                   <span className={styles.show}>
                     Show
-                    <ChevronRight />
+                    <ChevronDown aria-hidden="true" />
                   </span>
                 </summary>
                 <div className={styles.body}>

@@ -69,7 +69,7 @@ export function WorkspaceShell({
     <CommandNotice
       error={error}
       placement={panel === null ? "page" : "panel"}
-      onReload={() => void refresh().then(clearError)}
+      onReload={() => void refresh()}
       rateLimited={panel === "assistant" ? ASSISTANT_LIMIT : undefined}
     />
   );

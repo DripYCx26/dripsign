@@ -74,6 +74,7 @@
   --ds-size-icon-inline: 14px;
   --ds-size-icon: 16px;
   --ds-size-icon-tile: 20px;
+  --ds-size-signature-ink: 72px;
   --ds-icon-stroke: 1.75;
 
   /* Fixed table columns (a short tag such as a role or an action, a timestamp, a select), the
@@ -83,6 +84,7 @@
   --ds-column-time: 8rem;
   --ds-column-select: 9rem;
   --ds-measure-title-min: 12ch;
+  --ds-measure-banner-min: 16ch;
   --ds-field-max-message: 200px;
   --ds-field-max-preview: 160px;
   --ds-rule-quote: 2px;
@@ -97,13 +99,12 @@
   --ds-row-pad: var(--ds-space-3);
 
   /* Layout: the rail, the list pane, the reading width, the header and the narrow-screen drawer;
-     the document column, the focused signing flow, the development banner, and the side column
+     the document column, the development banner, and the side column
      of the new-agreement form. */
   /* The workspace thread rail: wide enough for a real chat; the narrow one holds history only. */
   --ds-layout-rail: clamp(440px, 36vw, 640px);
   --ds-layout-rail-narrow: 320px;
   --ds-layout-page: 1280px;
-  --ds-layout-sign: 960px;
   --ds-layout-sheet-read: 1200px;
   --ds-layout-sheet-max: 760px;
   --ds-layout-sheet-narrow: 440px;

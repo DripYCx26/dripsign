@@ -3,6 +3,7 @@ import type { AgreementView, RevisionView } from "@dripsign/core/types";
 import { fileUrl } from "@/features/files";
 import { Notice, Pill } from "@/ui";
 import { CopyHash } from "./CopyHash.tsx";
+import { FieldJump } from "./FieldJump.tsx";
 import { PdfView } from "./PdfView.tsx";
 import styles from "./PublishReview.module.css";
 import { PublishAction } from "./PublishAction.tsx";
@@ -34,7 +35,11 @@ function SignerFields({
         const isNew = previous !== undefined && !previous.signerIds.includes(id);
         return (
           <li key={id}>
-            {`${nameOf(id)} — ${fieldWords(fields)}`}
+            {fields.length === 0 ? (
+              `${nameOf(id)} — ${fieldWords(fields)}`
+            ) : (
+              <FieldJump recipientId={id}>{`${nameOf(id)} — ${fieldWords(fields)}`}</FieldJump>
+            )}
             {isNew && <Pill tone="info">New signer</Pill>}
           </li>
         );

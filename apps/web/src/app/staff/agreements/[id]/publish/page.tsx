@@ -25,7 +25,9 @@ export default async function PublishPage({ params }: Props) {
   return (
     <div className={styles.page}>
       <header className={styles.head}>
-        <BackButton label="Back to agreement" href={`/staff/agreements/${id}`} />
+        <div className={styles.back}>
+          <BackButton label="Back to agreement" href={`/staff/agreements/${id}`} />
+        </div>
         <h1>{`Publish revision ${String((current ?? 0) + 1)}`}</h1>
         <p className={styles.title}>{view.agreement.title}</p>
       </header>
