@@ -13,7 +13,7 @@ workspace, recipient portal and signing flow. Decisions live in `packages/core`.
 | `/agreements/[id]` | A live recipient of that agreement |
 | `/agreements/[id]/sign` | A required signer of the active round: review, then sign |
 | `/staff` | Live staff: dashboard and agreement list; "New agreement" creates a draft and opens it |
-| `/staff/agreements/[id]` | Staff of the agreement's tenant: workspace; a draft's rail is the assistant |
+| `/staff/agreements/[id]` | Staff of the agreement's tenant: workspace; a draft's rail is the assistant (none when it is off and the draft is written) |
 | `/staff/agreements/[id]/publish` | Staff of the tenant: review the draft PDF, then publish |
 | `/staff/team` | Staff admins; anyone else gets not found |
 | `GET /api/agreements/[id]/files/[kind]` | Staff or recipient of the agreement; kinds `draft`, `current`, `revision`, `signed`, `audit` |

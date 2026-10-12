@@ -10,12 +10,12 @@ const MODES = [
   { value: "pdf", label: "PDF" },
 ] as const;
 
-/** The revision shown, as a quiet button that opens the others when there is another to choose. */
+/** The revision shown, as a quiet button that opens the others; absent with nothing to choose. */
 function RevisionMenu({ doc }: Readonly<{ doc: DocumentState }>) {
   const choose = useRevisionParam();
   const { options, value, defaultValue, draft } = doc;
+  if (options.length < 2) return null;
   const label = options.find((option) => option.value === value)?.label ?? "";
-  if (options.length < 2) return <span className={styles.label}>{label}</span>;
   return (
     <div className={styles.revision}>
       <Menu

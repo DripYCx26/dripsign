@@ -1,6 +1,9 @@
 import type { AgreementView } from "@dripsign/core/types";
 
-type TabSource = Pick<AgreementView, "allowedActions" | "messages" | "proposals">;
+type TabSource = Pick<
+  AgreementView,
+  "allowedActions" | "messages" | "proposals" | "aiSuggestions" | "draft"
+>;
 
 /** `chat` is the rail and `document` the pane beside it; on a phone it is the one shown. */
 export type WorkspaceTab = "chat" | "document";
@@ -8,7 +11,8 @@ export type WorkspaceTab = "chat" | "document";
 /**
  * What the rail is: `none` when there is nothing to say and no way to say it, `narrow` when it is
  * history only (signed, voided), `full` for the thread, and `draft` for staff's assistant while
- * the agreement is a draft that no revision has been published from.
+ * the agreement is a draft that no revision has been published from. A draft with the assistant
+ * off has a rail only for the starters of a blank draft, or for turns it already holds.
  */
 export type RailMode = "none" | "narrow" | "full" | "draft";
 
@@ -17,11 +21,18 @@ function hasConversation(view: TabSource): boolean {
   return view.messages.length > 0 || view.proposals.length > 0;
 }
 
+/** The draft is still the single section a new agreement starts with. */
+export function isBlankDraft(view: Pick<AgreementView, "draft">): boolean {
+  return view.draft?.source.sections.length === 1;
+}
+
 export function railMode(view: TabSource): RailMode {
-  if (view.allowedActions.includes("message") || view.allowedActions.includes("propose")) {
-    return "full";
+  const can = (action: AgreementView["allowedActions"][number]) =>
+    view.allowedActions.includes(action);
+  if (can("message") || can("propose")) return "full";
+  if (can("save_draft") && (can("ask_ai") || view.aiSuggestions.length > 0 || isBlankDraft(view))) {
+    return "draft";
   }
-  if (view.allowedActions.includes("save_draft")) return "draft";
   return hasConversation(view) ? "narrow" : "none";
 }
 

@@ -33,27 +33,17 @@ type Loaded =
 
 type ToolbarProps = Readonly<{
   src: string;
-  /** Known once the file is open. */
-  pages: number | null;
   lead: ReactNode;
   actions: ReactNode;
   note: ReactNode;
 }>;
 
-/** One card of what is known of the file, a button to open it, the caller's control and note. */
-function Toolbar({ src, pages, lead, actions, note }: ToolbarProps) {
+/** One strip: the caller's facts of the file, a button to open it, the caller's control and note. */
+function Toolbar({ src, lead, actions, note }: ToolbarProps) {
   return (
     <div className={styles.card}>
       <div className={styles.bar}>
-        <dl className={styles.facts}>
-          {lead}
-          {pages !== null && (
-            <div>
-              <dt>Pages</dt>
-              <dd>{pages}</dd>
-            </div>
-          )}
-        </dl>
+        {lead !== undefined && <dl className={styles.facts}>{lead}</dl>}
         <a href={src} target="_blank" rel="noreferrer" className={styles.open}>
           Open PDF
           <ExternalLink aria-hidden="true" />
@@ -112,10 +102,9 @@ function PdfDocument({
   note,
 }: PdfViewProps) {
   const loaded = useLoadedPdf(src);
-  const pages = loaded.status === "ready" ? loaded.doc.numPages : null;
   return (
     <div className={styles.view}>
-      <Toolbar src={src} pages={pages} lead={lead} actions={actions} note={note} />
+      <Toolbar src={src} lead={lead} actions={actions} note={note} />
       {loaded.status === "error" && (
         <Notice tone="stop" live="alert">
           This PDF couldn’t be shown here.

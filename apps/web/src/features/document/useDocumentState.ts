@@ -24,14 +24,9 @@ function revisionOptions(view: AgreementView, capacity: Capacity): RevisionOptio
       value: String(revision.number),
       label: `Revision ${String(revision.number)}${revision.number === current ? " · current" : ""}`,
     }));
-  const options = draftIsAhead(view, capacity)
+  return draftIsAhead(view, capacity)
     ? [{ value: DRAFT_VALUE, label: "Draft (private)" }, ...published]
     : published;
-  // One revision alone is not "current" of anything.
-  const only = options.length === 1 ? options[0] : undefined;
-  return only === undefined || only.value === DRAFT_VALUE
-    ? options
-    : [{ ...only, label: `Revision ${only.value}` }];
 }
 
 function selectedValue(target: DocumentTarget): string {

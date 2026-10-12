@@ -3,7 +3,7 @@
 import type { AgreementView } from "@dripsign/core/types";
 import { useEffect, useRef, type ReactNode, type RefObject } from "react";
 import type { RunCommand } from "@/features/workspace/commands.ts";
-import { railMode } from "@/features/workspace/tabs.ts";
+import { isBlankDraft, railMode } from "@/features/workspace/tabs.ts";
 import { EmptyState, FilePen, Sparkles } from "@/ui";
 import { AssistantComposer } from "./AssistantComposer.tsx";
 import styles from "./AssistantThread.module.css";
@@ -38,7 +38,7 @@ type WelcomeProps = Readonly<{
 }>;
 
 function Welcome({ view, run, busy, canAsk, drafting }: WelcomeProps) {
-  const blank = drafting && view.draft?.source.sections.length === 1;
+  const blank = drafting && isBlankDraft(view);
   const starters = blank ? <Starters view={view} run={run} busy={busy} /> : undefined;
   if (canAsk) {
     return (
@@ -53,8 +53,8 @@ function Welcome({ view, run, busy, canAsk, drafting }: WelcomeProps) {
   return (
     <EmptyState
       icon={<FilePen />}
-      message={blank ? "Start from a template or write the terms." : "Edit the draft from the bar."}
-      detail={blank ? "Edit the draft from the bar." : undefined}
+      message="Start from a template or write the terms."
+      detail="Edit the draft from the bar."
       action={starters}
     />
   );
